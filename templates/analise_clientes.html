@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Título da Página{% endblock %}
+{% block content %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análise de Clientes</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        .container {
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+        .grafico {
+            width: 400px;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 20px;
+        }
+        table, th, td {
+            border: 1px solid #ccc;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+        }
+        a.botao {
+            display: inline-block;
+            padding: 8px 12px;
+            background: #28a745;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        a.botao:hover {
+            background: #218838;
+        }
+    </style>
+</head>
+<body>
+    <h1>Análise de Clientes</h1>
+    <p>Total de clientes: <strong>{{ total_clientes }}</strong></p>
+
+    <div class="container">
+        <div class="grafico">
+            <canvas id="graficoSegmentos"></canvas>
+        </div>
+        <div>
+            <h2>Distribuição por Segmento</h2>
+            <table>
+                <tr>
+                    <th>Segmento</th>
+                    <th>Quantidade</th>
+                </tr>
+                {% for segmento, quantidade in segmentos.items() %}
+                <tr>
+                    <td>{{ segmento }}</td>
+                    <td>{{ quantidade }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+            <a class="botao" href="{{ url_for('exportar_clientes_csv') }}">Exportar CSV</a>
+        </div>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('graficoSegmentos').getContext('2d');
+        const grafico = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: {{ segmentos.keys()|list|tojson }},
+                datasets: [{
+                    label: 'Clientes por Segmento',
+                    data: {{ segmentos.values()|list|tojson }},
+                    backgroundColor: [
+                        '#FF6384',
+                        '#36A2EB',
+                        '#FFCE56',
+                        '#4BC0C0',
+                        '#9966FF',
+                        '#FF9F40'
+                    ],
+                    borderWidth: 1
+                }]
+            }
+        });
+    </script>
+</body>
+</html>
+{% endblock %}

@@ -1,0 +1,19 @@
+<h2>⚙️ Configurações do Chatbot</h2>
+<form method="POST">
+  Palavra-chave: <input type="text" name="palavra"><br>
+  Resposta: <textarea name="resposta"></textarea><br>
+  Prioridade: 
+  <select name="prioridade">
+    <option>Baixa</option>
+    <option selected>Normal</option>
+    <option>Alta</option>
+  </select><br>
+  <button type="submit">Salvar</button>
+</form>
+
+<h3>Regras cadastradas</h3>
+<ul>
+  {% for regra in regras %}
+    <li><b>{{ regra.palavra_chave }}</b> → {{ regra.resposta }} ({{ regra.prioridade }})</li>
+  {% endfor %}
+</ul>

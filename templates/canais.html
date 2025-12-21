@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% block title %}Canais{% endblock %}
+
+{% block content %}
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+
+<div class="container-fluid mt-3">
+  <div class="row">
+    <div style="color:red">
+  TOTAL CLIENTES: {{ clientes|length }}
+</div>
+
+    <!-- COLUNA ESQUERDA -->
+    <div class="col-4 border-end">
+      <h5>Buscar cliente</h5>
+      <div class="contacts">
+  <div class="contacts-title">Contatos</div>
+
+  <div class="p-2">
+    <input
+      type="text"
+      id="search-contact"
+      class="form-control"
+      placeholder="Buscar contato..."
+    />
+  </div>
+
+  <div id="contacts-list">
+    {% for c in clientes %}
+      <div class="contact-item" data-nome="{{ c.nome|lower }}" data-numero="{{ c.telefone }}">
+        <strong>{{ c.nome }}</strong><br>
+        <small>{{ c.telefone }}</small>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+      <input
+        type="text"
+        id="busca"
+        class="form-control mb-2"
+        placeholder="Nome ou telefone..."
+      >
+
+      <div id="lista-clientes" class="list-group"></div>
+    </div>
+
+    <!-- COLUNA DIREITA -->
+    <div class="col-8 d-flex flex-column" style="height:75vh">
+
+      <div id="chat-header" class="border-bottom p-2 fw-bold">
+        Nenhum cliente selecionado
+      </div>
+
+      <div
+        id="mensagens"
+        class="flex-grow-1 p-2 overflow-auto"
+        style="background:#f8f9fa"
+      ></div>
+
+      <div class="input-group mt-2">
+        <input
+          type="text"
+          id="mensagem"
+          class="form-control"
+          placeholder="Digite a mensagem"
+        >
+        <button class="btn btn-success" id="enviar">Enviar</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- SOCKET.IO -->
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+<script>
+let socket = null;
+let clienteSelecionado = null;
+
+/* --- SOCKET (SEGURO) --- */
+if (typeof io !== "undefined") {
+  socket = io();
+  console.log("Socket conectado");
+}
+
+/* --- BUSCA CLIENTES --- */
+document.getElementById("busca").addEventListener("keyup", async e => {
+  const q = e.target.value.trim();
+  const lista = document.getElementById("lista-clientes");
+
+  lista.innerHTML = "";
+
+  if (q.length < 2) return;
+
+  const res = await fetch(`/api/clientes/busca?q=${encodeURIComponent(q)}`);
+  const clientes = await res.json();
+
+  clientes.forEach(c => {
+    const item = document.createElement("button");
+    item.className = "list-group-item list-group-item-action";
+    item.innerHTML = `<strong>${c.nome}</strong><br><small>${c.telefone}</small>`;
+
+    item.onclick = () => selecionarCliente(c);
+    lista.appendChild(item);
+  });
+});
+
+/* --- SELECIONA CLIENTE --- */
+async function selecionarCliente(cliente) {
+  clienteSelecionado = cliente;
+
+  document.getElementById("chat-header").innerText =
+    `${cliente.nome} - ${cliente.telefone}`;
+
+  document.getElementById("mensagens").innerHTML = "";
+
+  if (socket) {
+    socket.emit("join", { numero: cliente.telefone });
+  }
+
+  const res = await fetch(
+    `/canais/${cliente.telefone}/mensagens`
+  );
+  const json = await res.json();
+
+  json.mensagens.forEach(m => {
+    adicionarMensagem(m.remetente, m.mensagem);
+  });
+}
+
+/* --- ENVIO --- */
+document.getElementById("enviar").onclick = async () => {
+  const input = document.getElementById("mensagem");
+  const texto = input.value.trim();
+
+  if (!texto || !clienteSelecionado) return;
+
+  adicionarMensagem("Você", texto);
+  input.value = "";
+
+  await fetch("/canais/enviar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      numero: clienteSelecionado.telefone,
+      mensagem: texto
+    })
+  });
+};
+
+/* --- RECEBER --- */
+if (socket) {
+  socket.on("nova_mensagem", data => {
+    if (!clienteSelecionado) return;
+    if (data.numero !== clienteSelecionado.telefone) return;
+
+    adicionarMensagem(data.remetente, data.mensagem);
+  });
+}
+
+/* --- UI --- */
+function adicionarMensagem(remetente, texto) {
+  const div = document.createElement("div");
+  div.className = remetente === "Você" ? "text-end" : "text-start";
+  div.innerHTML = `
+    <span class="badge bg-${remetente === "Você" ? "success" : "secondary"}">
+      ${texto}
+    </span>
+  `;
+  const box = document.getElementById("mensagens");
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+const searchInput = document.getElementById("search-contact");
+
+searchInput.addEventListener("input", function () {
+  const termo = this.value.toLowerCase().trim();
+  const contatos = document.querySelectorAll(".contact-item");
+
+  contatos.forEach(contato => {
+    const nome = contato.dataset.nome || "";
+    const numero = contato.dataset.numero || "";
+
+    if (nome.includes(termo) || numero.includes(termo)) {
+      contato.style.display = "block";
+    } else {
+      contato.style.display = "none";
+    }
+  });
+});
+</script>
+
+
+{% endblock %}

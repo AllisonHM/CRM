@@ -1,0 +1,10 @@
+<h2>📩 Canal de Mensagens</h2>
+<div class="mensagens">
+  {% for msg in mensagens %}
+    <div class="msg-card {{ msg.prioridade|lower }}">
+      <b>{{ msg.numero }}</b> - {{ msg.recebido_em.strftime('%d/%m %H:%M') }} <br>
+      {{ msg.mensagem }}
+      <span class="tag">Prioridade: {{ msg.prioridade }}</span>
+    </div>
+  {% endfor %}
+</div>

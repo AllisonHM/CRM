@@ -1,0 +1,67 @@
+<!-- templates/mensagem_status.html -->
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Status da Mensagem</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #4caf50, #81c784);
+            color: white;
+        }
+
+        .container {
+            text-align: center;
+            background: rgba(0,0,0,0.6);
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.4);
+        }
+
+        .status {
+            font-size: 2em;
+            margin-bottom: 20px;
+        }
+
+        .success {
+            color: #00ff99;
+        }
+
+        .error {
+            color: #ff4d4d;
+        }
+
+        a {
+            display: inline-block;
+            margin-top: 20px;
+            text-decoration: none;
+            color: white;
+            background: #1976d2;
+            padding: 10px 20px;
+            border-radius: 10px;
+            transition: 0.3s;
+        }
+
+        a:hover {
+            background: #1565c0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% if status == "sucesso" %}
+            <div class="status success">Mensagem enviada com sucesso!</div>
+        {% else %}
+            <div class="status error">Falha ao enviar mensagem.</div>
+        {% endif %}
+        <a href="{{ voltar_url }}">Voltar</a>
+    </div>
+</body>
+</html>

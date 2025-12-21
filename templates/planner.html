@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% block title %}Menu Principal{% endblock %}
+
+{% block content %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Planner Semanal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+        .planner-table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        .planner-table th, .planner-table td {
+            border: 1px solid #ddd;
+            padding: 6px;
+            text-align: center;
+            vertical-align: top;
+            height: 55px;
+        }
+        .planner-table th {
+            background-color: #f8f9fa;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+        .horario-col {
+            width: 70px;
+            background-color: #f1f1f1;
+            font-weight: bold;
+        }
+        .evento {
+            padding: 4px;
+            border-radius: 6px;
+            color: #fff;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .tipo-agendamento { background: #28a745; }
+        .tipo-contato { background: #007bff; }
+        .tipo-outros { background: #6c757d; }
+        .cell:hover {
+            background: #eef7ff;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container py-4">
+
+    <h2 class="mb-3 text-center">📅 Planner Semanal</h2>
+
+    <!-- Navegação -->
+    <div class="d-flex justify-content-between mb-3">
+        <a href="{{ url_for('planner', week=semana_offset-1) }}" class="btn btn-outline-secondary">← Semana anterior</a>
+        <h4>Semana de {{ dias[0].strftime('%d/%m') }} a {{ dias[6].strftime('%d/%m') }}</h4>
+        <a href="{{ url_for('planner', week=semana_offset+1) }}" class="btn btn-outline-secondary">Próxima semana →</a>
+    </div>
+
+    <button class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#modalAgendamento">
+        Registrar agendamento
+    </button>
+
+    <div class="table-responsive" style="max-height: 80vh; overflow-y: scroll;">
+        <table class="planner-table table-bordered">
+            <thead>
+                <tr>
+                    <th class="horario-col">Hora</th>
+                    {% for dia in dias %}
+                        <th>{{ dia.strftime('%A') }}<br>{{ dia.strftime('%d/%m') }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for hora in horarios %}
+                <tr>
+                    <td class="horario-col">{{ hora.strftime('%H:%M') }}</td>
+
+                    {% for dia in dias %}
+                    <td class="cell"
+                        data-data="{{ dia }}"
+                        data-hora="{{ hora.strftime('%H:%M') }}"
+                        onclick="abrirModalHorario(this)">
+                        
+                        {% for ev in eventos %}
+                            {% if ev.data == dia and ev.hora == hora %}
+                                <div class="evento tipo-{{ ev.tipo }}" 
+     onclick="abrirModalDetalhes('{{ ev.id }}', '{{ ev.tipo }}', '{{ ev.cliente or '' }}', '{{ ev.data }}', '{{ ev.hora }}', `{{ ev.descricao or '' }}`)"
+     style="position: relative;">
+
+    <div>
+        {{ ev.tipo }} <br>
+        {% if ev.cliente %} {{ ev.cliente }} {% endif %}
+    </div>
+
+    <form action="{{ url_for('excluir_evento', id=ev.id) }}" method="POST"
+          style="display:inline-block; margin-top:4px;">
+        <button type="submit" class="btn btn-sm btn-danger p-1"
+                style="font-size:10px; line-height:10px;" onclick="event.stopPropagation();">
+            🗑
+        </button>
+    </form>
+</div>
+
+
+                            {% endif %}
+                        {% endfor %}
+
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="modalAgendamento">
+    <div class="modal-dialog">
+        <div class="modal-content p-3">
+
+            <h4>Novo Registro</h4>
+
+            <form method="POST" action="/planner/salvar">
+                <label>Tipo</label>
+                <select class="form-control mb-2" name="tipo" required>
+                    <option value="agendamento">Agendamento</option>
+                    <option value="contato">Contato a realizar</option>
+                    <option value="outros">Outros</option>
+                </select>
+
+                <label>Cliente</label>
+                <input class="form-control mb-2" name="cliente">
+
+                <label>Data</label>
+                <input class="form-control mb-2" name="data" id="modalData" required>
+
+                <label>Hora</label>
+                <input class="form-control mb-2" name="hora" id="modalHora" required>
+
+                <label>Descrição</label>
+                <textarea class="form-control mb-2" name="descricao"></textarea>
+
+                <button class="btn btn-success w-100" type="submit">Salvar</button>
+            </form>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    function abrirModalHorario(cell) {
+        document.getElementById("modalData").value = cell.getAttribute("data-data");
+        document.getElementById("modalHora").value = cell.getAttribute("data-hora");
+        var modal = new bootstrap.Modal(document.getElementById("modalAgendamento"));
+        modal.show();
+    }
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+
+<div class="modal fade" id="modalDetalhes">
+    <div class="modal-dialog">
+        <div class="modal-content p-3">
+            <h4>Detalhes do Agendamento</h4>
+
+            <p><strong>Tipo:</strong> <span id="detalheTipo"></span></p>
+            <p><strong>Cliente:</strong> <span id="detalheCliente"></span></p>
+            <p><strong>Data:</strong> <span id="detalheData"></span></p>
+            <p><strong>Hora:</strong> <span id="detalheHora"></span></p>
+            <p><strong>Descrição:</strong><br> <span id="detalheDescricao"></span></p>
+
+            <form id="deleteForm" method="POST">
+                <button class="btn btn-danger w-100 mt-3">Excluir</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function abrirModalDetalhes(id, tipo, cliente, data, hora, descricao) {
+    document.getElementById('detalheTipo').innerText = tipo;
+    document.getElementById('detalheCliente').innerText = cliente || "—";
+    document.getElementById('detalheData').innerText = data;
+    document.getElementById('detalheHora').innerText = hora;
+    document.getElementById('detalheDescricao').innerText = descricao || "—";
+
+    // define rota do botão excluir
+    document.getElementById('deleteForm').action = "/planner/excluir/" + id;
+
+    var modal = new bootstrap.Modal(document.getElementById('modalDetalhes'));
+    modal.show();
+}
+</script>
+
+</body>
+</html>
+
+{% endblock %}

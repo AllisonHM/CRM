@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Whatsapp{% endblock %}
+
+{% block content %}
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <title>Módulo WhatsApp</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="p-4">
+  <h1>Módulo WhatsApp</h1>
+  <form method="POST" action="/whatsapp/enviar">
+    <div class="mb-3">
+      <label for="numero" class="form-label">Número (ex: 5547999999999)</label>
+      <input type="text" name="numero" id="numero" class="form-control" required>
+    </div>
+    <div class="mb-3">
+      <label for="mensagem" class="form-label">Mensagem</label>
+      <textarea name="mensagem" id="mensagem" class="form-control" rows="4" required></textarea>
+    </div>
+    <button type="submit" class="btn btn-success">Enviar</button>
+  </form>
+</body>
+</html>
+{% endblock %}

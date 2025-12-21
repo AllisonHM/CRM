@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Ocorrências{% endblock %}
+
+{% block content %}
+
+<style>
+    .titulo-pagina {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 25px;
+        color: #080808;
+        letter-spacing: 1px;
+    }
+
+    .oc-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0 4px; /* REDUZIDO (antes 10px) */
+    }
+
+    .oc-table thead th {
+        background: #252a33;
+        color: #f9f8f8;
+        font-weight: 600;
+        padding: 10px 12px; /* REDUZIDO */
+        border: none;
+        text-align: left;
+    }
+
+    .oc-row {
+        background: #252a33;
+        transition: 0.2s ease;
+    }
+
+    .oc-row:hover {
+        background: #2d333d;
+        transform: scale(1.003); /* levemente menor que 1.005 */
+    }
+
+    .oc-table td {
+        padding: 8px 12px; /* REDUZIDO (antes 16px 18px) */
+        color: #e5e5e5;
+        border-top: 1px solid #2f3640;
+        border-bottom: 1px solid #2f3640;
+        line-height: 1.2; /* deixa mais compacto */
+    }
+
+    .btn-ver {
+        background: #000000;
+        color: #ffffff;
+        padding: 6px 10px; /* reduzido */
+        border-radius: 6px;
+        text-decoration: none;
+        font-weight: 600;
+        transition: 0.2s ease;
+        font-size: 0.85rem; /* menor */
+    }
+
+    .btn-ver:hover {
+        background: #000000;
+        opacity: 0.85;
+    }
+
+    .badge-sucesso,
+    .badge-pendente,
+    .badge-outro {
+        padding: 3px 8px; /* reduzido */
+        border-radius: 5px;
+        font-weight: 600;
+        font-size: 0.78rem; /* reduzido */
+        display: inline-block;
+    }
+
+    .badge-sucesso { background: #28a745; color: #fff; }
+    .badge-pendente { background: #ffc107; color: #000; }
+    .badge-outro    { background: #6c757d; color: #fff; }
+
+    .voltar-menu {
+        display: inline-block;
+        margin-top: 18px; /* menor */
+        background: #3a3f47;
+        padding: 8px 14px; /* menor */
+        border-radius: 6px;
+        color: #ddd;
+        text-decoration: none;
+        font-weight: 500;
+        font-size: 0.9rem;
+    }
+
+    .voltar-menu:hover {
+        background: #4a505a;
+    }
+</style>
+
+
+<h1 class="titulo-pagina">Ocorrências</h1>
+
+<div class="table-responsive">
+    <table class="oc-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Cliente</th>
+                <th>Tópico</th>
+                <th>Situação</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for o in ocorrencias %}
+            <tr class="oc-row">
+                <td>{{ o.id }}</td>
+
+                <td>
+                    {{ (o.cliente.nome if o.cliente else (o.cliente_nome if o.cliente_nome else '—')) }}
+                </td>
+
+                <td>{{ o.topico or '—' }}</td>
+
+                <td>
+                    {% if o.situacao == 'Ativa' %}
+                        <span class="badge-sucesso">Ativa</span>
+                    {% elif o.situacao == 'Pendente' %}
+                        <span class="badge-pendente">Pendente</span>
+                    {% else %}
+                        <span class="badge-outro">{{ o.situacao }}</span>
+                    {% endif %}
+                </td>
+
+                <td>
+                    {% if o.situacao == 'Ativo' %}
+                        <a class="btn-ver" href="{{ url_for('detalhe_ocorrencia', id=o.id) }}">
+                            Ver / Editar
+                        </a>
+                    {% else %}
+                        <button class="btn-ver" style="opacity:0.4;" disabled>Sem ação</button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<a href="{{ url_for('menu') }}" class="voltar-menu">⬅ Voltar ao Menu</a>
+
+{% endblock %}

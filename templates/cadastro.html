@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}Cadastro de Cliente{% endblock %}
+
+{% block content %}
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div>
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }} mt-3" role="alert">
+          {{ message }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+<style>
+    /* Container da área rolável */
+    .scroll-box {
+        max-height: 350px;
+        overflow-y: auto;
+        border: 1px solid #2c2f36;
+        border-radius: 8px;
+        padding: 5px;
+        background: #1e2127;
+    }
+
+    /* Barra de rolagem estilizada */
+    .scroll-box::-webkit-scrollbar {
+        width: 8px;
+    }
+    .scroll-box::-webkit-scrollbar-thumb {
+        background: #4d545c;
+        border-radius: 10px;
+    }
+    .scroll-box::-webkit-scrollbar-thumb:hover {
+        background: #5f6872;
+    }
+</style>
+
+<div class="container mt-4">
+    <h1 class="mb-4">Cadastro de Cliente</h1>
+
+    <!-- Formulário de Cadastro -->
+    <form method="POST" class="mb-5">
+        <div class="mb-3">
+            <label for="nome" class="form-label">Nome</label>
+            <input type="text" name="nome" id="nome" class="form-control" required>
+        </div>
+
+        <div class="mb-3">
+            <label for="email" class="form-label">Email</label>
+            <input type="email" name="email" id="email" class="form-control" required>
+        </div>
+
+        <div class="mb-3">
+    <label for="telefone" class="form-label">Telefone</label>
+    <input 
+        type="text" 
+        name="telefone" 
+        id="telefone" 
+        class="form-control"
+        required
+        placeholder="+55 47 99999-9999"
+        pattern="^\+\d{2}\s\d{2}\s\d{4,5}-?\d{4}$"
+        title="Digite no formato +55 47 99999-9999"
+    >
+</div>
+
+        <div class="mb-3">
+            <label for="tipo_pessoa" class="form-label">Tipo de Pessoa</label>
+            <select name="tipo_pessoa" id="tipo_pessoa" class="form-select" required>
+                <option value="">Selecione</option>
+                <option value="Física">Física</option>
+                <option value="Jurídica">Jurídica</option>
+            </select>
+        </div>
+
+        <button type="submit" class="btn btn-success">Salvar</button>
+        <a href="{{ url_for('relacionamento') }}" class="btn btn-secondary">Cancelar</a>
+    </form>
+
+    <!-- Tabela de Clientes -->
+    <h2 class="mb-3">Clientes Cadastrados</h2>
+
+    {% if clientes %}
+    <div class="scroll-box mb-3">
+        <table class="table table-striped align-middle mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th>Nome</th>
+                    <th>Email</th>
+                    <th>Telefone</th>
+                    <th>Tipo</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cliente in clientes %}
+                <tr>
+                    <td>{{ cliente.nome }}</td>
+                    <td>{{ cliente.email }}</td>
+                    <td>{{ cliente.telefone }}</td>
+                    <td>{{ cliente.tipo_pessoa }}</td>
+                    <td>
+                        <form action="{{ url_for('excluir_cliente', id=cliente.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Tem certeza que deseja excluir {{ cliente.nome }}?');">
+                            <button type="submit" class="btn btn-danger btn-sm">Excluir</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+        <p class="text-muted">Nenhum cliente cadastrado ainda.</p>
+    {% endif %}
+
+    <!-- 🔙 Botão Voltar ao Menu -->
+    <a href="{{ url_for('menu') }}" class="voltar-menu">⬅ Voltar ao Menu</a>
+
+</div>
+
+{% endblock %}

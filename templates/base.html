@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}CRM{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<style>
+    .popup-notificacao {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: rgba(0, 255, 200, 0.18);
+        border: 1px solid #00ffc3;
+        padding: 18px 24px;
+        border-radius: 12px;
+        backdrop-filter: blur(10px);
+        color: #e6e6e6;
+        width: 330px;
+        display: none;
+        box-shadow: 0 0 20px rgba(0,255,200,0.4);
+        animation: aparecer 0.5s ease;
+        z-index: 9999;
+    }
+
+    @keyframes aparecer {
+        from { opacity: 0; transform: translateY(15px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .popup-close {
+        float: right;
+        cursor: pointer;
+        color: #00ffc3;
+        font-weight: bold;
+        margin-top: -10px;
+    }
+</style>
+
+<div id="popupNotificacao" class="popup-notificacao">
+    <span class="popup-close" onclick="fecharPopup()">X</span>
+    <h3 style="color:#00ffc3">Evento Próximo</h3>
+    <p id="popupTexto"></p>
+</div>
+
+<script>
+    var socket = io();
+
+    socket.on('notificacao_evento', function(data) {
+        document.getElementById("popupTexto").innerHTML =
+            `<strong>${data.titulo}</strong><br>
+             Cliente: ${data.cliente}<br>
+             Horário: ${data.hora}<br>
+             ${data.descricao || ""}`;
+
+        document.getElementById("popupNotificacao").style.display = "block";
+    });
+
+    function fecharPopup() {
+        document.getElementById("popupNotificacao").style.display = "none";
+    }
+</script>
+
+<body class="p-4">
+
+    <!-- Navbar simples -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('menu') }}">CRM</a>
+            <div class="collapse navbar-collapse">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('cadastro') }}">Cadastro</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('relacionamento') }}">Relacionamento</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('mesas_negocio') }}">Mesas de Negócio</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('ocorrencias') }}">Ocorrências</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('whatsapp_index') }}">WhatsApp</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('canais') }}">Canais</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('planner') }}">Planner</a></li>
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('produtos') }}">Produtos</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Conteúdo principal -->
+    <div class="container">
+        {% block content %}
+        {% endblock %}
+    </div>
+
+</body>
+</html>

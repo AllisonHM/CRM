@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Nova Ocorrência{% endblock %}
+
+{% block content %}
+
+<div class="container mt-4">
+
+    <h1 class="titulo-pagina">Nova Ocorrência – {{ cliente.nome }}</h1>
+
+    <div class="card p-4 shadow-sm" style="border-radius: 12px; background-color: #f8f9fa;">
+        <form method="POST">
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">Tópico:</label>
+                <input type="text" name="topico" class="form-control" required>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">Status:</label>
+                <select name="status" class="form-select" required>
+                    <option>Ativo</option>
+                    <option>Cancelado</option>
+                    <option>Resolvido</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">Descrição:</label>
+                <textarea name="descricao" class="form-control" rows="4" required></textarea>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">Salvar</button>
+
+        </form>
+    </div>
+
+    <a href="{{ url_for('detalhe_cliente', id=cliente.id) }}" class="btn btn-secondary mt-3 w-100">
+        Voltar
+    </a>
+
+</div>
+
+{% endblock %}

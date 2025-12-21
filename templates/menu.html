@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Menu Principal{% endblock %}
+
+{% block content %}
+
+<style>
+
+    .dashboard-container {
+        display: flex;
+        height: calc(100vh - 60px);
+        margin-top: 20px;
+        color: #e6e6e6;
+        font-family: "Inter", sans-serif;
+    }
+
+    /* MENU LATERAL */
+    .sidebar {
+        width: 260px;
+        background: rgba(20, 20, 20, 0.85);
+        padding: 20px;
+        border-right: 1px solid rgba(0,255,200,0.25);
+        box-shadow: 0 0 15px rgba(0,255,200,0.15);
+    }
+
+    .sidebar h2 {
+        color: #00ffc3;
+        font-size: 1.8rem;
+        margin-bottom: 20px;
+        text-shadow: 0 0 7px rgba(0,255,200,0.5);
+    }
+
+    .menu-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .menu-item {
+        background: rgba(35, 35, 35, 0.7);
+        padding: 12px;
+        border-radius: 10px;
+        text-decoration: none;
+        color: #fff;
+        font-size: 1rem;
+        border: 1px solid rgba(0,255,200,0.2);
+        transition: 0.2s;
+    }
+
+    .menu-item:hover {
+        background: rgba(0,255,200,0.1);
+        border-color: #00ffc3;
+        color: #00ffc3;
+        transform: translateX(5px);
+    }
+
+    /* ÁREA PRINCIPAL */
+    .content-area {
+        flex: 1;
+        padding: 30px;
+    }
+
+    .content-area h1 {
+        font-size: 2.6rem;
+        color: #00ffc3;
+        margin-bottom: 25px;
+        text-shadow: 0 0 10px rgba(0,255,200,0.4);
+    }
+
+    /* CARDS */
+    .cards {
+        display: flex;
+        gap: 25px;
+    }
+
+    .card {
+        flex: 1;
+        background: rgba(25, 25, 25, 0.8);
+        padding: 25px;
+        border-radius: 14px;
+        border: 1px solid rgba(0,255,200,0.25);
+        box-shadow: 0 0 20px rgba(0,255,200,0.15);
+        transition: 0.3s;
+        backdrop-filter: blur(10px);
+    }
+
+    .card:hover {
+        box-shadow: 0 0 25px rgba(0,255,200,0.45);
+        transform: translateY(-5px);
+    }
+
+    .card-title {
+        font-size: 1.4rem;
+        margin-bottom: 10px;
+        color: #00ffc3;
+        text-shadow: 0 0 8px rgba(0,255,200,0.4);
+    }
+
+    .card-number {
+        font-size: 3rem;
+        font-weight: bold;
+        margin-bottom: 15px;
+        color: #fff;
+    }
+
+    canvas {
+        width: 100% !important;
+        height: 120px !important;
+    }
+
+</style>
+
+<div class="dashboard-container">
+
+    <!-- MENU LATERAL 
+    <div class="sidebar">
+        <h2>Menu</h2>
+        <div class="menu-list">
+            <a class="menu-item" href="{{ url_for('cadastro') }}">Cadastro de Cliente</a>
+            <a class="menu-item" href="{{ url_for('relacionamento') }}">Relacionamento</a>
+            <a class="menu-item" href="{{ url_for('mesas_negocio') }}">Mesas de Negócio</a>
+            <a class="menu-item" href="{{ url_for('ocorrencias') }}">Ocorrências</a>
+            <a class="menu-item" href="{{ url_for('canais') }}">Canais</a>
+            <a class="menu-item" href="{{ url_for('produtos') }}">Controle de Produtos</a>
+            <a class="menu-item" href="{{ url_for('planner') }}">Planner Semanal</a>
+        </div>
+    </div>
+-->
+    <!-- ÁREA PRINCIPAL -->
+    <div class="content-area">
+        <h1>Dashboard do CRM</h1>
+
+        <div class="cards">
+
+            <!-- CARD CLIENTES -->
+            <div class="card">
+                <div class="card-title">Clientes</div>
+                <div class="card-number">{{ qtd_clientes }}</div>
+                <canvas id="clientesChart"></canvas>
+            </div>
+
+            <!-- CARD MESAS -->
+            <div class="card">
+                <div class="card-title">Mesas de Negócio</div>
+                <div class="card-number">{{ qtd_mesas }}</div>
+                <canvas id="mesasChart"></canvas>
+            </div>
+
+            <!-- CARD OCORRÊNCIAS -->
+            <div class="card">
+                <div class="card-title">Ocorrências</div>
+                <div class="card-number">{{ qtd_ocorrencias }}</div>
+                <canvas id="ocorrenciasChart"></canvas>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+<!-- CHART.JS -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+
+function createMiniChart(id, value, color) {
+    new Chart(document.getElementById(id), {
+        type: 'bar',
+        data: {
+            labels: [''],
+            datasets: [{
+                label: '',
+                data: [value],
+                backgroundColor: color,
+                borderColor: color,
+                borderWidth: 2
+            }]
+        },
+        options: {
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { display: false },
+                y: { display: false, beginAtZero: true }
+            }
+        }
+    });
+}
+
+createMiniChart("clientesChart", {{ qtd_clientes }}, "rgba(0,255,200,0.7)");
+createMiniChart("mesasChart", {{ qtd_mesas }}, "rgba(0,150,255,0.7)");
+createMiniChart("ocorrenciasChart", {{ qtd_ocorrencias }}, "rgba(255,0,140,0.7)");
+
+</script>
+
+{% endblock %}
