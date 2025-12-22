@@ -44,18 +44,36 @@
     <p id="popupTexto"></p>
 </div>
 
+<!-- Socket.IO client (disponibiliza `io`) -->
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script>
-    var socket = io();
+    // Cria/recupera conexão socket única em window.socket
+    try {
+        if (typeof window.socket === 'undefined' || window.socket === null) {
+            if (typeof io !== 'undefined') {
+                window.socket = io();
+                console.log('Socket conectado (base)');
+            } else {
+                window.socket = null;
+                console.warn('Socket.IO client não disponível');
+            }
+        }
+    } catch (e) {
+        console.error('Erro ao inicializar Socket:', e);
+        window.socket = null;
+    }
 
-    socket.on('notificacao_evento', function(data) {
-        document.getElementById("popupTexto").innerHTML =
-            `<strong>${data.titulo}</strong><br>
-             Cliente: ${data.cliente}<br>
-             Horário: ${data.hora}<br>
-             ${data.descricao || ""}`;
+    if (window.socket) {
+        window.socket.on('notificacao_evento', function(data) {
+            document.getElementById("popupTexto").innerHTML =
+                `<strong>${data.titulo}</strong><br>
+                 Cliente: ${data.cliente}<br>
+                 Horário: ${data.hora}<br>
+                 ${data.descricao || ""}`;
 
-        document.getElementById("popupNotificacao").style.display = "block";
-    });
+            document.getElementById("popupNotificacao").style.display = "block";
+        });
+    }
 
     function fecharPopup() {
         document.getElementById("popupNotificacao").style.display = "none";

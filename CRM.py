@@ -260,21 +260,104 @@ def whatsapp_enviar():
     else:
         return render_template("mensagem_status.html", status="erro", voltar_url=url_for("whatsapp_index"))
 
+@app.route("/canais/webhook", methods=["POST"])
 @app.route("/webhook/messages", methods=["POST"])
 def receber_mensagem_webhook():
-    data = request.get_json() or {}
+    data = request.get_json(silent=True) or {}
 
-    print("📩 Webhook recebido:", data)
+    print("📩 Webhook recebido (raw):", data)
 
-    phone = data.get("phone")
-    text = data.get("text", {}).get("message")
+    # tenta extrair telefone a partir de várias chaves comuns
+    phone = None
+    # chaves diretas
+    for k in ("phone", "from", "from_number", "sender", "contact", "wa_id", "number"):
+        v = data.get(k)
+        if v:
+            phone = v
+            break
 
-    if not phone or not text:
+    # se ainda não encontrou, procura recursivamente por campos que pareçam telefone
+    def find_phone(obj):
+        if isinstance(obj, dict):
+            for kk, vv in obj.items():
+                if kk.lower() in ("phone", "from", "number", "wa_id", "id", "contact") and vv:
+                    return vv
+                res = find_phone(vv)
+                if res:
+                    return res
+        elif isinstance(obj, list):
+            for item in obj:
+                res = find_phone(item)
+                if res:
+                    return res
+        return None
+
+    if not phone:
+        phone = find_phone(data)
+
+    # tenta extrair texto em formatos comuns (apenas campos explícitos)
+    text = None
+    explicit_text = None
+    txt = data.get("text")
+    if isinstance(txt, dict):
+        explicit_text = txt.get("message") or txt.get("body") or txt.get("text")
+    elif isinstance(txt, str):
+        explicit_text = txt
+    explicit_text = explicit_text or data.get("message") or data.get("body") or data.get("text_message")
+
+    # filtra callbacks que não são mensagens (presença/status) quando possível
+    tipo = data.get("type", "").lower()
+    non_message_types = ("presencechatcallback", "messagestatuscallback", "deliverycallback", "messagestatuscallback")
+
+    # se for um tipo claramente não-mensagem e não houver texto explícito (campo text/message/body), ignorar
+    if tipo in non_message_types and not explicit_text:
+        print(f"Webhook ignorado (tipo {data.get('type')} sem texto explícito)")
         return {"status": "ignored"}, 200
 
-    numero = phone.replace("+", "").replace(" ", "").strip()
+    # agora tenta encontrar texto recursivamente, MAS apenas buscando campos nominais (message/body/text/caption)
+    def find_text(obj):
+        if isinstance(obj, dict):
+            for kk, vv in obj.items():
+                if kk.lower() in ("message", "body", "text", "caption") and isinstance(vv, str):
+                    return vv
+                res = find_text(vv)
+                if res:
+                    return res
+        elif isinstance(obj, list):
+            for item in obj:
+                res = find_text(item)
+                if res:
+                    return res
+        return None
 
-    # 1️⃣ Salvar no banco (WhatsAppMensagem)
+    # prefer explicit_text quando existir, senão use find_text
+    text = explicit_text or find_text(data)
+
+    # filtra callbacks que não são mensagens (presença/status) quando possível
+    tipo = data.get("type", "").lower()
+    non_message_types = ("presencechatcallback", "messagestatuscallback", "deliverycallback", "messageStatusCallback")
+
+    # se for um tipo claramente não-mensagem e não houver texto extraído, ignorar
+    if tipo in non_message_types and not text:
+        print(f"Webhook ignorado (tipo {data.get('type')} sem texto)")
+        return {"status": "ignored"}, 200
+
+    if not phone or not text:
+        print("Webhook ignorado: phone/text não encontrados")
+        return {"status": "ignored"}, 200
+
+    # evita salvar valores como instanceId que foram capturados como 'text'
+    if isinstance(text, str) and text == data.get("instanceId"):
+        print("Webhook ignorado: texto igual a instanceId")
+        return {"status": "ignored"}, 200
+
+    # normaliza número para apenas dígitos
+    numero = str(phone)
+    numero = numero.replace("+", "").replace(" ", "").strip()
+    import re
+    numero = re.sub(r"\D", "", numero)
+
+    # salvar no banco (WhatsAppMensagem)
     msg = WhatsAppMensagem(
         numero=numero,
         remetente="Cliente",
@@ -284,19 +367,28 @@ def receber_mensagem_webhook():
     db.session.add(msg)
     db.session.commit()
 
-    # 2️⃣ Emitir para a sala correta
-    socketio.emit(
-        "nova_mensagem",
-        {
-            "numero": numero,
-            "remetente": "Cliente",
-            "mensagem": text,
-            "hora": datetime.now().strftime("%H:%M")
-        },
-        room=numero
-    )
+    # emitir para a sala correta
+    payload = {
+        "id": msg.id,
+        "numero": numero,
+        "remetente": "Cliente",
+        "mensagem": text,
+        "hora": datetime.now().strftime("%H:%M")
+    }
 
-    print(f"✅ Mensagem emitida para sala {numero}")
+    rooms_to_emit = {numero}
+    if len(numero) >= 6:
+        rooms_to_emit.add(numero[-6:])
+    if len(numero) >= 8:
+        rooms_to_emit.add(numero[-8:])
+
+    for r in rooms_to_emit:
+        try:
+            socketio.emit("nova_mensagem", payload, room=r)
+        except Exception:
+            pass
+
+    print(f"✅ Mensagem emitida para salas: {', '.join(sorted(rooms_to_emit))}")
 
     return {"status": "ok"}, 200
 
@@ -307,8 +399,20 @@ def join_room_event(data):
         return
 
     numero_norm = numero.replace("+", "").replace(" ", "").strip()
+    # entra na sala completa e em salas por sufixo (últimos 6 e 8 dígitos) para tolerância de formatos
+    rooms_joined = set()
     join_room(numero_norm)
-    print(f"🔵 Usuário entrou na sala {numero_norm}")
+    rooms_joined.add(numero_norm)
+    if len(numero_norm) >= 6:
+        s6 = numero_norm[-6:]
+        join_room(s6)
+        rooms_joined.add(s6)
+    if len(numero_norm) >= 8:
+        s8 = numero_norm[-8:]
+        join_room(s8)
+        rooms_joined.add(s8)
+
+    print(f"🔵 Usuário entrou nas salas: {', '.join(sorted(rooms_joined))}")
 
 @app.route("/canais/enviar", methods=["POST"])
 def enviar_mensagem_canais():
@@ -335,16 +439,17 @@ def enviar_mensagem_canais():
         db.session.commit()
 
         # emitir para a sala
-        socketio.emit(
-            "nova_mensagem",
-            {
-                "numero": numero_norm,
-                "remetente": "Você",
-                "mensagem": mensagem,
-                "hora": datetime.now().strftime("%H:%M")
-            },
-            room=numero_norm
-        )
+        payload = {
+            "id": msg.id,
+            "numero": numero_norm,
+            "remetente": "Você",
+            "mensagem": mensagem,
+            "hora": datetime.now().strftime("%H:%M")
+        }
+        try:
+            socketio.emit("nova_mensagem", payload, room=numero_norm)
+        except Exception:
+            pass
 
         return jsonify({"status": "Sucesso"})
 
@@ -415,10 +520,22 @@ def buscar_clientes():
 def carregar_mensagens(numero):
     # opcional: normalizar numero (remover espaços/+ etc.)
     numero_norm = numero.replace("+", "").replace(" ", "").strip()
-    msgs = WhatsAppMensagem.query.filter_by(numero=numero_norm).order_by(WhatsAppMensagem.recebido_em.asc()).all()
+    # busca por número exato ou por sufixo (últimos 8 e 6 dígitos) para tolerância a formatos
+    s6 = numero_norm[-6:] if len(numero_norm) >= 6 else None
+    s8 = numero_norm[-8:] if len(numero_norm) >= 8 else None
+    from sqlalchemy import or_
+    query = WhatsAppMensagem.query
+    filters = [WhatsAppMensagem.numero == numero_norm]
+    if s8:
+        filters.append(WhatsAppMensagem.numero.like(f"%{s8}"))
+    if s6:
+        filters.append(WhatsAppMensagem.numero.like(f"%{s6}"))
+
+    msgs = query.filter(or_(*filters)).order_by(WhatsAppMensagem.recebido_em.asc()).all()
     mensagens_list = []
     for m in msgs:
         mensagens_list.append({
+            "id": m.id,
             "remetente": m.remetente,
             "mensagem": m.mensagem,
             "hora": m.recebido_em.strftime("%Y-%m-%d %H:%M:%S")
@@ -686,6 +803,10 @@ def emitir_novo_contato(cliente):
         'telefone': cliente.telefone
     }, broadcast=True)
 
+requests.post(
+  "https://proaristocracy-breathtakingly-indira.ngrok-free.dev/webhook/messages",
+  json={"phone":"+5547999471874","text":{"message":"Teste via ngrok"}}
+)
 
 if __name__ == "__main__":
     print("✅ Servidor rodando em: http://127.0.0.1:5000")
