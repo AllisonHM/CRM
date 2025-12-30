@@ -76,11 +76,22 @@ def menu():
     qtd_mesas = MesaNegocio.query.count()
     qtd_ocorrencias = Ocorrencia.query.count()
 
+    # Contagem de agendas no dia de hoje
+    hoje = datetime.today().date()
+    qtd_agendas_hoje = PlannerEvento.query.filter(PlannerEvento.data == hoje).count()
+
+    # Pessoas físicas / jurídicas
+    qtd_pf = Cliente.query.filter(Cliente.tipo_pessoa == 'Física').count()
+    qtd_pj = Cliente.query.filter(Cliente.tipo_pessoa == 'Jurídica').count()
+
     return render_template(
         "menu.html",
         qtd_clientes=qtd_clientes,
         qtd_mesas=qtd_mesas,
-        qtd_ocorrencias=qtd_ocorrencias
+        qtd_ocorrencias=qtd_ocorrencias,
+        qtd_agendas_hoje=qtd_agendas_hoje,
+        qtd_pf=qtd_pf,
+        qtd_pj=qtd_pj
     )
 
 
@@ -692,6 +703,21 @@ def api_historico(produto_id):
             "data_registro": m.data_registro.strftime("%Y-%m-%d %H:%M:%S")
         })
     return jsonify({"produto": {"id": produto.id, "nome": produto.nome}, "movimentacoes": data})
+
+# Excluir produto
+@app.route("/api/produtos/<int:produto_id>", methods=["DELETE"])
+def api_deletar_produto(produto_id):
+    produto = Produto.query.get_or_404(produto_id)
+    nome_produto = produto.nome
+    
+    # Deleta movimentações associadas (cascade)
+    Movimentacao.query.filter_by(produto_id=produto_id).delete()
+    
+    # Deleta produto
+    db.session.delete(produto)
+    db.session.commit()
+    
+    return jsonify({"status": "sucesso", "mensagem": f"Produto '{nome_produto}' excluído com sucesso"}), 200
 
 @app.route("/produtos/<int:produto_id>/movimentacoes")
 def historico_movimentacoes(produto_id):

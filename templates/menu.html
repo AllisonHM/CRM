@@ -66,46 +66,51 @@
         text-shadow: 0 0 10px rgba(0,255,200,0.4);
     }
 
-    /* CARDS */
+    /* CARDS (compact) */
     .cards {
-        display: flex;
-        gap: 25px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        align-items: stretch;
     }
 
     .card {
-        flex: 1;
-        background: rgba(25, 25, 25, 0.8);
-        padding: 25px;
-        border-radius: 14px;
-        border: 1px solid rgba(0,255,200,0.25);
-        box-shadow: 0 0 20px rgba(0,255,200,0.15);
-        transition: 0.3s;
-        backdrop-filter: blur(10px);
+        background: rgba(25, 25, 25, 0.85);
+        padding: 12px;
+        height: 120px;
+        border-radius: 10px;
+        border: 1px solid rgba(0,255,200,0.12);
+        box-shadow: 0 0 12px rgba(0,255,200,0.06);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        transition: 0.2s;
     }
 
     .card:hover {
-        box-shadow: 0 0 25px rgba(0,255,200,0.45);
-        transform: translateY(-5px);
+        box-shadow: 0 0 16px rgba(0,255,200,0.12);
+        border-color: rgba(0,255,200,0.25);
     }
 
-    .card-title {
-        font-size: 1.4rem;
-        margin-bottom: 10px;
+    .card-label {
+        font-size: 0.85rem;
         color: #00ffc3;
-        text-shadow: 0 0 8px rgba(0,255,200,0.4);
+        font-weight: 500;
+        text-align: center;
+        line-height: 1.2;
     }
 
     .card-number {
-        font-size: 3rem;
-        font-weight: bold;
-        margin-bottom: 15px;
-        color: #fff;
+        font-size: 2.6rem;
+        font-weight: 700;
+        color: #ffffff;
+        letter-spacing: 0.5px;
     }
 
-    canvas {
-        width: 100% !important;
-        height: 120px !important;
-    }
+    /* small labels for screen-readers only */
+    .sr-label { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
 
 </style>
 
@@ -130,26 +135,40 @@
         <h1>Dashboard do CRM</h1>
 
         <div class="cards">
-
-            <!-- CARD CLIENTES -->
-            <div class="card">
-                <div class="card-title">Clientes</div>
+            <div class="card" aria-label="Clientes cadastrados">
+                <span class="sr-label">Clientes cadastrados</span>
+                <div class="card-label">Clientes</div>
                 <div class="card-number">{{ qtd_clientes }}</div>
-                <canvas id="clientesChart"></canvas>
             </div>
 
-            <!-- CARD MESAS -->
-            <div class="card">
-                <div class="card-title">Mesas de Negócio</div>
+            <div class="card" aria-label="Mesas de negócio">
+                <span class="sr-label">Mesas de negócio</span>
+                <div class="card-label">Mesas</div>
                 <div class="card-number">{{ qtd_mesas }}</div>
-                <canvas id="mesasChart"></canvas>
             </div>
 
-            <!-- CARD OCORRÊNCIAS -->
-            <div class="card">
-                <div class="card-title">Ocorrências</div>
+            <div class="card" aria-label="Ocorrências">
+                <span class="sr-label">Ocorrências</span>
+                <div class="card-label">Ocorrências</div>
                 <div class="card-number">{{ qtd_ocorrencias }}</div>
-                <canvas id="ocorrenciasChart"></canvas>
+            </div>
+
+            <div class="card" aria-label="Agendas hoje">
+                <span class="sr-label">Agendas hoje</span>
+                <div class="card-label">Agendas Hoje</div>
+                <div class="card-number">{{ qtd_agendas_hoje }}</div>
+            </div>
+
+            <div class="card" aria-label="Pessoas físicas">
+                <span class="sr-label">Pessoas físicas</span>
+                <div class="card-label">Pessoas Físicas</div>
+                <div class="card-number">{{ qtd_pf }}</div>
+            </div>
+
+            <div class="card" aria-label="Pessoas jurídicas">
+                <span class="sr-label">Pessoas jurídicas</span>
+                <div class="card-label">Pessoas Jurídicas</div>
+                <div class="card-number">{{ qtd_pj }}</div>
             </div>
 
         </div>
@@ -157,38 +176,6 @@
 
 </div>
 
-<!-- CHART.JS -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-<script>
-
-function createMiniChart(id, value, color) {
-    new Chart(document.getElementById(id), {
-        type: 'bar',
-        data: {
-            labels: [''],
-            datasets: [{
-                label: '',
-                data: [value],
-                backgroundColor: color,
-                borderColor: color,
-                borderWidth: 2
-            }]
-        },
-        options: {
-            plugins: { legend: { display: false } },
-            scales: {
-                x: { display: false },
-                y: { display: false, beginAtZero: true }
-            }
-        }
-    });
-}
-
-createMiniChart("clientesChart", {{ qtd_clientes }}, "rgba(0,255,200,0.7)");
-createMiniChart("mesasChart", {{ qtd_mesas }}, "rgba(0,150,255,0.7)");
-createMiniChart("ocorrenciasChart", {{ qtd_ocorrencias }}, "rgba(255,0,140,0.7)");
-
-</script>
+<!-- compact cards: no charts required -->
 
 {% endblock %}

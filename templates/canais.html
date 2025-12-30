@@ -5,6 +5,28 @@
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
 
+<style>
+  /* Chat bubbles */
+  .msg-bubble {
+    display: inline-block;
+    padding: .45rem .65rem;
+    border-radius: 14px;
+    margin: 2px 0;
+    max-width: 85%;
+    word-wrap: break-word;
+  }
+  .msg-me { background: #198754; color: #fff; }
+  .msg-other { background: #e9ecef; color: #212529; }
+
+  /* Notificações */
+  #notificacoes-list .list-group-item { cursor: pointer; }
+  .notif-preview { font-size: 0.85rem; color: #6c757d; }
+  .notif-messages { margin-top: .5rem; display:flex; flex-direction:column; gap:4px; }
+  .notif-message { font-size: 0.78rem; padding:6px 8px; border-radius:10px; }
+  .notif-message.me { background:#d1e7dd; color:#0f5132; align-self:flex-end; }
+  .notif-message.other { background:#f8f9fa; color:#212529; align-self:flex-start; }
+</style>
+
 <div class="container-fluid mt-3">
   <div class="row">
     <div style="color:red">
@@ -13,33 +35,36 @@
 
     <!-- COLUNA ESQUERDA -->
     <div class="col-4 border-end">
-      <h5>Buscar cliente</h5>
+      <h5 class="mb-2">Notificações</h5>
+      <div id="notificacoes-list" class="list-group mb-3"></div>
+
+      <h5 class="mb-2">Buscar cliente</h5>
       <div class="contacts">
-  <div class="contacts-title">Contatos</div>
+        <div class="contacts-title">Contatos</div>
 
-  <div class="p-2">
-    <input
-      type="text"
-      id="search-contact"
-      class="form-control"
-      placeholder="Buscar contato..."
-    />
-  </div>
+        <div class="p-2">
+          <input
+            type="text"
+            id="search-contact"
+            class="form-control"
+            placeholder="Buscar contato..."
+          />
+        </div>
 
-  <div id="contacts-list">
-    {% for c in clientes %}
-      <div class="contact-item" data-nome="{{ c.nome|lower }}" data-numero="{{ c.telefone }}">
-        <strong>{{ c.nome }}</strong><br>
-        <small>{{ c.telefone }}</small>
+        <div id="contacts-list">
+          {% for c in clientes %}
+            <div class="contact-item" data-nome="{{ c.nome|lower }}" data-numero="{{ c.telefone }}">
+              <strong>{{ c.nome }}</strong><br>
+              <small>{{ c.telefone }}</small>
+            </div>
+          {% endfor %}
+        </div>
       </div>
-    {% endfor %}
-  </div>
-</div>
 
       <input
         type="text"
         id="busca"
-        class="form-control mb-2"
+        class="form-control mb-2 mt-3"
         placeholder="Nome ou telefone..."
       >
 
@@ -77,6 +102,91 @@
 let socket = window.socket || null;
 let clienteSelecionado = null;
 const seenMessageIds = new Set();
+const notifications = new Map();
+
+// Carrega últimas notificações (uma por cliente) com preview de conversa
+async function carregarNotificacoes() {
+  try {
+    const res = await fetch('/canais/ultimas');
+    const list = await res.json();
+    const container = document.getElementById('notificacoes-list');
+    container.innerHTML = '';
+    list.forEach(item => {
+      notifications.set(item.numero, item);
+      const el = criarItemNotificacao(item);
+      container.appendChild(el);
+    });
+  } catch (e) {
+    console.error('Erro ao carregar notificações', e);
+  }
+}
+
+function criarItemNotificacao(item) {
+  const div = document.createElement('div');
+  div.className = 'list-group-item';
+  div.dataset.numero = item.numero;
+
+  const header = document.createElement('div');
+  header.className = 'd-flex w-100 justify-content-between';
+  header.innerHTML = `<h6 class="mb-0">${item.nome}</h6><small class="text-muted">${item.recebido_em.slice(11,16)}</small>`;
+
+  const preview = document.createElement('div');
+  preview.className = 'notif-preview';
+  preview.innerText = item.mensagem || '';
+
+  const messagesWrap = document.createElement('div');
+  messagesWrap.className = 'notif-messages';
+  if (item.historico_preview && item.historico_preview.length) {
+    item.historico_preview.forEach(h => {
+      const m = document.createElement('div');
+      m.className = 'notif-message ' + (h.remetente === 'Você' ? 'me' : 'other');
+      m.innerText = h.mensagem;
+      messagesWrap.appendChild(m);
+    });
+  }
+
+  // dot status
+  const dot = document.createElement('span');
+  dot.className = 'rounded-circle';
+  dot.style.display = 'inline-block';
+  dot.style.width = '12px';
+  dot.style.height = '12px';
+  const recebido = new Date(item.recebido_em.replace(' ', 'T'));
+  const diffMin = Math.floor((Date.now() - recebido.getTime()) / 60000);
+  if (diffMin <= 10) dot.classList.add('bg-success');
+  else if (diffMin <= 30) dot.classList.add('bg-warning');
+  else dot.classList.add('bg-danger');
+
+  div.appendChild(header);
+  div.appendChild(preview);
+  div.appendChild(messagesWrap);
+  const right = document.createElement('div');
+  right.appendChild(dot);
+  right.style.marginTop = '6px';
+  div.appendChild(right);
+
+  div.addEventListener('click', async () => {
+    try {
+      const res = await fetch(`/canais/${item.numero}/mensagens`);
+      const json = await res.json();
+      if (json.cliente) selecionarCliente(json.cliente);
+      else selecionarCliente({ nome: item.nome, telefone: item.numero });
+    } catch (e) {
+      console.error('Erro ao abrir conversa via notificação', e);
+    }
+  });
+
+  return div;
+}
+
+function upsertNotificacao(item) {
+  notifications.set(item.numero, item);
+  const container = document.getElementById('notificacoes-list');
+  const existing = container.querySelector(`[data-numero="${item.numero}"]`);
+  if (existing) existing.remove();
+  const el = criarItemNotificacao(item);
+  container.insertBefore(el, container.firstChild);
+}
 
 /* --- SOCKET (REUTILIZA window.socket) --- */
 if (socket) {
@@ -163,6 +273,9 @@ if (socket) {
     const recebido = String(data.numero || "").replace(/\D/g, "");
     console.log('nova_mensagem recebida ->', data, 'recebido:', recebido);
 
+      // atualiza painel de notificações (insere/atualiza item)
+      upsertNotificacao({ numero: data.numero, nome: (clienteSelecionado && clienteSelecionado.telefone_norm === recebido) ? clienteSelecionado.nome : data.numero, mensagem: data.mensagem, recebido_em: new Date().toISOString().slice(0,19).replace('T',' ') });
+
     // se não há cliente selecionado, auto-abre a conversa correspondente
     if (!clienteSelecionado) {
       showIncomingNotification(recebido, data.remetente, data.mensagem);
@@ -239,14 +352,12 @@ function adicionarMensagem(remetente, texto, id=null) {
   }
 
   console.log('adicionarMensagem ->', remetente, texto);
-
   const div = document.createElement("div");
-  div.className = remetente === "Você" ? "text-end" : "text-start";
-  div.innerHTML = `
-    <span class="badge bg-${remetente === "Você" ? "success" : "secondary"}">
-      ${texto}
-    </span>
-  `;
+  div.className = remetente === "Você" ? "text-end mb-2" : "text-start mb-2";
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble ' + (remetente === 'Você' ? 'msg-me' : 'msg-other');
+  bubble.innerText = texto;
+  div.appendChild(bubble);
   const box = document.getElementById("mensagens");
   box.appendChild(div);
   box.scrollTop = box.scrollHeight;
@@ -267,6 +378,11 @@ searchInput.addEventListener("input", function () {
       contato.style.display = "none";
     }
   });
+});
+
+// inicializa notificações ao carregar a página
+document.addEventListener('DOMContentLoaded', function() {
+  carregarNotificacoes();
 });
 </script>
 
