@@ -3,6 +3,25 @@
 
 {% block content %}
 <style>
+    /* Botão voltar padrão */
+    .voltar-topo {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        z-index: 1000;
+        text-decoration: none;
+        background: #2c2f36;
+        color: #fff;
+        padding: 8px 14px;
+        border-radius: 6px;
+        font-weight: 500;
+    }
+
+    .voltar-topo:hover {
+        background: #3a3f47;
+        color: #fff;
+    }
+
     .cliente-container {
         max-width: 1200px;
         margin: 40px auto;
@@ -91,32 +110,14 @@
         box-shadow: 0 0 10px rgba(0,255,200,0.3);
     }
 
-    .voltar-btn {
-        display: block;
-        width: fit-content;
-        margin: 35px auto 0;
-        padding: 12px 25px;
-        border-radius: 10px;
-        background: rgba(216, 216, 216, 0.1);
-        border: 1px solid rgba(0,255,200,0.25);
-        color: #00ffc3;
-        text-decoration: none;
-        font-weight: 600;
-        transition: 0.3s;
-        box-shadow: 0 0 12px rgba(0,255,200,0.2);
-    }
-
-    .voltar-btn:hover {
-        background: #00ffc3;
-        color: #fffafa;
-        box-shadow: 0 0 20px rgba(0,255,200,0.6);
-    }
-
     @keyframes fadeIn {
         from { opacity: 0; transform: translateY(10px); }
         to { opacity: 1; transform: translateY(0); }
     }
 </style>
+
+<!-- 🔙 Botão Voltar (PADRÃO) -->
+<a href="{{ url_for('relacionamento') }}" class="voltar-topo">⬅ Voltar</a>
 
 <div class="cliente-container">
     <h1>Cliente: {{ cliente.nome }}</h1>
@@ -149,23 +150,23 @@
         <!-- Mesas -->
         <div class="card">
             <h3>Mesas de Negócio</h3>
-<!-- Botão para adicionar nova mesa -->
-<a href="{{ url_for('add_mesa', id=cliente.id) }}"
-   style="
-        display:inline-block;
-        margin-bottom: 15px;
-        padding: 8px 14px;
-        border-radius: 10px;
-        background: rgba(0,255,200,0.1);
-        border: 1px solid rgba(0,255,200,0.35);
-        color: #00ffc3;
-        text-decoration:none;
-        font-weight:600;
-        box-shadow:0 0 12px rgba(0,255,200,0.3);
-        transition:0.3s;">
-    ➕ Nova Mesa
-</a>
 
+            <!-- Botão Nova Mesa -->
+            <a href="{{ url_for('add_mesa', id=cliente.id) }}"
+               style="
+                    display:inline-block;
+                    margin-bottom: 15px;
+                    padding: 8px 14px;
+                    border-radius: 10px;
+                    background: rgba(0,255,200,0.1);
+                    border: 1px solid rgba(0,255,200,0.35);
+                    color: #00ffc3;
+                    text-decoration:none;
+                    font-weight:600;
+                    box-shadow:0 0 12px rgba(0,255,200,0.3);
+                    transition:0.3s;">
+                ➕ Nova Mesa
+            </a>
 
             {% if cliente.mesas %}
             <ul>
@@ -186,9 +187,9 @@
         <div class="card">
             <h3>Ocorrências</h3>
 
-            <!-- 🔥 Botão Nova Ocorrência (igual ao botão Nova Mesa) -->
+            <!-- Botão Nova Ocorrência -->
             <a href="{{ url_for('add_ocorrencia', id=cliente.id) }}"
-            style="
+               style="
                     display:inline-block;
                     margin-bottom: 15px;
                     padding: 8px 14px;
@@ -219,8 +220,6 @@
         </div>
 
     </div>
-
-    <a class="voltar-btn" href="{{ url_for('relacionamento') }}">Voltar</a>
 </div>
 
 {% endblock %}

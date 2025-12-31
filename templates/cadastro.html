@@ -36,7 +36,29 @@
     .scroll-box::-webkit-scrollbar-thumb:hover {
         background: #5f6872;
     }
+
+    /* Botão voltar fixo no topo */
+    .voltar-topo {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        z-index: 1000;
+        text-decoration: none;
+        background: #2c2f36;
+        color: #fff;
+        padding: 8px 14px;
+        border-radius: 6px;
+        font-weight: 500;
+    }
+
+    .voltar-topo:hover {
+        background: #3a3f47;
+        color: #fff;
+    }
 </style>
+
+<!-- 🔙 Botão Voltar -->
+<a href="{{ url_for('menu') }}" class="voltar-topo">⬅ Voltar</a>
 
 <div class="container mt-4">
     <h1 class="mb-4">Cadastro de Cliente</h1>
@@ -54,18 +76,18 @@
         </div>
 
         <div class="mb-3">
-    <label for="telefone" class="form-label">Telefone</label>
-    <input 
-        type="text" 
-        name="telefone" 
-        id="telefone" 
-        class="form-control"
-        required
-        placeholder="+55 47 99999-9999"
-        pattern="^\+\d{2}\s\d{2}\s\d{4,5}-?\d{4}$"
-        title="Digite no formato +55 47 99999-9999"
-    >
-</div>
+            <label for="telefone" class="form-label">Telefone</label>
+            <input 
+                type="text" 
+                name="telefone" 
+                id="telefone" 
+                class="form-control"
+                required
+                placeholder="+55 47 99999-9999"
+                pattern="^\+\d{2}\s\d{2}\s\d{4,5}-?\d{4}$"
+                title="Digite no formato +55 47 99999-9999"
+            >
+        </div>
 
         <div class="mb-3">
             <label for="tipo_pessoa" class="form-label">Tipo de Pessoa</label>
@@ -79,6 +101,17 @@
         <button type="submit" class="btn btn-success">Salvar</button>
         <a href="{{ url_for('relacionamento') }}" class="btn btn-secondary">Cancelar</a>
     </form>
+
+    <!-- Campo de busca -->
+    <div class="mb-3">
+        <input
+            type="text"
+            id="buscaCliente"
+            class="form-control"
+            placeholder="🔍 Buscar cliente por nome ou telefone..."
+            onkeyup="filtrarClientes()"
+        >
+    </div>
 
     <!-- Tabela de Clientes -->
     <h2 class="mb-3">Clientes Cadastrados</h2>
@@ -115,10 +148,24 @@
     {% else %}
         <p class="text-muted">Nenhum cliente cadastrado ainda.</p>
     {% endif %}
-
-    <!-- 🔙 Botão Voltar ao Menu -->
-    <a href="{{ url_for('menu') }}" class="voltar-menu">⬅ Voltar ao Menu</a>
-
 </div>
+
+<script>
+function filtrarClientes() {
+    const filtro = document.getElementById("buscaCliente").value.toLowerCase();
+    const linhas = document.querySelectorAll("tbody tr");
+
+    linhas.forEach(linha => {
+        const nome = linha.children[0].innerText.toLowerCase();
+        const telefone = linha.children[2].innerText.toLowerCase();
+
+        if (nome.includes(filtro) || telefone.includes(filtro)) {
+            linha.style.display = "";
+        } else {
+            linha.style.display = "none";
+        }
+    });
+}
+</script>
 
 {% endblock %}

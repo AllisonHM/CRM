@@ -6,6 +6,25 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
 
 <style>
+  /* Botão voltar padrão */
+  .voltar-topo {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 1000;
+    text-decoration: none;
+    background: #2c2f36;
+    color: #fff;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-weight: 500;
+  }
+
+  .voltar-topo:hover {
+    background: #3a3f47;
+    color: #fff;
+  }
+
   /* Chat bubbles */
   .msg-bubble {
     display: inline-block;
@@ -27,11 +46,14 @@
   .notif-message.other { background:#f8f9fa; color:#212529; align-self:flex-start; }
 </style>
 
+<!-- 🔙 Botão Voltar (PADRÃO) -->
+<a href="{{ url_for('menu') }}" class="voltar-topo">⬅ Voltar</a>
+
 <div class="container-fluid mt-3">
   <div class="row">
     <div style="color:red">
-  TOTAL CLIENTES: {{ clientes|length }}
-</div>
+      TOTAL CLIENTES: {{ clientes|length }}
+    </div>
 
     <!-- COLUNA ESQUERDA -->
     <div class="col-4 border-end">
@@ -104,7 +126,9 @@ let clienteSelecionado = null;
 const seenMessageIds = new Set();
 const notifications = new Map();
 
-// Carrega últimas notificações (uma por cliente) com preview de conversa
+/* ===========================
+   NOTIFICAÇÕES
+=========================== */
 async function carregarNotificacoes() {
   try {
     const res = await fetch('/canais/ultimas');
@@ -134,70 +158,24 @@ function criarItemNotificacao(item) {
   preview.className = 'notif-preview';
   preview.innerText = item.mensagem || '';
 
-  const messagesWrap = document.createElement('div');
-  messagesWrap.className = 'notif-messages';
-  if (item.historico_preview && item.historico_preview.length) {
-    item.historico_preview.forEach(h => {
-      const m = document.createElement('div');
-      m.className = 'notif-message ' + (h.remetente === 'Você' ? 'me' : 'other');
-      m.innerText = h.mensagem;
-      messagesWrap.appendChild(m);
-    });
-  }
-
-  // dot status
-  const dot = document.createElement('span');
-  dot.className = 'rounded-circle';
-  dot.style.display = 'inline-block';
-  dot.style.width = '12px';
-  dot.style.height = '12px';
-  const recebido = new Date(item.recebido_em.replace(' ', 'T'));
-  const diffMin = Math.floor((Date.now() - recebido.getTime()) / 60000);
-  if (diffMin <= 10) dot.classList.add('bg-success');
-  else if (diffMin <= 30) dot.classList.add('bg-warning');
-  else dot.classList.add('bg-danger');
-
   div.appendChild(header);
   div.appendChild(preview);
-  div.appendChild(messagesWrap);
-  const right = document.createElement('div');
-  right.appendChild(dot);
-  right.style.marginTop = '6px';
-  div.appendChild(right);
 
   div.addEventListener('click', async () => {
-    try {
-      const res = await fetch(`/canais/${item.numero}/mensagens`);
-      const json = await res.json();
-      if (json.cliente) selecionarCliente(json.cliente);
-      else selecionarCliente({ nome: item.nome, telefone: item.numero });
-    } catch (e) {
-      console.error('Erro ao abrir conversa via notificação', e);
-    }
+    const res = await fetch(`/canais/${item.numero}/mensagens`);
+    const json = await res.json();
+    selecionarCliente(json.cliente || { nome: item.nome, telefone: item.numero });
   });
 
   return div;
 }
 
-function upsertNotificacao(item) {
-  notifications.set(item.numero, item);
-  const container = document.getElementById('notificacoes-list');
-  const existing = container.querySelector(`[data-numero="${item.numero}"]`);
-  if (existing) existing.remove();
-  const el = criarItemNotificacao(item);
-  container.insertBefore(el, container.firstChild);
-}
-
-/* --- SOCKET (REUTILIZA window.socket) --- */
-if (socket) {
-  console.log("Socket conectado (canais)");
-}
-
-/* --- BUSCA CLIENTES --- */
+/* ===========================
+   BUSCA CLIENTES
+=========================== */
 document.getElementById("busca").addEventListener("keyup", async e => {
   const q = e.target.value.trim();
   const lista = document.getElementById("lista-clientes");
-
   lista.innerHTML = "";
 
   if (q.length < 2) return;
@@ -209,182 +187,86 @@ document.getElementById("busca").addEventListener("keyup", async e => {
     const item = document.createElement("button");
     item.className = "list-group-item list-group-item-action";
     item.innerHTML = `<strong>${c.nome}</strong><br><small>${c.telefone}</small>`;
-
     item.onclick = () => selecionarCliente(c);
     lista.appendChild(item);
   });
 });
 
-/* --- SELECIONA CLIENTE --- */
+/* ===========================
+   SELECIONAR CLIENTE
+=========================== */
 async function selecionarCliente(cliente) {
-  // normaliza o número (apenas dígitos) para usar nas rotas e salas
   const numero_norm = (cliente.telefone || "").toString().replace(/\D/g, "");
-  clienteSelecionado = Object.assign({}, cliente, { telefone_norm: numero_norm });
-
-  console.log('selecionarCliente ->', clienteSelecionado);
+  clienteSelecionado = { ...cliente, telefone_norm: numero_norm };
 
   document.getElementById("chat-header").innerText =
     `${cliente.nome} - ${cliente.telefone}`;
 
   document.getElementById("mensagens").innerHTML = "";
 
-  if (socket) {
-    socket.emit("join", { numero: numero_norm });
-    console.log("socket emit: join ->", numero_norm);
-    console.log('socket id ->', window.socket && window.socket.id);
-  }
+  if (socket) socket.emit("join", { numero: numero_norm });
 
   const res = await fetch(`/canais/${numero_norm}/mensagens`);
   const json = await res.json();
 
-  json.mensagens.forEach(m => {
-    adicionarMensagem(m.remetente, m.mensagem, m.id);
-  });
+  json.mensagens.forEach(m => adicionarMensagem(m.remetente, m.mensagem, m.id));
 }
 
-/* --- ENVIO --- */
+/* ===========================
+   ENVIO
+=========================== */
 document.getElementById("enviar").onclick = async () => {
   const input = document.getElementById("mensagem");
   const texto = input.value.trim();
-
   if (!texto || !clienteSelecionado) return;
 
   adicionarMensagem("Você", texto);
   input.value = "";
 
-  // envia usando número normalizado
-  try {
-    const res = await fetch("/canais/enviar", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ numero: clienteSelecionado.telefone_norm || clienteSelecionado.telefone, mensagem: texto })
-    });
-    const j = await res.json().catch(() => null);
-    console.log("/canais/enviar ->", res.status, j);
-  } catch (err) {
-    console.error("Erro ao enviar /canais/enviar:", err);
-  }
+  await fetch("/canais/enviar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      numero: clienteSelecionado.telefone_norm,
+      mensagem: texto
+    })
+  });
 };
 
-/* --- RECEBER --- */
-if (socket) {
-  socket.on("nova_mensagem", data => {
-    // normaliza recebido (apenas dígitos)
-    const recebido = String(data.numero || "").replace(/\D/g, "");
-    console.log('nova_mensagem recebida ->', data, 'recebido:', recebido);
-
-      // atualiza painel de notificações (insere/atualiza item)
-      upsertNotificacao({ numero: data.numero, nome: (clienteSelecionado && clienteSelecionado.telefone_norm === recebido) ? clienteSelecionado.nome : data.numero, mensagem: data.mensagem, recebido_em: new Date().toISOString().slice(0,19).replace('T',' ') });
-
-    // se não há cliente selecionado, auto-abre a conversa correspondente
-    if (!clienteSelecionado) {
-      showIncomingNotification(recebido, data.remetente, data.mensagem);
-      return;
-    }
-
-    // normaliza esperado
-    const esperado = clienteSelecionado.telefone_norm || (clienteSelecionado.telefone || "").toString().replace(/\D/g, "");
-
-    // compara por igualdade ou por sufixo (últimos 6-8 dígitos) para tolerar formatos diferentes
-    const matchesExact = recebido === String(esperado);
-    const last6Equal = esperado.slice(-6) && recebido.slice(-6) && esperado.slice(-6) === recebido.slice(-6);
-    const last8Equal = esperado.slice(-8) && recebido.slice(-8) && esperado.slice(-8) === recebido.slice(-8);
-
-    console.log('comparacao -> exact:', matchesExact, 'last6:', last6Equal, 'last8:', last8Equal, 'esperado:', esperado);
-
-    if (matchesExact || last8Equal || last6Equal) {
-      if (data.remetente === "Cliente") adicionarMensagem(data.remetente, data.mensagem, data.id);
-      return;
-    }
-
-    // se não for para o cliente selecionado, mostra notificação com opção de abrir conversa
-    showIncomingNotification(recebido, data.remetente, data.mensagem);
-  });
-}
-
-// Notificação para mensagens que chegam para outro contato
-async function showIncomingNotification(numeroDigits, remetente, mensagem) {
-  try {
-    const res = await fetch(`/canais/${numeroDigits}/mensagens`);
-    const json = await res.json();
-    const nome = (json.cliente && json.cliente.nome) || numeroDigits;
-
-    // auto-abre a conversa correspondente
-    if (json.cliente) {
-      selecionarCliente(json.cliente);
-    } else {
-      selecionarCliente({ nome: nome, telefone: numeroDigits });
-    }
-    return;
-  } catch (err) {
-    console.error('Erro ao mostrar notificação entrante', err);
-  }
-}
-
-/* --- UI --- */
-/* --- UI --- */
-const recentMessages = new Map(); // chave -> timestamp
-
+/* ===========================
+   UI
+=========================== */
 function adicionarMensagem(remetente, texto, id=null) {
-  const now = Date.now();
-  const chave = `${remetente}::${texto}`;
+  if (id && seenMessageIds.has(id)) return;
+  if (id) seenMessageIds.add(id);
 
-  // Ignora duplicados idênticos em curto período (5s)
-  // se id fornecido, usar deduplicação por id primeiro
-  if (id !== null) {
-    if (seenMessageIds.has(id)) {
-      console.log('adicionarMensagem: ignorado por id já visto ->', id, remetente, texto);
-      return;
-    }
-    seenMessageIds.add(id);
-  } else {
-    const prev = recentMessages.get(chave);
-    if (prev && (now - prev) < 5000) {
-      console.log('adicionarMensagem: duplicado ignorado ->', remetente, texto);
-      return;
-    }
-  }
-  recentMessages.set(chave, now);
-
-  // limpeza periódica de entradas antigas
-  for (const [k, t] of recentMessages) {
-    if (now - t > 60 * 1000) recentMessages.delete(k);
-  }
-
-  console.log('adicionarMensagem ->', remetente, texto);
   const div = document.createElement("div");
   div.className = remetente === "Você" ? "text-end mb-2" : "text-start mb-2";
-  const bubble = document.createElement('div');
-  bubble.className = 'msg-bubble ' + (remetente === 'Você' ? 'msg-me' : 'msg-other');
+
+  const bubble = document.createElement("div");
+  bubble.className = "msg-bubble " + (remetente === "Você" ? "msg-me" : "msg-other");
   bubble.innerText = texto;
+
   div.appendChild(bubble);
   const box = document.getElementById("mensagens");
   box.appendChild(div);
   box.scrollTop = box.scrollHeight;
 }
-const searchInput = document.getElementById("search-contact");
 
-searchInput.addEventListener("input", function () {
+/* ===========================
+   FILTRO CONTATOS
+=========================== */
+document.getElementById("search-contact").addEventListener("input", function () {
   const termo = this.value.toLowerCase().trim();
-  const contatos = document.querySelectorAll(".contact-item");
-
-  contatos.forEach(contato => {
+  document.querySelectorAll(".contact-item").forEach(contato => {
     const nome = contato.dataset.nome || "";
     const numero = contato.dataset.numero || "";
-
-    if (nome.includes(termo) || numero.includes(termo)) {
-      contato.style.display = "block";
-    } else {
-      contato.style.display = "none";
-    }
+    contato.style.display =
+      nome.includes(termo) || numero.includes(termo) ? "block" : "none";
   });
 });
 
-// inicializa notificações ao carregar a página
-document.addEventListener('DOMContentLoaded', function() {
-  carregarNotificacoes();
-});
+document.addEventListener("DOMContentLoaded", carregarNotificacoes);
 </script>
-
 
 {% endblock %}

@@ -1,54 +1,68 @@
 {% extends "base.html" %}
-{% block title %}Menu Principal{% endblock %}
+{% block title %}Planner Semanal{% endblock %}
 
 {% block content %}
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <title>Planner Semanal</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+    /* 🔙 Botão voltar padrão — COMPATÍVEL COM base.html */
+    .voltar-topo {
+        position: fixed;
+        top: 20px;
+        left: calc(var(--menu-offset) + 20px);
+        z-index: 9999;
+        text-decoration: none;
+        background: #2c2f36;
+        color: #fff;
+        padding: 8px 14px;
+        border-radius: 6px;
+        font-weight: 500;
+        box-shadow: 0 0 12px rgba(0,0,0,0.35);
+    }
 
-    <style>
-        .planner-table {
-            border-collapse: collapse;
-            width: 100%;
-        }
-        .planner-table th, .planner-table td {
-            border: 1px solid #ddd;
-            padding: 6px;
-            text-align: center;
-            vertical-align: top;
-            height: 55px;
-        }
-        .planner-table th {
-            background-color: #f8f9fa;
-            position: sticky;
-            top: 0;
-            z-index: 2;
-        }
-        .horario-col {
-            width: 70px;
-            background-color: #f1f1f1;
-            font-weight: bold;
-        }
-        .evento {
-            padding: 4px;
-            border-radius: 6px;
-            color: #fff;
-            font-size: 12px;
-            cursor: pointer;
-        }
-        .tipo-agendamento { background: #28a745; }
-        .tipo-contato { background: #007bff; }
-        .tipo-outros { background: #6c757d; }
-        .cell:hover {
-            background: #eef7ff;
-            cursor: pointer;
-        }
-    </style>
-</head>
-<body>
+    .voltar-topo:hover {
+        background: #3a3f47;
+        color: #fff;
+    }
+
+    .planner-table {
+        border-collapse: collapse;
+        width: 100%;
+    }
+    .planner-table th, .planner-table td {
+        border: 1px solid #ddd;
+        padding: 6px;
+        text-align: center;
+        vertical-align: top;
+        height: 55px;
+    }
+    .planner-table th {
+        background-color: #f8f9fa;
+        position: sticky;
+        top: 0;
+        z-index: 2;
+    }
+    .horario-col {
+        width: 70px;
+        background-color: #f1f1f1;
+        font-weight: bold;
+    }
+    .evento {
+        padding: 4px;
+        border-radius: 6px;
+        color: #fff;
+        font-size: 12px;
+        cursor: pointer;
+    }
+    .tipo-agendamento { background: #28a745; }
+    .tipo-contato { background: #007bff; }
+    .tipo-outros { background: #6c757d; }
+    .cell:hover {
+        background: #eef7ff;
+        cursor: pointer;
+    }
+</style>
+
+<!-- 🔙 BOTÃO VOLTAR (PADRÃO GLOBAL) -->
+<a href="{{ url_for('menu') }}" class="voltar-topo">⬅ Voltar</a>
 
 <div class="container py-4">
 
@@ -56,9 +70,15 @@
 
     <!-- Navegação -->
     <div class="d-flex justify-content-between mb-3">
-        <a href="{{ url_for('planner', week=semana_offset-1) }}" class="btn btn-outline-secondary">← Semana anterior</a>
-        <h4>Semana de {{ dias[0].strftime('%d/%m') }} a {{ dias[6].strftime('%d/%m') }}</h4>
-        <a href="{{ url_for('planner', week=semana_offset+1) }}" class="btn btn-outline-secondary">Próxima semana →</a>
+        <a href="{{ url_for('planner', week=semana_offset-1) }}" class="btn btn-outline-secondary">
+            ← Semana anterior
+        </a>
+        <h4>
+            Semana de {{ dias[0].strftime('%d/%m') }} a {{ dias[6].strftime('%d/%m') }}
+        </h4>
+        <a href="{{ url_for('planner', week=semana_offset+1) }}" class="btn btn-outline-secondary">
+            Próxima semana →
+        </a>
     </div>
 
     <button class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#modalAgendamento">
@@ -88,28 +108,35 @@
                         
                         {% for ev in eventos %}
                             {% if ev.data == dia and ev.hora == hora %}
-                                <div class="evento tipo-{{ ev.tipo }}" 
-     onclick="abrirModalDetalhes('{{ ev.id }}', '{{ ev.tipo }}', '{{ ev.cliente or '' }}', '{{ ev.data }}', '{{ ev.hora }}', `{{ ev.descricao or '' }}`)"
-     style="position: relative;">
+                                <div class="evento tipo-{{ ev.tipo }}"
+                                     onclick="abrirModalDetalhes(
+                                        '{{ ev.id }}',
+                                        '{{ ev.tipo }}',
+                                        '{{ ev.cliente or '' }}',
+                                        '{{ ev.data }}',
+                                        '{{ ev.hora }}',
+                                        `{{ ev.descricao or '' }}`
+                                     )"
+                                     style="position: relative;">
 
-    <div>
-        {{ ev.tipo }} <br>
-        {% if ev.cliente %} {{ ev.cliente }} {% endif %}
-    </div>
+                                    <div>
+                                        {{ ev.tipo }}<br>
+                                        {% if ev.cliente %}{{ ev.cliente }}{% endif %}
+                                    </div>
 
-    <form action="{{ url_for('excluir_evento', id=ev.id) }}" method="POST"
-          style="display:inline-block; margin-top:4px;">
-        <button type="submit" class="btn btn-sm btn-danger p-1"
-                style="font-size:10px; line-height:10px;" onclick="event.stopPropagation();">
-            🗑
-        </button>
-    </form>
-</div>
-
-
+                                    <form action="{{ url_for('excluir_evento', id=ev.id) }}"
+                                          method="POST"
+                                          style="display:inline-block; margin-top:4px;">
+                                        <button type="submit"
+                                                class="btn btn-sm btn-danger p-1"
+                                                style="font-size:10px; line-height:10px;"
+                                                onclick="event.stopPropagation();">
+                                            🗑
+                                        </button>
+                                    </form>
+                                </div>
                             {% endif %}
                         {% endfor %}
-
                     </td>
                     {% endfor %}
                 </tr>
@@ -120,7 +147,7 @@
 
 </div>
 
-<!-- Modal -->
+<!-- Modal Novo Agendamento -->
 <div class="modal fade" id="modalAgendamento">
     <div class="modal-dialog">
         <div class="modal-content p-3">
@@ -154,18 +181,7 @@
     </div>
 </div>
 
-<script>
-    function abrirModalHorario(cell) {
-        document.getElementById("modalData").value = cell.getAttribute("data-data");
-        document.getElementById("modalHora").value = cell.getAttribute("data-hora");
-        var modal = new bootstrap.Modal(document.getElementById("modalAgendamento"));
-        modal.show();
-    }
-</script>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-
-
+<!-- Modal Detalhes -->
 <div class="modal fade" id="modalDetalhes">
     <div class="modal-dialog">
         <div class="modal-content p-3">
@@ -185,22 +201,23 @@
 </div>
 
 <script>
+function abrirModalHorario(cell) {
+    document.getElementById("modalData").value = cell.getAttribute("data-data");
+    document.getElementById("modalHora").value = cell.getAttribute("data-hora");
+    new bootstrap.Modal(document.getElementById("modalAgendamento")).show();
+}
+
 function abrirModalDetalhes(id, tipo, cliente, data, hora, descricao) {
     document.getElementById('detalheTipo').innerText = tipo;
     document.getElementById('detalheCliente').innerText = cliente || "—";
     document.getElementById('detalheData').innerText = data;
     document.getElementById('detalheHora').innerText = hora;
     document.getElementById('detalheDescricao').innerText = descricao || "—";
-
-    // define rota do botão excluir
     document.getElementById('deleteForm').action = "/planner/excluir/" + id;
-
-    var modal = new bootstrap.Modal(document.getElementById('modalDetalhes'));
-    modal.show();
+    new bootstrap.Modal(document.getElementById('modalDetalhes')).show();
 }
 </script>
 
-</body>
-</html>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
 {% endblock %}

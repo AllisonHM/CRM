@@ -6,7 +6,24 @@
     <title>{% block title %}CRM{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
+
 <style>
+    :root {
+        --menu-offset: 80px; /* 🔧 ajuste aqui o quanto vai para a direita */
+    }
+
+    body {
+        padding: 1.5rem;
+        padding-left: calc(1.5rem + var(--menu-offset));
+    }
+
+    /* Navbar deslocada */
+    .navbar {
+        margin-left: var(--menu-offset);
+        border-radius: 10px;
+    }
+
+    /* Popup de notificação */
     .popup-notificacao {
         position: fixed;
         bottom: 20px;
@@ -44,10 +61,9 @@
     <p id="popupTexto"></p>
 </div>
 
-<!-- Socket.IO client (disponibiliza `io`) -->
+<!-- Socket.IO client -->
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script>
-    // Cria/recupera conexão socket única em window.socket
     try {
         if (typeof window.socket === 'undefined' || window.socket === null) {
             if (typeof io !== 'undefined') {
@@ -55,11 +71,9 @@
                 console.log('Socket conectado (base)');
             } else {
                 window.socket = null;
-                console.warn('Socket.IO client não disponível');
             }
         }
     } catch (e) {
-        console.error('Erro ao inicializar Socket:', e);
         window.socket = null;
     }
 
@@ -80,9 +94,9 @@
     }
 </script>
 
-<body class="p-4">
+<body>
 
-    <!-- Navbar simples -->
+    <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
         <div class="container-fluid">
             <a class="navbar-brand" href="{{ url_for('menu') }}">CRM</a>
@@ -101,7 +115,7 @@
         </div>
     </nav>
 
-    <!-- Conteúdo principal -->
+    <!-- Conteúdo -->
     <div class="container">
         {% block content %}
         {% endblock %}
