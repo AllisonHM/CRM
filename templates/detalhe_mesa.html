@@ -3,26 +3,6 @@
 
 {% block content %}
 <style>
-    /* 🔙 Botão voltar padrão — VERSÃO FINAL */
-    .voltar-topo {
-        position: fixed;
-        top: 20px;
-        left: calc(var(--menu-offset) + 20px);
-        z-index: 9999;
-        text-decoration: none;
-        background: #2c2f36;
-        color: #fff;
-        padding: 8px 14px;
-        border-radius: 6px;
-        font-weight: 500;
-        box-shadow: 0 0 12px rgba(0,0,0,0.35);
-    }
-
-    .voltar-topo:hover {
-        background: #3a3f47;
-        color: #fff;
-    }
-
     .mesa-container {
         max-width: 900px;
         margin: 40px auto;
@@ -83,11 +63,6 @@
         to { opacity: 1; transform: translateY(0); }
     }
 </style>
-
-<!-- 🔙 BOTÃO VOLTAR (FORA DO CONTAINER + OFFSET CORRETO) -->
-<a href="{{ url_for('detalhe_cliente', id=mesa.cliente.id) }}" class="voltar-topo">
-    ⬅ Voltar
-</a>
 
 <div class="mesa-container">
 

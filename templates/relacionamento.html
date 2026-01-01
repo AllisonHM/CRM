@@ -3,25 +3,6 @@
 
 {% block content %}
 <style>
-    /* Botão voltar padrão */
-    .voltar-topo {
-        position: fixed;
-        top: 20px;
-        left: 20px;
-        z-index: 1000;
-        text-decoration: none;
-        background: #2c2f36;
-        color: #fff;
-        padding: 8px 14px;
-        border-radius: 6px;
-        font-weight: 500;
-    }
-
-    .voltar-topo:hover {
-        background: #3a3f47;
-        color: #fff;
-    }
-
     .relacionamento-container {
         max-width: 950px;
         margin: 40px auto;
@@ -108,9 +89,6 @@
         to { opacity: 1; transform: translateY(0); }
     }
 </style>
-
-<!-- 🔙 Botão Voltar (PADRÃO) -->
-<a href="{{ url_for('menu') }}" class="voltar-topo">⬅ Voltar</a>
 
 <div class="relacionamento-container">
     <h1>Clientes</h1>

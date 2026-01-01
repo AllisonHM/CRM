@@ -106,6 +106,60 @@ def detalhe_cliente(id):
     cliente = Cliente.query.get_or_404(id)
     return render_template("detalhe_cliente.html", cliente=cliente)
 
+@app.route("/cliente/<int:id>/novo")
+def detalhe_cliente_novo(id):
+    cliente = Cliente.query.get_or_404(id)
+    return render_template("detalhe_cliente_novo.html", cliente=cliente)
+
+@app.route("/cliente/<int:id>/editar", methods=["GET", "POST"])
+def editar_cliente(id):
+    cliente = Cliente.query.get_or_404(id)
+    if request.method == "POST":
+        cliente.nome = request.form.get('nome', cliente.nome)
+        cliente.email = request.form.get('email', cliente.email)
+        cliente.telefone = request.form.get('telefone', cliente.telefone)
+        cliente.endereco = request.form.get('endereco', cliente.endereco)
+        cliente.segmento = request.form.get('segmento', cliente.segmento)
+        
+        # Pessoa Física
+        if 'data_nascimento' in request.form and request.form.get('data_nascimento'):
+            try:
+                cliente.data_nascimento = datetime.strptime(request.form.get('data_nascimento'), '%Y-%m-%d').date()
+            except:
+                pass
+        
+        if 'renda' in request.form and request.form.get('renda'):
+            try:
+                cliente.renda = float(request.form.get('renda'))
+            except:
+                pass
+        
+        cliente.segmento_trabalho = request.form.get('segmento_trabalho', cliente.segmento_trabalho)
+        
+        # Pessoa Jurídica
+        if 'data_abertura' in request.form and request.form.get('data_abertura'):
+            try:
+                cliente.data_abertura = datetime.strptime(request.form.get('data_abertura'), '%Y-%m-%d').date()
+            except:
+                pass
+        
+        if 'faturamento' in request.form and request.form.get('faturamento'):
+            try:
+                cliente.faturamento = float(request.form.get('faturamento'))
+            except:
+                pass
+        
+        if 'qtd_funcionarios' in request.form and request.form.get('qtd_funcionarios'):
+            try:
+                cliente.qtd_funcionarios = int(request.form.get('qtd_funcionarios'))
+            except:
+                pass
+        
+        db.session.commit()
+        return redirect(url_for('detalhe_cliente_novo', id=cliente.id))
+    
+    return render_template("editar_cliente.html", cliente=cliente)
+
 # --- MESAS DE NEGÓCIO
 @app.route("/cliente/<int:id>/add_mesa", methods=["GET", "POST"])
 def add_mesa(id):
@@ -210,11 +264,23 @@ def cadastro():
 @app.route("/cliente/<int:id>/excluir", methods=["POST"])
 def excluir_cliente(id):
     cliente = Cliente.query.get_or_404(id)
-    if cliente.mesas or cliente.ocorrencias:
-        return jsonify({"status": "erro", "detalhe": "Não é possível excluir cliente com mesas ou ocorrências vinculadas."})
+    
+    # Excluir todas as ocorrências vinculadas
+    if cliente.ocorrencias:
+        for ocorrencia in cliente.ocorrencias:
+            db.session.delete(ocorrencia)
+    
+    # Excluir todas as mesas vinculadas
+    if cliente.mesas:
+        for mesa in cliente.mesas:
+            db.session.delete(mesa)
+    
+    # Excluir o cliente
     db.session.delete(cliente)
     db.session.commit()
-    return jsonify({"status": "sucesso"})
+    
+    flash(f"Cliente '{cliente.nome}' e todos os seus dados foram excluídos com sucesso!", "success")
+    return redirect(url_for('cadastro'))
 
 @app.route("/cliente/<int:id>/delete", methods=["POST"])
 def deletar_cliente(id):

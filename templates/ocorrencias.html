@@ -74,22 +74,6 @@
     .badge-sucesso { background: #28a745; color: #fff; }
     .badge-pendente { background: #ffc107; color: #000; }
     .badge-outro    { background: #6c757d; color: #fff; }
-
-    .voltar-menu {
-        display: inline-block;
-        margin-top: 18px; /* menor */
-        background: #3a3f47;
-        padding: 8px 14px; /* menor */
-        border-radius: 6px;
-        color: #ddd;
-        text-decoration: none;
-        font-weight: 500;
-        font-size: 0.9rem;
-    }
-
-    .voltar-menu:hover {
-        background: #4a505a;
-    }
 </style>
 
 
@@ -142,7 +126,5 @@
         </tbody>
     </table>
 </div>
-
-<a href="{{ url_for('menu') }}" class="voltar-menu">⬅ Voltar ao Menu</a>
 
 {% endblock %}

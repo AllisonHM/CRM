@@ -3,25 +3,6 @@
 
 {% block content %}
 <style>
-    /* Botão voltar padrão */
-    .voltar-topo {
-        position: fixed;
-        top: 20px;
-        left: 20px;
-        z-index: 1000;
-        text-decoration: none;
-        background: #2c2f36;
-        color: #fff;
-        padding: 8px 14px;
-        border-radius: 6px;
-        font-weight: 500;
-    }
-
-    .voltar-topo:hover {
-        background: #3a3f47;
-        color: #fff;
-    }
-
     .cliente-container {
         max-width: 1200px;
         margin: 40px auto;
@@ -116,27 +97,41 @@
     }
 </style>
 
-<!-- 🔙 Botão Voltar (PADRÃO) -->
-<a href="{{ url_for('relacionamento') }}" class="voltar-topo">⬅ Voltar</a>
-
 <div class="cliente-container">
     <h1>Cliente: {{ cliente.nome }}</h1>
 
-    <a href="{{ url_for('planner') }}"
-       style="
-        display:inline-block;
-        margin-bottom: 20px;
-        padding: 10px 18px;
-        border-radius: 10px;
-        background: rgb(255, 255, 255);
-        border: 1px solid rgba(0,255,200,0.35);
-        color: #00ffc3;
-        text-decoration:none;
-        font-weight:600;
-        box-shadow:0 0 12px rgba(0,255,200,0.3);
-        transition:0.3s;">
-        📅 Abrir Planner
-    </a>
+    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+        <a href="{{ url_for('planner') }}"
+           style="
+            display:inline-block;
+            padding: 10px 18px;
+            border-radius: 10px;
+            background: rgb(255, 255, 255);
+            border: 1px solid rgba(0,255,200,0.35);
+            color: #00ffc3;
+            text-decoration:none;
+            font-weight:600;
+            box-shadow:0 0 12px rgba(0,255,200,0.3);
+            transition:0.3s;">
+            📅 Abrir Planner
+        </a>
+
+        <a href="{{ url_for('detalhe_cliente_novo', id=cliente.id) }}"
+           style="
+            display:inline-block;
+            padding: 10px 18px;
+            border-radius: 10px;
+            background: rgba(0,255,200,0.15);
+            border: 1px solid rgba(0,255,200,0.35);
+            color: #00ffc3;
+            text-decoration:none;
+            font-weight:600;
+            box-shadow:0 0 12px rgba(0,255,200,0.3);
+            transition:0.3s;
+            font-size: 0.9rem;">
+            ✨ Ver Detalhes Completos
+        </a>
+    </div>
 
     <div class="cards-wrapper">
 

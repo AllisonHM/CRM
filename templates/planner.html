@@ -3,26 +3,6 @@
 
 {% block content %}
 <style>
-    /* 🔙 Botão voltar padrão — COMPATÍVEL COM base.html */
-    .voltar-topo {
-        position: fixed;
-        top: 20px;
-        left: calc(var(--menu-offset) + 20px);
-        z-index: 9999;
-        text-decoration: none;
-        background: #2c2f36;
-        color: #fff;
-        padding: 8px 14px;
-        border-radius: 6px;
-        font-weight: 500;
-        box-shadow: 0 0 12px rgba(0,0,0,0.35);
-    }
-
-    .voltar-topo:hover {
-        background: #3a3f47;
-        color: #fff;
-    }
-
     .planner-table {
         border-collapse: collapse;
         width: 100%;
@@ -60,9 +40,6 @@
         cursor: pointer;
     }
 </style>
-
-<!-- 🔙 BOTÃO VOLTAR (PADRÃO GLOBAL) -->
-<a href="{{ url_for('menu') }}" class="voltar-topo">⬅ Voltar</a>
 
 <div class="container py-4">
 
