@@ -11,6 +11,27 @@
         font-family: "Inter", sans-serif;
     }
 
+    /* Botão voltar fixo no topo esquerdo */
+    .voltar-topo {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        z-index: 1000;
+        text-decoration: none;
+        background: #2c2f36;
+        color: #fff;
+        padding: 8px 14px;
+        border-radius: 6px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+
+    .voltar-topo:hover {
+        background: #3a3f47;
+        color: #00ffc3;
+        box-shadow: 0 0 12px rgba(0,255,200,0.3);
+    }
+
     h1 {
         font-size: 2.2rem;
         color: #00ffc3;
@@ -75,6 +96,9 @@
     }
 </style>
 
+<!-- Botão Voltar Fixo -->
+<a href="{{ url_for('detalhe_cliente', id=cliente.id) }}" class="voltar-topo">⬅ Voltar</a>
+
 <div class="mesa-container">
     <h1>Nova Mesa – {{ cliente.nome }}</h1>
 
@@ -101,7 +125,6 @@
         </form>
     </div>
 
-    <a class="voltar-btn" href="{{ url_for('detalhe_cliente', id=cliente.id) }}">⬅ Voltar</a>
 </div>
 
 {% endblock %}

@@ -3,6 +3,32 @@
 
 {% block content %}
 
+<style>
+    /* Botão voltar fixo no topo esquerdo */
+    .voltar-topo {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        z-index: 1000;
+        text-decoration: none;
+        background: #2c2f36;
+        color: #fff;
+        padding: 8px 14px;
+        border-radius: 6px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+
+    .voltar-topo:hover {
+        background: #3a3f47;
+        color: #00ffc3;
+        box-shadow: 0 0 12px rgba(0,255,200,0.3);
+    }
+</style>
+
+<!-- Botão Voltar Fixo -->
+<a href="{{ url_for('detalhe_cliente', id=cliente.id) }}" class="voltar-topo">⬅ Voltar</a>
+
 <div class="container mt-4">
 
     <h1 class="titulo-pagina">Nova Ocorrência – {{ cliente.nome }}</h1>
@@ -33,10 +59,6 @@
 
         </form>
     </div>
-
-    <a href="{{ url_for('detalhe_cliente', id=cliente.id) }}" class="btn btn-secondary mt-3 w-100">
-        Voltar
-    </a>
 
 </div>
 

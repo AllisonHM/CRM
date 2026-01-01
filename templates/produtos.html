@@ -137,8 +137,7 @@
         <td>${p.quantidade}</td>
         <td>${p.ultima_movimentacao_data ? p.ultima_movimentacao_data + " — " + (p.ultima_movimentacao_descricao || "") : "-"}</td>
         <td>
-          <button class="btn btn-sm btn-outline-primary" onclick="verHistorico(${p.id}, '${p.nome.replace(/'/g,'\\\'')}')">Histórico</button>
-          <button class="btn btn-sm btn-outline-danger ms-2" onclick="excluirProduto(${p.id}, '${p.nome.replace(/'/g,'\\\'')}')">Excluir</button>
+          <button class="btn btn-sm btn-outline-danger" onclick="excluirProduto(${p.id}, '${p.nome.replace(/'/g,'\\\'')}')">Excluir</button>
         </td>
       `;
       tbody.appendChild(tr);
