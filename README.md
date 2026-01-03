@@ -34,7 +34,7 @@ Sistema de CRM (Customer Relationship Management) desenvolvido com Flask.
 ```bash
 python CRM.py
 ```
-
+ngrok http 5000 --host-header="127.0.0.1:5000"
 ## Estrutura do Projeto
 
 - `CRM.py` - Arquivo principal da aplicação
