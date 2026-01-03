@@ -569,6 +569,43 @@ def canais():
     return render_template("canais.html", clientes=clientes)
 
 
+@app.route("/canais/ultimas")
+def ultimas_notificacoes():
+    """
+    Retorna as últimas mensagens recebidas agrupadas por número de telefone.
+    Para cada número, retorna apenas a mensagem mais recente.
+    """
+    from sqlalchemy import func
+    
+    # Subquery para encontrar a data mais recente por número
+    subq = db.session.query(
+        WhatsAppMensagem.numero,
+        func.max(WhatsAppMensagem.recebido_em).label('max_data')
+    ).group_by(WhatsAppMensagem.numero).subquery()
+    
+    # Query principal para buscar as mensagens mais recentes
+    ultimas = db.session.query(WhatsAppMensagem).join(
+        subq,
+        (WhatsAppMensagem.numero == subq.c.numero) & 
+        (WhatsAppMensagem.recebido_em == subq.c.max_data)
+    ).order_by(WhatsAppMensagem.recebido_em.desc()).limit(20).all()
+    
+    resultado = []
+    for msg in ultimas:
+        # Tentar encontrar o cliente pelo telefone
+        cliente = Cliente.query.filter_by(telefone=msg.numero).first()
+        nome = cliente.nome if cliente else msg.numero
+        
+        resultado.append({
+            "numero": msg.numero,
+            "nome": nome,
+            "mensagem": msg.mensagem,
+            "recebido_em": msg.recebido_em.strftime("%Y-%m-%d %H:%M:%S")
+        })
+    
+    return jsonify(resultado)
+
+
 @app.route("/api/clientes/busca")
 def buscar_clientes():
     q = request.args.get("q", "").strip()
@@ -621,6 +658,34 @@ def carregar_mensagens(numero):
     cliente = Cliente.query.filter_by(telefone=numero_norm).first()
     nome = cliente.nome if cliente else numero_norm
     return jsonify({"cliente": {"numero": numero_norm, "nome": nome}, "mensagens": mensagens_list})
+
+@app.route("/canais/<string:numero>/deletar", methods=["DELETE"])
+def deletar_conversa(numero):
+    """
+    Deleta todas as mensagens de uma conversa.
+    """
+    numero_norm = numero.replace("+", "").replace(" ", "").strip()
+    
+    try:
+        # Buscar todas as mensagens do número
+        s6 = numero_norm[-6:] if len(numero_norm) >= 6 else None
+        s8 = numero_norm[-8:] if len(numero_norm) >= 8 else None
+        
+        from sqlalchemy import or_
+        filters = [WhatsAppMensagem.numero == numero_norm]
+        if s8:
+            filters.append(WhatsAppMensagem.numero.like(f"%{s8}"))
+        if s6:
+            filters.append(WhatsAppMensagem.numero.like(f"%{s6}"))
+        
+        # Deletar mensagens
+        WhatsAppMensagem.query.filter(or_(*filters)).delete()
+        db.session.commit()
+        
+        return jsonify({"success": True, "message": "Conversa deletada com sucesso"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/tickets/<int:ticket_id>/send", methods=["POST"])
 def send_message(ticket_id):
