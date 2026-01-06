@@ -143,6 +143,18 @@
     font-size: 1.2rem;
     margin-right: 15px;
     flex-shrink: 0;
+    position: relative;
+  }
+  
+  .conversation-avatar .unread-badge {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 14px;
+    height: 14px;
+    background: #e53e3e;
+    border: 2px solid white;
+    border-radius: 50%;
   }
   
   .conversation-info {
@@ -153,6 +165,7 @@
   .conversation-header {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     margin-bottom: 4px;
   }
   
@@ -683,14 +696,25 @@ async function loadConversations() {
     const currentActive = activeContact?.numero;
     container.innerHTML = '';
     
+    // Usar um Set para evitar duplicação
+    const seenNumbers = new Set();
+    conversations.clear();
+    
     data.forEach(conv => {
       const numeroNorm = normalizeNumber(conv.numero);
-      const existing = conversations.get(numeroNorm) || {};
+      
+      // Se já vimos este número, pular (evita duplicação)
+      if (seenNumbers.has(numeroNorm)) {
+        return;
+      }
+      seenNumbers.add(numeroNorm);
+      
       const safeConv = {
         numero: numeroNorm,
-        nome: existing.nome && existing.nome !== existing.numero ? existing.nome : (conv.nome || numeroNorm),
-        mensagem: conv.mensagem || existing.mensagem || '',
-        recebido_em: conv.recebido_em || existing.recebido_em || new Date().toISOString()
+        nome: conv.nome && conv.nome !== numeroNorm ? conv.nome : (conv.nome || numeroNorm),
+        mensagem: conv.mensagem || '',
+        recebido_em: conv.recebido_em || new Date().toISOString(),
+        nao_respondida: conv.nao_respondida || false
       };
 
       conversations.set(numeroNorm, safeConv);
@@ -743,8 +767,14 @@ function createConversationItem(conv) {
   const previewText = (conv.mensagem || '').toString();
   const preview = previewText.substring(0, 50) + (previewText.length > 50 ? '...' : '');
   
+  // Indicador de mensagem não respondida (bolinha no avatar)
+  const badgeHTML = conv.nao_respondida ? '<div class="unread-badge"></div>' : '';
+  
   div.innerHTML = `
-    <div class="conversation-avatar">${initials}</div>
+    <div class="conversation-avatar">
+      ${initials}
+      ${badgeHTML}
+    </div>
     <div class="conversation-info">
       <div class="conversation-header">
         <div class="conversation-name">${conv.nome}</div>
@@ -985,19 +1015,27 @@ function handleNewMessage(data) {
   // Se for do contato ativo, adicionar no chat
   if (activeContact && activeContact.numero === numeroNorm) {
     addMessageToUI(remetente, mensagem, new Date().toISOString(), id);
+    // Se foi respondido, remover o indicador de não respondido
+    if (remetente === "Você") {
+      const conv = conversations.get(numeroNorm);
+      if (conv) {
+        conv.nao_respondida = false;
+      }
+    }
   } else {
     // Mostrar notificação
     showNotification(`Nova mensagem de ${remetente}`, 'success');
     playNotificationSound();
   }
   
-  // Atualizar lista de conversas localmente para evitar duplicidade
+  // Atualizar ou criar a conversa no map local
   const existing = conversations.get(numeroNorm) || {};
   const merged = {
     numero: numeroNorm,
-    nome: existing.nome || numeroNorm,
+    nome: existing.nome && existing.nome !== numeroNorm ? existing.nome : numeroNorm,
     mensagem: mensagem,
-    recebido_em: new Date().toISOString()
+    recebido_em: new Date().toISOString(),
+    nao_respondida: remetente === "Cliente"  // Marca como não respondida se for do cliente
   };
   conversations.set(numeroNorm, merged);
   renderConversationList(document.getElementById('conversations-list'), activeContact?.numero);
@@ -1044,7 +1082,8 @@ async function searchContacts(query) {
         numero: numeroNorm,
         nome: cliente.nome || existing.nome || numeroNorm,
         mensagem: existing.mensagem || 'Iniciar conversa',
-        recebido_em: existing.recebido_em || new Date().toISOString()
+        recebido_em: existing.recebido_em || new Date().toISOString(),
+        nao_respondida: existing.nao_respondida || false
       };
       conversations.set(numeroNorm, conv);
       const element = createConversationItem(conv);
@@ -1167,3 +1206,4 @@ function normalizeNumber(numero) {
 </script>
 
 {% endblock %}
+ 

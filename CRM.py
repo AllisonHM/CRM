@@ -102,7 +102,7 @@ def relacionamento():
     return render_template("relacionamento.html", clientes=clientes)
 
 @app.route("/cliente/<int:id>")
-def detalhe_cliente(id):
+def detalhe_cliente(id): 
     cliente = Cliente.query.get_or_404(id)
     return render_template("detalhe_cliente.html", cliente=cliente)
 
@@ -500,7 +500,7 @@ def enviar_mensagem_canais():
     if not numero or not mensagem:
         return jsonify({"status": "Erro"}), 400
 
-    numero_norm = numero.replace("+", "").replace(" ", "").strip()
+    numero_norm = normalize_phone(numero)
 
     resultado = enviar_whatsapp_zapi(numero_norm, mensagem)
 
@@ -569,41 +569,123 @@ def canais():
     return render_template("canais.html", clientes=clientes)
 
 
+def normalize_phone(phone):
+    """Normaliza número de telefone removendo todos os caracteres não-numéricos"""
+    import re
+    return re.sub(r'\D', '', str(phone)) if phone else ''
+
+def find_cliente_by_phone(numero_normalizado):
+    """
+    Busca cliente por telefone com lógica inteligente que considera variações:
+    - Tenta match exato
+    - Tenta comparar últimos 9 dígitos (número sem DDD)
+    - Tenta comparar últimos 11 dígitos (DDD + número)
+    - Tenta remover o código de país (55)
+    - Tenta remover 9 extra no início
+    - Tenta buscar número com 1 dígito a menos/mais
+    """
+    if not numero_normalizado:
+        return None
+    
+    # Obter todos os clientes
+    clientes = Cliente.query.all()
+    
+    for c in clientes:
+        tel_norm = normalize_phone(c.telefone)
+        
+        # Match exato
+        if tel_norm == numero_normalizado:
+            return c
+        
+        # Tenta comparar últimos 9 dígitos (número puro sem DDD)
+        if len(tel_norm) >= 9 and len(numero_normalizado) >= 9:
+            if tel_norm[-9:] == numero_normalizado[-9:]:
+                return c
+        
+        # Tenta comparar últimos 11 dígitos (DDD + número)
+        if len(tel_norm) >= 11 and len(numero_normalizado) >= 11:
+            if tel_norm[-11:] == numero_normalizado[-11:]:
+                return c
+        
+        # Remove código de país (55) e compara
+        tel_sem_55 = tel_norm[2:] if tel_norm.startswith('55') else tel_norm
+        num_sem_55 = numero_normalizado[2:] if numero_normalizado.startswith('55') else numero_normalizado
+        
+        if tel_sem_55 and num_sem_55 and tel_sem_55 == num_sem_55:
+            return c
+        
+        # Remove 9 extra no início (se houver)
+        tel_sem_9 = tel_norm[1:] if tel_norm.startswith('9') and len(tel_norm) > 10 else tel_norm
+        num_sem_9 = numero_normalizado[1:] if numero_normalizado.startswith('9') and len(numero_normalizado) > 10 else numero_normalizado
+        
+        if tel_sem_9 and num_sem_9 and tel_sem_9 == num_sem_9:
+            return c
+        
+        # Tenta match com 1 dígito a menos (número está incompleto)
+        # Ex: 554799471874 (12 dígitos) vs 5547999471874 (13 dígitos)
+        if len(tel_norm) == len(numero_normalizado) + 1:
+            # Tenta remover cada dígito do tel_norm e comparar
+            for i in range(len(tel_norm)):
+                tel_sem_um = tel_norm[:i] + tel_norm[i+1:]
+                if tel_sem_um == numero_normalizado:
+                    return c
+        
+        # Tenta match com 1 dígito a mais (número tem dígito extra)
+        if len(numero_normalizado) == len(tel_norm) + 1:
+            # Tenta remover cada dígito do numero_normalizado e comparar
+            for i in range(len(numero_normalizado)):
+                num_sem_um = numero_normalizado[:i] + numero_normalizado[i+1:]
+                if num_sem_um == tel_norm:
+                    return c
+    
+    return None
+
 @app.route("/canais/ultimas")
 def ultimas_notificacoes():
     """
     Retorna as últimas mensagens recebidas agrupadas por número de telefone.
     Para cada número, retorna apenas a mensagem mais recente.
+    Evita duplicações normalizando números de telefone e usando busca inteligente de cliente.
     """
     from sqlalchemy import func
     
-    # Subquery para encontrar a data mais recente por número
-    subq = db.session.query(
-        WhatsAppMensagem.numero,
-        func.max(WhatsAppMensagem.recebido_em).label('max_data')
-    ).group_by(WhatsAppMensagem.numero).subquery()
+    # Obter todas as mensagens ordenadas por data desc
+    all_msgs = db.session.query(WhatsAppMensagem).order_by(
+        WhatsAppMensagem.recebido_em.desc()
+    ).all()
     
-    # Query principal para buscar as mensagens mais recentes
-    ultimas = db.session.query(WhatsAppMensagem).join(
-        subq,
-        (WhatsAppMensagem.numero == subq.c.numero) & 
-        (WhatsAppMensagem.recebido_em == subq.c.max_data)
-    ).order_by(WhatsAppMensagem.recebido_em.desc()).limit(20).all()
+    # Agrupar por número normalizado, mantendo apenas a mais recente
+    conversas_dict = {}
+    for msg in all_msgs:
+        numero_norm = normalize_phone(msg.numero)
+        
+        # Se este número normalizado ainda não foi visto, salvar
+        if numero_norm not in conversas_dict:
+            conversas_dict[numero_norm] = msg
     
+    # Construir resultado
     resultado = []
-    for msg in ultimas:
-        # Tentar encontrar o cliente pelo telefone
-        cliente = Cliente.query.filter_by(telefone=msg.numero).first()
-        nome = cliente.nome if cliente else msg.numero
+    for numero_norm, msg in conversas_dict.items():
+        # Buscar cliente usando a função inteligente
+        cliente = find_cliente_by_phone(numero_norm)
+        nome = cliente.nome if cliente else numero_norm
+        
+        # Verificar se a última mensagem é do cliente (não respondida)
+        # Se remetente é "Cliente", significa que o cliente enviou e ainda não foi respondido
+        nao_respondida = msg.remetente == "Cliente"
         
         resultado.append({
-            "numero": msg.numero,
+            "numero": numero_norm,
             "nome": nome,
             "mensagem": msg.mensagem,
-            "recebido_em": msg.recebido_em.strftime("%Y-%m-%d %H:%M:%S")
+            "recebido_em": msg.recebido_em.strftime("%Y-%m-%d %H:%M:%S"),
+            "nao_respondida": nao_respondida
         })
     
-    return jsonify(resultado)
+    # Ordenar por data (mais recentes primeiro)
+    resultado.sort(key=lambda x: x['recebido_em'], reverse=True)
+    
+    return jsonify(resultado[:20])  # Limitar a 20 conversas
 
 
 @app.route("/api/clientes/busca")
@@ -632,20 +714,14 @@ def buscar_clientes():
 # busca histórico por número (usa numero como string)
 @app.route("/canais/<string:numero>/mensagens")
 def carregar_mensagens(numero):
-    # opcional: normalizar numero (remover espaços/+ etc.)
-    numero_norm = numero.replace("+", "").replace(" ", "").strip()
-    # busca por número exato ou por sufixo (últimos 8 e 6 dígitos) para tolerância a formatos
-    s6 = numero_norm[-6:] if len(numero_norm) >= 6 else None
-    s8 = numero_norm[-8:] if len(numero_norm) >= 8 else None
-    from sqlalchemy import or_
-    query = WhatsAppMensagem.query
-    filters = [WhatsAppMensagem.numero == numero_norm]
-    if s8:
-        filters.append(WhatsAppMensagem.numero.like(f"%{s8}"))
-    if s6:
-        filters.append(WhatsAppMensagem.numero.like(f"%{s6}"))
-
-    msgs = query.filter(or_(*filters)).order_by(WhatsAppMensagem.recebido_em.asc()).all()
+    # normalizar numero (remover espaços/+ e caracteres não numéricos)
+    numero_norm = normalize_phone(numero)
+    
+    # busca por número normalizado
+    msgs = WhatsAppMensagem.query.filter_by(numero=numero_norm).order_by(
+        WhatsAppMensagem.recebido_em.asc()
+    ).all()
+    
     mensagens_list = []
     for m in msgs:
         mensagens_list.append({
