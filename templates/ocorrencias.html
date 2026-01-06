@@ -3,84 +3,10 @@
 
 {% block content %}
 
-<style>
-    .titulo-pagina {
-        font-size: 2rem;
-        font-weight: 700;
-        margin-bottom: 25px;
-        color: #080808;
-        letter-spacing: 1px;
-    }
-
-    .oc-table {
-        width: 100%;
-        border-collapse: separate;
-        border-spacing: 0 4px; /* REDUZIDO (antes 10px) */
-    }
-
-    .oc-table thead th {
-        background: #252a33;
-        color: #f9f8f8;
-        font-weight: 600;
-        padding: 10px 12px; /* REDUZIDO */
-        border: none;
-        text-align: left;
-    }
-
-    .oc-row {
-        background: #252a33;
-        transition: 0.2s ease;
-    }
-
-    .oc-row:hover {
-        background: #2d333d;
-        transform: scale(1.003); /* levemente menor que 1.005 */
-    }
-
-    .oc-table td {
-        padding: 8px 12px; /* REDUZIDO (antes 16px 18px) */
-        color: #e5e5e5;
-        border-top: 1px solid #2f3640;
-        border-bottom: 1px solid #2f3640;
-        line-height: 1.2; /* deixa mais compacto */
-    }
-
-    .btn-ver {
-        background: #000000;
-        color: #ffffff;
-        padding: 6px 10px; /* reduzido */
-        border-radius: 6px;
-        text-decoration: none;
-        font-weight: 600;
-        transition: 0.2s ease;
-        font-size: 0.85rem; /* menor */
-    }
-
-    .btn-ver:hover {
-        background: #000000;
-        opacity: 0.85;
-    }
-
-    .badge-sucesso,
-    .badge-pendente,
-    .badge-outro {
-        padding: 3px 8px; /* reduzido */
-        border-radius: 5px;
-        font-weight: 600;
-        font-size: 0.78rem; /* reduzido */
-        display: inline-block;
-    }
-
-    .badge-sucesso { background: #28a745; color: #fff; }
-    .badge-pendente { background: #ffc107; color: #000; }
-    .badge-outro    { background: #6c757d; color: #fff; }
-</style>
-
-
-<h1 class="titulo-pagina">Ocorrências</h1>
+<h1 class="section-title">⚠️ Ocorrências</h1>
 
 <div class="table-responsive">
-    <table class="oc-table">
+    <table class="table table-crm">
         <thead>
             <tr>
                 <th>ID</th>
@@ -93,7 +19,7 @@
 
         <tbody>
             {% for o in ocorrencias %}
-            <tr class="oc-row">
+            <tr>
                 <td>{{ o.id }}</td>
 
                 <td>

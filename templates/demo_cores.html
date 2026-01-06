@@ -1,0 +1,331 @@
+{% extends "base.html" %}
+{% block title %}Demo de Cores - CRM{% endblock %}
+{% block content %}
+
+<div class="mb-5">
+  <h1 class="section-title">🎨 Paleta de Cores do CRM</h1>
+  <p class="lead">Visualização completa da paleta roxo escuro + amarelo implementada no sistema</p>
+</div>
+
+<!-- Cores Principais -->
+<div class="row mb-5">
+  <div class="col-md-12">
+    <h2 style="color: var(--primary-dark); border-bottom: 2px solid var(--accent-yellow); padding-bottom: 10px;">Cores Principais</h2>
+  </div>
+  
+  <div class="col-md-3">
+    <div class="card card-accent">
+      <div class="card-body text-center">
+        <div style="background: var(--primary-dark); height: 100px; border-radius: 8px; margin-bottom: 1rem;"></div>
+        <h5>Roxo Escuro</h5>
+        <code>#4a235a</code>
+        <p class="text-muted">Botões, headers, textos principais</p>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-3">
+    <div class="card card-accent">
+      <div class="card-body text-center">
+        <div style="background: var(--primary-medium); height: 100px; border-radius: 8px; margin-bottom: 1rem;"></div>
+        <h5>Roxo Médio</h5>
+        <code>#6b3fa0</code>
+        <p class="text-muted">Gradientes</p>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-3">
+    <div class="card card-accent">
+      <div class="card-body text-center">
+        <div style="background: var(--primary-light); height: 100px; border-radius: 8px; margin-bottom: 1rem;"></div>
+        <h5>Roxo Claro</h5>
+        <code>#8b5fbf</code>
+        <p class="text-muted">Hover states</p>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-3">
+    <div class="card card-accent">
+      <div class="card-body text-center">
+        <div style="background: var(--accent-yellow); height: 100px; border-radius: 8px; margin-bottom: 1rem;"></div>
+        <h5>Amarelo Vibrante</h5>
+        <code>#ffc107</code>
+        <p class="text-muted">Destaques, botões secundários</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Cores de Status -->
+<div class="row mb-5">
+  <div class="col-md-12">
+    <h2 style="color: var(--primary-dark); border-bottom: 2px solid var(--accent-yellow); padding-bottom: 10px;">Cores de Status</h2>
+  </div>
+  
+  <div class="col-md-3">
+    <div class="card">
+      <div class="card-body text-center">
+        <div style="background: var(--success-green); height: 100px; border-radius: 8px; margin-bottom: 1rem;"></div>
+        <h5>Sucesso</h5>
+        <code>#27ae60</code>
+        <p class="text-muted">✅ Ações positivas</p>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-3">
+    <div class="card">
+      <div class="card-body text-center">
+        <div style="background: var(--warning-orange); height: 100px; border-radius: 8px; margin-bottom: 1rem;"></div>
+        <h5>Aviso</h5>
+        <code>#f39c12</code>
+        <p class="text-muted">⚠️ Avisos</p>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-3">
+    <div class="card">
+      <div class="card-body text-center">
+        <div style="background: var(--danger-red); height: 100px; border-radius: 8px; margin-bottom: 1rem;"></div>
+        <h5>Perigo</h5>
+        <code>#e74c3c</code>
+        <p class="text-muted">❌ Erros</p>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-3">
+    <div class="card">
+      <div class="card-body text-center">
+        <div style="background: var(--info-blue); height: 100px; border-radius: 8px; margin-bottom: 1rem;"></div>
+        <h5>Informação</h5>
+        <code>#3498db</code>
+        <p class="text-muted">ℹ️ Informações</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Componentes -->
+<div class="row mb-5">
+  <div class="col-md-12">
+    <h2 style="color: var(--primary-dark); border-bottom: 2px solid var(--accent-yellow); padding-bottom: 10px;">Componentes</h2>
+  </div>
+  
+  <!-- Botões -->
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">Botões</div>
+      <div class="card-body">
+        <div class="mb-3">
+          <button class="btn btn-primary btn-rounded me-2">Ação Principal</button>
+          <button class="btn btn-warning btn-rounded me-2">Ação Secundária</button>
+          <button class="btn btn-success btn-rounded me-2">Sucesso</button>
+        </div>
+        <div>
+          <button class="btn btn-danger btn-rounded me-2">Perigo</button>
+          <button class="btn btn-info btn-rounded me-2">Informação</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Badges -->
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">Badges</div>
+      <div class="card-body">
+        <div class="mb-3">
+          <span class="badge badge-primary me-2">Primary</span>
+          <span class="badge badge-warning me-2">Warning</span>
+          <span class="badge badge-success me-2">Success</span>
+        </div>
+        <div>
+          <span class="badge badge-danger me-2">Danger</span>
+          <span class="badge badge-info">Info</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Alertas -->
+<div class="row mb-5">
+  <div class="col-md-12">
+    <h2 style="color: var(--primary-dark); border-bottom: 2px solid var(--accent-yellow); padding-bottom: 10px;">Alertas</h2>
+  </div>
+  
+  <div class="col-md-6">
+    <div class="alert alert-success alert-icon">
+      Ação realizada com sucesso!
+    </div>
+  </div>
+  
+  <div class="col-md-6">
+    <div class="alert alert-info alert-icon">
+      Esta é uma mensagem informativa.
+    </div>
+  </div>
+  
+  <div class="col-md-6">
+    <div class="alert alert-warning alert-icon">
+      Atenção: verifique os dados.
+    </div>
+  </div>
+  
+  <div class="col-md-6">
+    <div class="alert alert-danger alert-icon">
+      Erro ao processar a ação.
+    </div>
+  </div>
+</div>
+
+<!-- Tabelas -->
+<div class="row mb-5">
+  <div class="col-md-12">
+    <h2 style="color: var(--primary-dark); border-bottom: 2px solid var(--accent-yellow); padding-bottom: 10px;">Tabela com Estilo CRM</h2>
+    
+    <div class="table-responsive">
+      <table class="table table-crm">
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Email</th>
+            <th>Status</th>
+            <th>Negócios</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>João Silva</strong></td>
+            <td>joao@example.com</td>
+            <td><span class="badge badge-success">Ativo</span></td>
+            <td><span class="badge badge-primary">5</span></td>
+          </tr>
+          <tr>
+            <td><strong>Maria Santos</strong></td>
+            <td>maria@example.com</td>
+            <td><span class="badge badge-success">Ativo</span></td>
+            <td><span class="badge badge-primary">3</span></td>
+          </tr>
+          <tr>
+            <td><strong>Pedro Costa</strong></td>
+            <td>pedro@example.com</td>
+            <td><span class="badge badge-warning">Inativo</span></td>
+            <td><span class="badge badge-primary">2</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Cards de Estatísticas -->
+<div class="row mb-5">
+  <div class="col-md-12">
+    <h2 style="color: var(--primary-dark); border-bottom: 2px solid var(--accent-yellow); padding-bottom: 10px;">Cards de Estatísticas</h2>
+  </div>
+  
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon">👥</div>
+      <div class="stat-value">1,234</div>
+      <div class="stat-label">Total de Clientes</div>
+    </div>
+  </div>
+  
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon">💰</div>
+      <div class="stat-value">R$ 125k</div>
+      <div class="stat-label">Receita Mensal</div>
+    </div>
+  </div>
+  
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon">📊</div>
+      <div class="stat-value">847</div>
+      <div class="stat-label">Negócios Ativos</div>
+    </div>
+  </div>
+  
+  <div class="col-md-3">
+    <div class="stat-card">
+      <div class="stat-icon">⭐</div>
+      <div class="stat-value">4.8</div>
+      <div class="stat-label">Satisfação (5.0)</div>
+    </div>
+  </div>
+</div>
+
+<!-- Formulário -->
+<div class="row mb-5">
+  <div class="col-md-12">
+    <h2 style="color: var(--primary-dark); border-bottom: 2px solid var(--accent-yellow); padding-bottom: 10px;">Formulário Exemplo</h2>
+    
+    <div class="card">
+      <div class="card-body">
+        <form>
+          <div class="row">
+            <div class="col-md-6">
+              <div class="form-group-crm">
+                <label for="nome">Nome</label>
+                <input type="text" class="form-control" id="nome" placeholder="Digite o nome...">
+              </div>
+            </div>
+            
+            <div class="col-md-6">
+              <div class="form-group-crm">
+                <label for="email">Email</label>
+                <input type="email" class="form-control" id="email" placeholder="Digite o email...">
+              </div>
+            </div>
+          </div>
+          
+          <div class="form-group-crm">
+            <label for="descricao">Descrição</label>
+            <textarea class="form-control" id="descricao" rows="4" placeholder="Digite a descrição..."></textarea>
+            <small class="form-text">Descreva os detalhes aqui</small>
+          </div>
+          
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary btn-rounded">💾 Salvar</button>
+            <button type="reset" class="btn btn-outline-secondary btn-rounded">🔄 Limpar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Gradientes -->
+<div class="row">
+  <div class="col-md-12">
+    <h2 style="color: var(--primary-dark); border-bottom: 2px solid var(--accent-yellow); padding-bottom: 10px;">Gradientes</h2>
+  </div>
+  
+  <div class="col-md-6">
+    <div style="background: var(--gradient-primary); color: white; padding: 2rem; border-radius: 12px; text-align: center; margin-bottom: 1rem;">
+      <h3>Gradiente Primário</h3>
+      <p>Roxo Escuro → Roxo Médio</p>
+    </div>
+  </div>
+  
+  <div class="col-md-6">
+    <div style="background: var(--gradient-accent); color: #333; padding: 2rem; border-radius: 12px; text-align: center; margin-bottom: 1rem;">
+      <h3>Gradiente Accent</h3>
+      <p>Amarelo → Ouro</p>
+    </div>
+  </div>
+</div>
+
+<div class="mt-5 text-center">
+  <p class="text-muted">Esta é uma demonstração completa da paleta de cores implementada no CRM</p>
+  <p class="text-muted"><small>Todas as cores estão defin</small>idas como variáveis CSS em `/static/style.css`</p>
+</div>
+
+{% endblock %}

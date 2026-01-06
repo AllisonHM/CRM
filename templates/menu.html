@@ -1,181 +1,82 @@
 {% extends "base.html" %}
-{% block title %}Menu Principal{% endblock %}
+{% block title %}Menu - CRM{% endblock %}
 
 {% block content %}
 
-<style>
+<h1 class="section-title">📊 Dashboard do CRM</h1>
 
-    .dashboard-container {
-        display: flex;
-        height: calc(100vh - 60px);
-        margin-top: 20px;
-        color: #e6e6e6;
-        font-family: "Inter", sans-serif;
-    }
-
-    /* MENU LATERAL */
-    .sidebar {
-        width: 260px;
-        background: rgba(20, 20, 20, 0.85);
-        padding: 20px;
-        border-right: 1px solid rgba(0,255,200,0.25);
-        box-shadow: 0 0 15px rgba(0,255,200,0.15);
-    }
-
-    .sidebar h2 {
-        color: #00ffc3;
-        font-size: 1.8rem;
-        margin-bottom: 20px;
-        text-shadow: 0 0 7px rgba(0,255,200,0.5);
-    }
-
-    .menu-list {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-    }
-
-    .menu-item {
-        background: rgba(35, 35, 35, 0.7);
-        padding: 12px;
-        border-radius: 10px;
-        text-decoration: none;
-        color: #fff;
-        font-size: 1rem;
-        border: 1px solid rgba(0,255,200,0.2);
-        transition: 0.2s;
-    }
-
-    .menu-item:hover {
-        background: rgba(0,255,200,0.1);
-        border-color: #00ffc3;
-        color: #00ffc3;
-        transform: translateX(5px);
-    }
-
-    /* ÁREA PRINCIPAL */
-    .content-area {
-        flex: 1;
-        padding: 30px;
-    }
-
-    .content-area h1 {
-        font-size: 2.6rem;
-        color: #00ffc3;
-        margin-bottom: 25px;
-        text-shadow: 0 0 10px rgba(0,255,200,0.4);
-    }
-
-    /* CARDS (compact) */
-    .cards {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 16px;
-        align-items: stretch;
-    }
-
-    .card {
-        background: rgba(25, 25, 25, 0.85);
-        padding: 12px;
-        height: 120px;
-        border-radius: 10px;
-        border: 1px solid rgba(0,255,200,0.12);
-        box-shadow: 0 0 12px rgba(0,255,200,0.06);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        transition: 0.2s;
-    }
-
-    .card:hover {
-        box-shadow: 0 0 16px rgba(0,255,200,0.12);
-        border-color: rgba(0,255,200,0.25);
-    }
-
-    .card-label {
-        font-size: 0.85rem;
-        color: #00ffc3;
-        font-weight: 500;
-        text-align: center;
-        line-height: 1.2;
-    }
-
-    .card-number {
-        font-size: 2.6rem;
-        font-weight: 700;
-        color: #ffffff;
-        letter-spacing: 0.5px;
-    }
-
-    /* small labels for screen-readers only */
-    .sr-label { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
-
-</style>
-
-<div class="dashboard-container">
-
-    <!-- MENU LATERAL 
-    <div class="sidebar">
-        <h2>Menu</h2>
-        <div class="menu-list">
-            <a class="menu-item" href="{{ url_for('cadastro') }}">Cadastro de Cliente</a>
-            <a class="menu-item" href="{{ url_for('relacionamento') }}">Relacionamento</a>
-            <a class="menu-item" href="{{ url_for('mesas_negocio') }}">Mesas de Negócio</a>
-            <a class="menu-item" href="{{ url_for('ocorrencias') }}">Ocorrências</a>
-            <a class="menu-item" href="{{ url_for('canais') }}">Canais</a>
-            <a class="menu-item" href="{{ url_for('produtos') }}">Controle de Produtos</a>
-            <a class="menu-item" href="{{ url_for('planner') }}">Planner Semanal</a>
-        </div>
+<div class="row">
+  <!-- Card: Clientes -->
+  <div class="col-md-6 col-lg-3 mb-3">
+    <div class="stat-card hover-lift">
+      <div class="stat-icon">👥</div>
+      <div class="stat-value">{{ qtd_clientes }}</div>
+      <div class="stat-label">Total de Clientes</div>
     </div>
--->
-    <!-- ÁREA PRINCIPAL -->
-    <div class="content-area">
-        <h1>Dashboard do CRM</h1>
+  </div>
 
-        <div class="cards">
-            <div class="card" aria-label="Clientes cadastrados">
-                <span class="sr-label">Clientes cadastrados</span>
-                <div class="card-label">Clientes</div>
-                <div class="card-number">{{ qtd_clientes }}</div>
-            </div>
-
-            <div class="card" aria-label="Mesas de negócio">
-                <span class="sr-label">Mesas de negócio</span>
-                <div class="card-label">Mesas</div>
-                <div class="card-number">{{ qtd_mesas }}</div>
-            </div>
-
-            <div class="card" aria-label="Ocorrências">
-                <span class="sr-label">Ocorrências</span>
-                <div class="card-label">Ocorrências</div>
-                <div class="card-number">{{ qtd_ocorrencias }}</div>
-            </div>
-
-            <div class="card" aria-label="Agendas hoje">
-                <span class="sr-label">Agendas hoje</span>
-                <div class="card-label">Agendas Hoje</div>
-                <div class="card-number">{{ qtd_agendas_hoje }}</div>
-            </div>
-
-            <div class="card" aria-label="Pessoas físicas">
-                <span class="sr-label">Pessoas físicas</span>
-                <div class="card-label">Pessoas Físicas</div>
-                <div class="card-number">{{ qtd_pf }}</div>
-            </div>
-
-            <div class="card" aria-label="Pessoas jurídicas">
-                <span class="sr-label">Pessoas jurídicas</span>
-                <div class="card-label">Pessoas Jurídicas</div>
-                <div class="card-number">{{ qtd_pj }}</div>
-            </div>
-
-        </div>
+  <!-- Card: Mesas de Negócio -->
+  <div class="col-md-6 col-lg-3 mb-3">
+    <div class="stat-card hover-lift">
+      <div class="stat-icon">💼</div>
+      <div class="stat-value">{{ qtd_mesas }}</div>
+      <div class="stat-label">Mesas de Negócio</div>
     </div>
+  </div>
 
+  <!-- Card: Ocorrências -->
+  <div class="col-md-6 col-lg-3 mb-3">
+    <div class="stat-card hover-lift">
+      <div class="stat-icon">⚠️</div>
+      <div class="stat-value">{{ qtd_ocorrencias }}</div>
+      <div class="stat-label">Ocorrências</div>
+    </div>
+  </div>
+
+  <!-- Card: Agendas Hoje -->
+  <div class="col-md-6 col-lg-3 mb-3">
+    <div class="stat-card hover-lift">
+      <div class="stat-icon">📅</div>
+      <div class="stat-value">{{ qtd_agendas_hoje }}</div>
+      <div class="stat-label">Agendas Hoje</div>
+    </div>
+  </div>
+
+  <!-- Card: Agendas Semana -->
+  <div class="col-md-6 col-lg-3 mb-3">
+    <div class="stat-card hover-lift">
+      <div class="stat-icon">📆</div>
+      <div class="stat-value">{{ qtd_agendas_semana }}</div>
+      <div class="stat-label">Agendas Semana</div>
+    </div>
+  </div>
+
+  <!-- Card: Agendas Mês -->
+  <div class="col-md-6 col-lg-3 mb-3">
+    <div class="stat-card hover-lift">
+      <div class="stat-icon">📋</div>
+      <div class="stat-value">{{ qtd_agendas_mes }}</div>
+      <div class="stat-label">Agendas Mês</div>
+    </div>
+  </div>
+
+  <!-- Card: Pessoas Físicas -->
+  <div class="col-md-6 col-lg-3 mb-3">
+    <div class="stat-card hover-lift">
+      <div class="stat-icon">👤</div>
+      <div class="stat-value">{{ qtd_pf }}</div>
+      <div class="stat-label">Pessoas Físicas</div>
+    </div>
+  </div>
+
+  <!-- Card: Pessoas Jurídicas -->
+  <div class="col-md-6 col-lg-3 mb-3">
+    <div class="stat-card hover-lift">
+      <div class="stat-icon">🏢</div>
+      <div class="stat-value">{{ qtd_pj }}</div>
+      <div class="stat-label">Pessoas Jurídicas</div>
+    </div>
+  </div>
 </div>
-
-<!-- compact cards: no charts required -->
 
 {% endblock %}

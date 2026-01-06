@@ -3,66 +3,10 @@
 
 {% block content %}
 
-<style>
-    .titulo-pagina {
-        font-size: 2rem;
-        font-weight: 700;
-        margin-bottom: 25px;
-        color: #080808;
-        letter-spacing: 1px;
-    }
-
-    .mesa-table {
-        width: 100%;
-        border-collapse: separate;
-        border-spacing: 0 4px; /* Espaçamento entre as linhas */
-    }
-
-    .mesa-table thead th {
-        background: #252a33;
-        color: #f9f8f8;
-        font-weight: 600;
-        padding: 14px;
-        border: none;
-        text-align: left;
-    }
-
-    .mesa-row {
-        background: #252a33;
-        transition: 0.2s;
-    }
-
-    .mesa-row:hover {
-        background: #2d333d;
-        transform: scale(1.005);
-    }
-
-    .mesa-table td {
-        padding: 16px 18px; /* Espaçamento maior entre colunas */
-        color: #e5e5e5;
-        border-top: 1px solid #2f3640;
-        border-bottom: 1px solid #2f3640;
-    }
-
-    .btn-editar {
-        background: #000000;
-        color: #ffffff;
-        padding: 8px 14px;
-        border-radius: 6px;
-        text-decoration: none;
-        font-weight: 600;
-        transition: 0.2s;
-    }
-
-    .btn-editar:hover {
-        background: #000000;
-    }
-</style>
-
-<h1 class="titulo-pagina">Mesas de Negócio</h1>
+<h1 class="section-title">📊 Mesas de Negócio</h1>
 
 <div class="table-responsive">
-    <table class="mesa-table">
+    <table class="table table-crm">
         <thead>
             <tr>
                 <th>Cliente</th>
@@ -79,7 +23,7 @@
 
         <tbody>
             {% for m in mesas %}
-            <tr class="mesa-row">
+            <tr>
                 <td>{{ m.cliente.nome }}</td>
                 <td>{{ m.topico }}</td>
                 <td>{{ m.produtos }}</td>
@@ -90,9 +34,9 @@
                 <td>{{ m.hora_registro }}</td>
                 <td>
                     {% if m.situacao == "Em negociação" %}
-                    <a class="btn-editar" href="{{ url_for('detalhe_mesa', id=m.id) }}">
-                        Editar / Adicionar Info
-                    </a>
+                    <a class="btn btn-sm btn-primary" href="{{ url_for('detalhe_mesa', id=m.id) }}">📋 Ver</a>
+                    {% else %}
+                    <span class="badge badge-success">✓ Fechado</span>
                     {% endif %}
                 </td>
             </tr>

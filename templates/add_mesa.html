@@ -2,129 +2,48 @@
 {% block title %}Adicionar Mesa{% endblock %}
 
 {% block content %}
-<style>
-    .mesa-container {
-        max-width: 900px;
-        margin: 40px auto;
-        padding: 20px;
-        color: #e6e6e6;
-        font-family: "Inter", sans-serif;
-    }
 
-    /* Botão voltar fixo no topo esquerdo */
-    .voltar-topo {
-        position: fixed;
-        top: 20px;
-        left: 20px;
-        z-index: 1000;
-        text-decoration: none;
-        background: #2c2f36;
-        color: #fff;
-        padding: 8px 14px;
-        border-radius: 6px;
-        font-weight: 500;
-        transition: all 0.3s ease;
-    }
+<div class="mb-4">
+  <a href="{{ url_for('detalhe_cliente', id=cliente.id) }}" class="btn btn-outline-secondary btn-rounded">⬅ Voltar</a>
+</div>
 
-    .voltar-topo:hover {
-        background: #3a3f47;
-        color: #00ffc3;
-        box-shadow: 0 0 12px rgba(0,255,200,0.3);
-    }
+<h1 class="section-title">📋 Nova Mesa de Negócio</h1>
 
-    h1 {
-        font-size: 2.2rem;
-        color: #00ffc3;
-        margin-bottom: 25px;
-        font-weight: 700;
-        text-shadow: 0 0 10px rgba(0,255,200,0.4);
-    }
+<div class="card card-accent hover-lift">
+  <div class="card-header">📝 Dados da Mesa</div>
+  <div class="card-body">
+    <form method="POST">
 
-    .card {
-        background: rgba(20,20,20,0.75);
-        padding: 22px;
-        border-radius: 12px;
-        border: 1px solid rgba(0,255,200,0.25);
-        box-shadow: 0 0 15px rgba(0,255,200,0.25);
-        margin-bottom: 25px;
-    }
+    <form method="POST">
 
-    label {
-        font-weight: 600;
-        color: #00ffc3;
-        margin-top: 12px;
-    }
+      <div class="form-group-crm">
+        <label for="topico">Tópico</label>
+        <input type="text" id="topico" name="topico" class="form-control" required>
+      </div>
 
-    input, textarea, select {
-        width: 100%;
-        padding: 10px;
-        margin-top: 6px;
-        border-radius: 8px;
-        border: 1px solid #555;
-        background: #222;
-        color: #fff;
-    }
+      <div class="form-group-crm">
+        <label for="produtos">Produtos</label>
+        <textarea id="produtos" name="produtos" class="form-control" rows="4" required></textarea>
+      </div>
 
-    button {
-        margin-top: 20px;
-        padding: 12px 22px;
-        background: #00ffc3;
-        color: #000;
-        border: none;
-        border-radius: 10px;
-        font-weight: 700;
-        cursor: pointer;
-        box-shadow: 0 0 14px rgba(0,255,200,0.4);
-        transition: .3s;
-    }
+      <div class="form-group-crm">
+        <label for="situacao">Situação</label>
+        <select id="situacao" name="situacao" class="form-select" required>
+          <option value="">-- Selecione --</option>
+          <option value="Em negociação">Em negociação</option>
+          <option value="Perdido">Perdido</option>
+          <option value="Ganho">Ganho</option>
+        </select>
+      </div>
 
-    button:hover {
-        background: #00e6af;
-        box-shadow: 0 0 22px rgba(0,255,200,0.6);
-    }
+      <div class="form-group-crm">
+        <label for="valor">Valor Total</label>
+        <input type="number" id="valor" step="0.01" name="valor_total" class="form-control" required>
+      </div>
 
-    .voltar-btn {
-        display: inline-block;
-        padding: 10px 18px;
-        background: rgba(255,255,255,0.1);
-        border: 1px solid rgba(0,255,200,0.25);
-        border-radius: 10px;
-        color: #00ffc3;
-        text-decoration: none;
-        font-weight: 600;
-        transition: 0.3s;
-    }
-</style>
-
-<!-- Botão Voltar Fixo -->
-<a href="{{ url_for('detalhe_cliente', id=cliente.id) }}" class="voltar-topo">⬅ Voltar</a>
-
-<div class="mesa-container">
-    <h1>Nova Mesa – {{ cliente.nome }}</h1>
-
-    <div class="card">
-        <form method="POST">
-
-            <label>Tópico</label>
-            <input type="text" name="topico" required>
-
-            <label>Produtos</label>
-            <textarea name="produtos" rows="4" required></textarea>
-
-            <label>Situação</label>
-            <select name="situacao" required>
-                <option>Em negociação</option>
-                <option>Perdido</option>
-                <option>Ganho</option>
-            </select>
-
-            <label>Valor Total</label>
-            <input type="number" step="0.01" name="valor_total" required>
-
-            <button type="submit">Salvar Mesa</button>
-        </form>
-    </div>
-
+      <button type="submit" class="btn btn-primary btn-rounded">💾 Salvar</button>
+    </form>
+  </div>
 </div>
 
 {% endblock %}

@@ -80,6 +80,25 @@ def menu():
     hoje = datetime.today().date()
     qtd_agendas_hoje = PlannerEvento.query.filter(PlannerEvento.data == hoje).count()
 
+    # Agendas da semana (próximos 7 dias)
+    data_inicio_semana = hoje
+    data_fim_semana = hoje + timedelta(days=7)
+    qtd_agendas_semana = PlannerEvento.query.filter(
+        PlannerEvento.data >= data_inicio_semana,
+        PlannerEvento.data < data_fim_semana
+    ).count()
+
+    # Agendas do mês (mes atual)
+    primeiro_dia_mes = hoje.replace(day=1)
+    if hoje.month == 12:
+        ultimo_dia_mes = primeiro_dia_mes.replace(year=hoje.year + 1, month=1) - timedelta(days=1)
+    else:
+        ultimo_dia_mes = primeiro_dia_mes.replace(month=hoje.month + 1) - timedelta(days=1)
+    qtd_agendas_mes = PlannerEvento.query.filter(
+        PlannerEvento.data >= primeiro_dia_mes,
+        PlannerEvento.data <= ultimo_dia_mes
+    ).count()
+
     # Pessoas físicas / jurídicas
     qtd_pf = Cliente.query.filter(Cliente.tipo_pessoa == 'Física').count()
     qtd_pj = Cliente.query.filter(Cliente.tipo_pessoa == 'Jurídica').count()
@@ -90,6 +109,8 @@ def menu():
         qtd_mesas=qtd_mesas,
         qtd_ocorrencias=qtd_ocorrencias,
         qtd_agendas_hoje=qtd_agendas_hoje,
+        qtd_agendas_semana=qtd_agendas_semana,
+        qtd_agendas_mes=qtd_agendas_mes,
         qtd_pf=qtd_pf,
         qtd_pj=qtd_pj
     )

@@ -1,127 +1,40 @@
 {% extends "base.html" %}
-{% block title %}Relacionamento{% endblock %}
+{% block title %}Relacionamento - CRM{% endblock %}
 
 {% block content %}
-<style>
-    .relacionamento-container {
-        max-width: 950px;
-        margin: 40px auto;
-        padding: 20px;
-        color: #e6e6e6;
-        font-family: "Inter", sans-serif;
-        animation: fadeIn 0.7s ease-in-out;
-    }
 
-    h1 {
-        text-align: center;
-        font-size: 2.6rem;
-        font-weight: 700;
-        margin-bottom: 25px;
-        color: #0a0a0a;
-        text-shadow: 0 0 12px rgba(7, 7, 7, 0.5);
-    }
+<h1 class="section-title">🤝 Relacionamento</h1>
 
-    /* Barra de pesquisa */
-    .search-box {
-        width: 100%;
-        margin: 0 auto 30px;
-        display: flex;
-        justify-content: center;
-    }
-
-    .search-input {
-        width: 100%;
-        padding: 14px 18px;
-        font-size: 1.1rem;
-        border-radius: 12px;
-        border: 1px solid rgba(0,255,200,0.25);
-        outline: none;
-        background: rgba(20,20,20,0.6);
-        color: #e6e6e6;
-        backdrop-filter: blur(6px);
-        transition: 0.3s;
-    }
-
-    .search-input:focus {
-        border-color: #00ffc3;
-        box-shadow: 0 0 14px rgba(0,255,200,0.4);
-    }
-
-    .lista-clientes {
-        display: flex;
-        flex-direction: column;
-        gap: 15px;
-    }
-
-    .cliente-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        background: rgba(25, 25, 25, 0.8);
-        padding: 18px 22px;
-        border-radius: 14px;
-        border: 1px solid rgba(0,255,200,0.15);
-        box-shadow: 0 0 12px rgba(0,255,200,0.1);
-        transition: all 0.3s ease;
-        backdrop-filter: blur(8px);
-    }
-
-    .cliente-item:hover {
-        transform: translateY(-4px);
-        border-color: #00ffc3;
-        box-shadow: 0 0 18px rgba(0,255,200,0.4);
-    }
-
-    .cliente-item a {
-        font-size: 1.2rem;
-        font-weight: 500;
-        color: #e6e6e6;
-        text-decoration: none;
-        transition: color 0.2s ease;
-    }
-
-    .cliente-item:hover a {
-        color: #060606;
-    }
-
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-</style>
-
-<div class="relacionamento-container">
-    <h1>Clientes</h1>
-
-    <!-- 🔍 Caixa de busca -->
-    <div class="search-box">
-        <input
-            type="text"
-            id="searchInput"
-            class="search-input"
-            placeholder="Pesquisar cliente pelo nome..."
-        >
-    </div>
-
-    <div class="lista-clientes" id="listaClientes">
-        {% for c in clientes %}
-            <div class="cliente-item">
-                <a href="{{ url_for('detalhe_cliente', id=c.id) }}">
-                    {{ c.nome }} ({{ c.tipo_pessoa }})
-                </a>
-            </div>
-        {% endfor %}
-    </div>
+<div class="mb-4">
+  <input 
+    type="text" 
+    id="searchInput" 
+    class="form-control" 
+    placeholder="🔍 Buscar cliente..."
+    style="max-width: 500px;">
 </div>
 
-<!-- 🔍 Script do filtro -->
+<div class="list-group">
+  {% for c in clientes %}
+  <a href="{{ url_for('detalhe_cliente', id=c.id) }}" class="list-group-item list-group-item-action cliente-item" data-nome="{{ c.nome.lower() }}">
+    <div class="d-flex justify-content-between align-items-center">
+      <div>
+        <h5 class="mb-1">👤 {{ c.nome }}</h5>
+        <p class="mb-0 text-muted small">{{ c.tipo_pessoa }}</p>
+      </div>
+      <span class="badge badge-primary">→</span>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+
 <script>
 document.getElementById("searchInput").addEventListener("keyup", function() {
     const filtro = this.value.toLowerCase();
     const itens = document.querySelectorAll(".cliente-item");
 
     itens.forEach(item => {
-        const texto = item.innerText.toLowerCase();
+        const texto = item.getAttribute("data-nome");
         item.style.display = texto.includes(filtro) ? "" : "none";
     });
 });
