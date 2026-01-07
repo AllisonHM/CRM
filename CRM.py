@@ -244,8 +244,10 @@ def detalhe_ocorrencia(id):
 @app.route("/ocorrencia/<int:id>/atualizar", methods=["POST"])
 def atualizar_ocorrencia(id):
     ocorrencia = Ocorrencia.query.get_or_404(id)
-    ocorrencia.situacao = request.form["situacao"]
-    db.session.commit()
+    situacao = request.form.get("situacao")
+    if situacao:
+        ocorrencia.status = situacao
+        db.session.commit()
     return redirect(url_for("ocorrencias"))
 
 # --- CADASTRO CLIENTE

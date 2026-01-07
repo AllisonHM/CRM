@@ -3,10 +3,73 @@
 
 {% block content %}
 
-<h1 class="section-title">📊 Mesas de Negócio</h1>
+<style>
+  .table-scroll {
+    max-height: 600px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+  }
+  
+  .table-scroll table {
+    margin-bottom: 0;
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
 
-<div class="table-responsive">
-    <table class="table table-crm">
+  .table-scroll thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .table-scroll thead th {
+    background: var(--gradient-primary);
+    color: white;
+    font-weight: 600;
+    padding: 1rem;
+  }
+
+  .filter-row th {
+    background: rgba(74, 35, 90, 0.2);
+    padding: 0.5rem;
+  }
+
+  .filter-row input,
+  .filter-row select {
+    width: 100%;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+  }
+
+  .btn-export {
+    padding: 10px 18px;
+    background: var(--accent-yellow);
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: 0.3s;
+    margin-bottom: 15px;
+  }
+
+  .btn-export:hover {
+    background: var(--hover-yellow);
+    box-shadow: 0 0 15px rgba(255, 193, 7, 0.3);
+  }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1 class="section-title">📊 Mesas de Negócio</h1>
+  <button class="btn-export" onclick="exportarCSV()">📥 Exportar CSV</button>
+</div>
+
+<div class="table-scroll">
+    <table class="table table-crm" id="tabelaMesas">
         <thead>
             <tr>
                 <th>Cliente</th>
@@ -18,6 +81,25 @@
                 <th>Data</th>
                 <th>Hora</th>
                 <th>Ações</th>
+            </tr>
+            <tr class="filter-row">
+                <th><input type="text" id="filterCliente" placeholder="Filtrar..."></th>
+                <th><input type="text" id="filterTopico" placeholder="Filtrar..."></th>
+                <th><input type="text" id="filterProdutos" placeholder="Filtrar..."></th>
+                <th><input type="text" id="filterDescricao" placeholder="Filtrar..."></th>
+                <th>
+                  <select id="filterSituacao">
+                    <option value="">Todos</option>
+                    <option value="Em negociação">Em negociação</option>
+                    <option value="Ganho">Ganho</option>
+                    <option value="Perdido">Perdido</option>
+                    <option value="Fechado">Fechado</option>
+                  </select>
+                </th>
+                <th><input type="text" id="filterValor" placeholder="Filtrar..."></th>
+                <th><input type="text" id="filterData" placeholder="Filtrar..."></th>
+                <th><input type="text" id="filterHora" placeholder="Filtrar..."></th>
+                <th></th>
             </tr>
         </thead>
 
@@ -44,5 +126,85 @@
         </tbody>
     </table>
 </div>
+
+<script>
+  // Adiciona listeners aos filtros
+  document.getElementById('filterCliente').addEventListener('keyup', filtrarTabela);
+  document.getElementById('filterTopico').addEventListener('keyup', filtrarTabela);
+  document.getElementById('filterProdutos').addEventListener('keyup', filtrarTabela);
+  document.getElementById('filterDescricao').addEventListener('keyup', filtrarTabela);
+  document.getElementById('filterSituacao').addEventListener('change', filtrarTabela);
+  document.getElementById('filterValor').addEventListener('keyup', filtrarTabela);
+  document.getElementById('filterData').addEventListener('keyup', filtrarTabela);
+  document.getElementById('filterHora').addEventListener('keyup', filtrarTabela);
+
+  function filtrarTabela() {
+    const tabela = document.getElementById('tabelaMesas');
+    const linhas = tabela.querySelectorAll('tbody tr');
+    
+    const filterCliente = document.getElementById('filterCliente').value.toLowerCase();
+    const filterTopico = document.getElementById('filterTopico').value.toLowerCase();
+    const filterProdutos = document.getElementById('filterProdutos').value.toLowerCase();
+    const filterDescricao = document.getElementById('filterDescricao').value.toLowerCase();
+    const filterSituacao = document.getElementById('filterSituacao').value;
+    const filterValor = document.getElementById('filterValor').value.toLowerCase();
+    const filterData = document.getElementById('filterData').value.toLowerCase();
+    const filterHora = document.getElementById('filterHora').value.toLowerCase();
+
+    linhas.forEach(linha => {
+      const colunas = linha.querySelectorAll('td');
+      const cliente = colunas[0].textContent.toLowerCase();
+      const topico = colunas[1].textContent.toLowerCase();
+      const produtos = colunas[2].textContent.toLowerCase();
+      const descricao = colunas[3].textContent.toLowerCase();
+      const situacao = colunas[4].textContent;
+      const valor = colunas[5].textContent.toLowerCase();
+      const data = colunas[6].textContent.toLowerCase();
+      const hora = colunas[7].textContent.toLowerCase();
+
+      const matchCliente = cliente.includes(filterCliente);
+      const matchTopico = topico.includes(filterTopico);
+      const matchProdutos = produtos.includes(filterProdutos);
+      const matchDescricao = descricao.includes(filterDescricao);
+      const matchSituacao = filterSituacao === '' || situacao.includes(filterSituacao);
+      const matchValor = valor.includes(filterValor);
+      const matchData = data.includes(filterData);
+      const matchHora = hora.includes(filterHora);
+
+      if (matchCliente && matchTopico && matchProdutos && matchDescricao && matchSituacao && matchValor && matchData && matchHora) {
+        linha.style.display = '';
+      } else {
+        linha.style.display = 'none';
+      }
+    });
+  }
+
+  function exportarCSV() {
+    const tabela = document.getElementById('tabelaMesas');
+    let csv = '';
+    const linhas = tabela.querySelectorAll('tr');
+    
+    linhas.forEach((linha, index) => {
+      if (index > 1) { // Pula cabeçalho e linha de filtros
+        if (linha.style.display !== 'none') {
+          const colunas = linha.querySelectorAll('td');
+          const row = Array.from(colunas).map(col => `"${col.textContent.trim()}"`).join(',');
+          csv += row + '\n';
+        }
+      }
+    });
+
+    // Adiciona cabeçalho
+    const headers = Array.from(tabela.querySelectorAll('thead th:not(.filter-row th)')).slice(0, 8).map(h => `"${h.textContent.trim()}"`).join(',');
+    csv = headers + '\n' + csv;
+
+    // Cria download
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `mesas_negocio_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  }
+</script>
 
 {% endblock %}

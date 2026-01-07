@@ -3,10 +3,73 @@
 
 {% block content %}
 
-<h1 class="section-title">⚠️ Ocorrências</h1>
+<style>
+  .table-scroll {
+    max-height: 600px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+  }
+  
+  .table-scroll table {
+    margin-bottom: 0;
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
 
-<div class="table-responsive">
-    <table class="table table-crm">
+  .table-scroll thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .table-scroll thead th {
+    background: var(--gradient-primary);
+    color: white;
+    font-weight: 600;
+    padding: 1rem;
+  }
+
+  .filter-row th {
+    background: rgba(74, 35, 90, 0.2);
+    padding: 0.5rem;
+  }
+
+  .filter-row input,
+  .filter-row select {
+    width: 100%;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.85rem;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+  }
+
+  .btn-export {
+    padding: 10px 18px;
+    background: var(--accent-yellow);
+    color: #000;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: 0.3s;
+    margin-bottom: 15px;
+  }
+
+  .btn-export:hover {
+    background: var(--hover-yellow);
+    box-shadow: 0 0 15px rgba(255, 193, 7, 0.3);
+  }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1 class="section-title">⚠️ Ocorrências</h1>
+  <button class="btn-export" onclick="exportarCSV()">📥 Exportar CSV</button>
+</div>
+
+<div class="table-scroll">
+    <table class="table table-crm" id="tabelaOcorrencias">
         <thead>
             <tr>
                 <th>ID</th>
@@ -14,6 +77,20 @@
                 <th>Tópico</th>
                 <th>Situação</th>
                 <th>Ações</th>
+            </tr>
+            <tr class="filter-row">
+                <th><input type="text" id="filterID" placeholder="Filtrar..."></th>
+                <th><input type="text" id="filterCliente" placeholder="Filtrar..."></th>
+                <th><input type="text" id="filterTopico" placeholder="Filtrar..."></th>
+                <th>
+                  <select id="filterSituacao">
+                    <option value="">Todos</option>
+                    <option value="Ativo">Ativo</option>
+                    <option value="Resolvido">Resolvido</option>
+                    <option value="Cancelado">Cancelado</option>
+                  </select>
+                </th>
+                <th></th>
             </tr>
         </thead>
 
@@ -29,22 +106,22 @@
                 <td>{{ o.topico or '—' }}</td>
 
                 <td>
-                    {% if o.situacao == 'Ativa' %}
-                        <span class="badge-sucesso">Ativa</span>
-                    {% elif o.situacao == 'Pendente' %}
-                        <span class="badge-pendente">Pendente</span>
+                    {% if o.status == 'Ativo' %}
+                        <span class="badge badge-warning">🟡 Ativo</span>
+                    {% elif o.status == 'Resolvido' %}
+                        <span class="badge badge-success">🟢 Resolvido</span>
+                    {% elif o.status == 'Cancelado' %}
+                        <span class="badge badge-danger">🔴 Cancelado</span>
                     {% else %}
-                        <span class="badge-outro">{{ o.situacao }}</span>
+                        <span class="badge badge-primary">{{ o.status }}</span>
                     {% endif %}
                 </td>
 
                 <td>
-                    {% if o.situacao == 'Ativo' %}
-                        <a class="btn-ver" href="{{ url_for('detalhe_ocorrencia', id=o.id) }}">
-                            Ver / Editar
-                        </a>
+                    {% if o.status == 'Ativo' %}
+                        <a class="btn btn-sm btn-primary" href="{{ url_for('detalhe_ocorrencia', id=o.id) }}">Ver / Editar</a>
                     {% else %}
-                        <button class="btn-ver" style="opacity:0.4;" disabled>Sem ação</button>
+                        <button class="btn btn-sm btn-secondary" disabled style="opacity:0.5;">Sem ação</button>
                     {% endif %}
                 </td>
             </tr>
@@ -52,5 +129,69 @@
         </tbody>
     </table>
 </div>
+
+<script>
+  // Adiciona listeners aos filtros
+  document.getElementById('filterID').addEventListener('keyup', filtrarTabela);
+  document.getElementById('filterCliente').addEventListener('keyup', filtrarTabela);
+  document.getElementById('filterTopico').addEventListener('keyup', filtrarTabela);
+  document.getElementById('filterSituacao').addEventListener('change', filtrarTabela);
+
+  function filtrarTabela() {
+    const tabela = document.getElementById('tabelaOcorrencias');
+    const linhas = tabela.querySelectorAll('tbody tr');
+    
+    const filterID = document.getElementById('filterID').value.toLowerCase();
+    const filterCliente = document.getElementById('filterCliente').value.toLowerCase();
+    const filterTopico = document.getElementById('filterTopico').value.toLowerCase();
+    const filterSituacao = document.getElementById('filterSituacao').value;
+
+    linhas.forEach(linha => {
+      const colunas = linha.querySelectorAll('td');
+      const id = colunas[0].textContent.toLowerCase();
+      const cliente = colunas[1].textContent.toLowerCase();
+      const topico = colunas[2].textContent.toLowerCase();
+      const situacao = colunas[3].textContent;
+
+      const matchID = id.includes(filterID);
+      const matchCliente = cliente.includes(filterCliente);
+      const matchTopico = topico.includes(filterTopico);
+      const matchSituacao = filterSituacao === '' || situacao.includes(filterSituacao);
+
+      if (matchID && matchCliente && matchTopico && matchSituacao) {
+        linha.style.display = '';
+      } else {
+        linha.style.display = 'none';
+      }
+    });
+  }
+
+  function exportarCSV() {
+    const tabela = document.getElementById('tabelaOcorrencias');
+    let csv = '';
+    const linhas = tabela.querySelectorAll('tr');
+    
+    linhas.forEach((linha, index) => {
+      if (index > 1) { // Pula cabeçalho e linha de filtros
+        if (linha.style.display !== 'none') {
+          const colunas = linha.querySelectorAll('td');
+          const row = Array.from(colunas).map(col => `"${col.textContent.trim()}"`).slice(0, 4).join(',');
+          csv += row + '\n';
+        }
+      }
+    });
+
+    // Adiciona cabeçalho
+    const headers = ['ID', 'Cliente', 'Tópico', 'Situação'].map(h => `"${h}"`).join(',');
+    csv = headers + '\n' + csv;
+
+    // Cria download
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `ocorrencias_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  }
+</script>
 
 {% endblock %}
