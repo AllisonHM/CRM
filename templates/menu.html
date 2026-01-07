@@ -6,35 +6,17 @@
 <h1 class="section-title">📊 Dashboard do CRM</h1>
 
 <div class="row">
-  <!-- Card: Clientes -->
-  <div class="col-md-6 col-lg-3 mb-3">
+  <!-- Card: Produtos -->
+  <div class="col-md-6 col-lg mb-3">
     <div class="stat-card hover-lift">
-      <div class="stat-icon">👥</div>
-      <div class="stat-value">{{ qtd_clientes }}</div>
-      <div class="stat-label">Total de Clientes</div>
-    </div>
-  </div>
-
-  <!-- Card: Mesas de Negócio -->
-  <div class="col-md-6 col-lg-3 mb-3">
-    <div class="stat-card hover-lift">
-      <div class="stat-icon">💼</div>
-      <div class="stat-value">{{ qtd_mesas }}</div>
-      <div class="stat-label">Mesas de Negócio</div>
-    </div>
-  </div>
-
-  <!-- Card: Ocorrências -->
-  <div class="col-md-6 col-lg-3 mb-3">
-    <div class="stat-card hover-lift">
-      <div class="stat-icon">⚠️</div>
-      <div class="stat-value">{{ qtd_ocorrencias }}</div>
-      <div class="stat-label">Ocorrências</div>
+      <div class="stat-icon">📦</div>
+      <div class="stat-value">{{ qtd_produtos }}</div>
+      <div class="stat-label">Produtos Cadastrados</div>
     </div>
   </div>
 
   <!-- Card: Agendas Hoje -->
-  <div class="col-md-6 col-lg-3 mb-3">
+  <div class="col-md-6 col-lg mb-3">
     <div class="stat-card hover-lift">
       <div class="stat-icon">📅</div>
       <div class="stat-value">{{ qtd_agendas_hoje }}</div>
@@ -43,7 +25,7 @@
   </div>
 
   <!-- Card: Agendas Semana -->
-  <div class="col-md-6 col-lg-3 mb-3">
+  <div class="col-md-6 col-lg mb-3">
     <div class="stat-card hover-lift">
       <div class="stat-icon">📆</div>
       <div class="stat-value">{{ qtd_agendas_semana }}</div>
@@ -52,7 +34,7 @@
   </div>
 
   <!-- Card: Agendas Mês -->
-  <div class="col-md-6 col-lg-3 mb-3">
+  <div class="col-md-6 col-lg mb-3">
     <div class="stat-card hover-lift">
       <div class="stat-icon">📋</div>
       <div class="stat-value">{{ qtd_agendas_mes }}</div>
@@ -60,23 +42,238 @@
     </div>
   </div>
 
-  <!-- Card: Pessoas Físicas -->
-  <div class="col-md-6 col-lg-3 mb-3">
+  <!-- Card: Mensagens Não Respondidas -->
+  <div class="col-md-6 col-lg mb-3">
     <div class="stat-card hover-lift">
-      <div class="stat-icon">👤</div>
-      <div class="stat-value">{{ qtd_pf }}</div>
-      <div class="stat-label">Pessoas Físicas</div>
-    </div>
-  </div>
-
-  <!-- Card: Pessoas Jurídicas -->
-  <div class="col-md-6 col-lg-3 mb-3">
-    <div class="stat-card hover-lift">
-      <div class="stat-icon">🏢</div>
-      <div class="stat-value">{{ qtd_pj }}</div>
-      <div class="stat-label">Pessoas Jurídicas</div>
+      <div class="stat-icon">💬</div>
+      <div class="stat-value">{{ qtd_mensagens_pendentes | default(0) }}</div>
+      <div class="stat-label">Mensagens Pendentes</div>
     </div>
   </div>
 </div>
+
+<div class="row mt-5">
+  <!-- Gráfico: Clientes (Pessoas Física vs Jurídica) -->
+  <div class="col-md-6 mb-4">
+    <div class="card card-accent">
+      <div class="card-header">👥 Clientes por Tipo</div>
+      <div class="card-body">
+        <canvas id="chartClientes" height="80"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Gráfico: Mesas de Negócio -->
+  <div class="col-md-6 mb-4">
+    <div class="card card-accent">
+      <div class="card-header">💼 Mesas de Negócio</div>
+      <div class="card-body">
+        <canvas id="chartMesas" height="80"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Gráfico: Ocorrências -->
+  <div class="col-md-6 mb-4">
+    <div class="card card-accent">
+      <div class="card-header">⚠️ Ocorrências por Status</div>
+      <div class="card-body">
+        <canvas id="chartOcorrencias" height="80"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Gráfico: Funil de Vendas -->
+  <div class="col-md-6 mb-4">
+    <div class="card card-accent">
+      <div class="card-header">💰 Funil de Vendas (Status x Valor)</div>
+      <div class="card-body">
+        <canvas id="chartFunil" height="80"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+  // Dados passados do backend
+  const qtdPF = {{ qtd_pf }};
+  const qtdPJ = {{ qtd_pj }};
+  const qtdMesasAndamento = {{ qtd_mesas_andamento | default(0) }};
+  const qtdMesasGanhas = {{ qtd_mesas_ganhas | default(0) }};
+  const qtdMesasPerdidas = {{ qtd_mesas_perdidas | default(0) }};
+  const qtdOcorrenciasAtivo = {{ qtd_ocorrencias_ativo | default(0) }};
+  const qtdOcorrenciasResolvido = {{ qtd_ocorrencias_resolvido | default(0) }};
+  const qtdOcorrenciasCancelado = {{ qtd_ocorrencias_cancelado | default(0) }};
+  const valorMesasAndamento = {{ valor_mesas_andamento | default(0) }};
+  const valorMesasGanhas = {{ valor_mesas_ganhas | default(0) }};
+  const valorMesasPerdidas = {{ valor_mesas_perdidas | default(0) }};
+
+  // Gráfico: Clientes (Pessoas Física vs Jurídica)
+  const ctxClientes = document.getElementById('chartClientes').getContext('2d');
+  new Chart(ctxClientes, {
+    type: 'bar',
+    data: {
+      labels: ['Pessoas Físicas', 'Pessoas Jurídicas'],
+      datasets: [{
+        label: 'Quantidade',
+        data: [qtdPF, qtdPJ],
+        backgroundColor: ['#4a235a', '#ffc107'],
+        borderColor: ['#4a235a', '#ffc107'],
+        borderWidth: 1,
+        borderRadius: 6
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false }
+      },
+      scales: {
+        x: {
+          beginAtZero: true,
+          ticks: { color: '#2c3e50' }
+        },
+        y: {
+          ticks: { color: '#2c3e50' }
+        }
+      }
+    }
+  });
+
+  // Gráfico: Mesas de Negócio
+  const ctxMesas = document.getElementById('chartMesas').getContext('2d');
+  new Chart(ctxMesas, {
+    type: 'bar',
+    data: {
+      labels: ['Em Andamento', 'Ganhas', 'Perdidas'],
+      datasets: [{
+        label: 'Quantidade',
+        data: [qtdMesasAndamento, qtdMesasGanhas, qtdMesasPerdidas],
+        backgroundColor: ['#ffc107', '#27ae60', '#e74c3c'],
+        borderColor: ['#ffc107', '#27ae60', '#e74c3c'],
+        borderWidth: 1,
+        borderRadius: 6
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false }
+      },
+      scales: {
+        x: {
+          beginAtZero: true,
+          ticks: { color: '#2c3e50' }
+        },
+        y: {
+          ticks: { color: '#2c3e50' }
+        }
+      }
+    }
+  });
+
+  // Gráfico: Ocorrências
+  const ctxOcorrencias = document.getElementById('chartOcorrencias').getContext('2d');
+  new Chart(ctxOcorrencias, {
+    type: 'bar',
+    data: {
+      labels: ['Ativo', 'Resolvido', 'Cancelado'],
+      datasets: [{
+        label: 'Quantidade',
+        data: [qtdOcorrenciasAtivo, qtdOcorrenciasResolvido, qtdOcorrenciasCancelado],
+        backgroundColor: ['#ffc107', '#27ae60', '#e74c3c'],
+        borderColor: ['#ffc107', '#27ae60', '#e74c3c'],
+        borderWidth: 1,
+        borderRadius: 6
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false }
+      },
+      scales: {
+        x: {
+          beginAtZero: true,
+          ticks: { color: '#2c3e50' }
+        },
+        y: {
+          ticks: { color: '#2c3e50' }
+        }
+      }
+    }
+  });
+
+  // Gráfico: Funil de Vendas (Pilhas - Status x Valor)
+  const ctxFunil = document.getElementById('chartFunil').getContext('2d');
+  new Chart(ctxFunil, {
+    type: 'bar',
+    data: {
+      labels: ['Vendas por Status'],
+      datasets: [
+        {
+          label: 'Em Andamento',
+          data: [valorMesasAndamento],
+          backgroundColor: '#ffc107',
+          borderColor: '#ffc107',
+          borderWidth: 1
+        },
+        {
+          label: 'Ganhas',
+          data: [valorMesasGanhas],
+          backgroundColor: '#27ae60',
+          borderColor: '#27ae60',
+          borderWidth: 1
+        },
+        {
+          label: 'Perdidas',
+          data: [valorMesasPerdidas],
+          backgroundColor: '#e74c3c',
+          borderColor: '#e74c3c',
+          borderWidth: 1
+        }
+      ]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: true,
+      scales: {
+        x: {
+          stacked: true,
+          beginAtZero: true,
+          ticks: { 
+            color: '#2c3e50',
+            callback: function(value) {
+              return 'R$ ' + value.toFixed(0);
+            }
+          }
+        },
+        y: {
+          stacked: true,
+          ticks: { color: '#2c3e50' }
+        }
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              return context.dataset.label + ': R$ ' + context.parsed.x.toFixed(2).replace('.', ',');
+            }
+          }
+        }
+      }
+    }
+  });
+</script>
 
 {% endblock %}

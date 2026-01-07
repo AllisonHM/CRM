@@ -110,7 +110,17 @@
                 <td>{{ m.topico }}</td>
                 <td>{{ m.produtos }}</td>
                 <td>{{ m.descricao }}</td>
-                <td>{{ m.situacao }}</td>
+                <td>
+                  {% if m.situacao == "Em negociação" %}
+                    <span class="badge badge-warning">🟡 Em negociação</span>
+                  {% elif m.situacao == "Ganho" %}
+                    <span class="badge badge-success">🟢 Ganho</span>
+                  {% elif m.situacao == "Perdido" %}
+                    <span class="badge badge-danger">🔴 Perdido</span>
+                  {% else %}
+                    <span class="badge badge-primary">{{ m.situacao }}</span>
+                  {% endif %}
+                </td>
                 <td>R$ {{ m.valor_total }}</td>
                 <td>{{ m.data_registro }}</td>
                 <td>{{ m.hora_registro }}</td>

@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block title %}Análise de NPS{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold">📊 Net Promoter Score (NPS)</h2>
+        <a href="{{ url_for('menu') }}" class="btn btn-secondary btn-rounded">
+            <i class="fas fa-arrow-left"></i> Voltar ao Menu
+        </a>
+    </div>
+
+    <!-- Cards de Resumo -->
+    <div class="row mb-4">
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="stat-card text-center">
+                <div class="stat-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    <i class="fas fa-star"></i>
+                </div>
+                <h3 class="stat-value">{{ nps_score }}</h3>
+                <p class="stat-label">NPS Score</p>
+                <small class="text-muted">{{ nps_classificacao }}</small>
+            </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="stat-card text-center">
+                <div class="stat-icon" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);">
+                    <i class="fas fa-thumbs-up"></i>
+                </div>
+                <h3 class="stat-value">{{ qtd_promotores }}</h3>
+                <p class="stat-label">Promotores (9-10)</p>
+                <small class="text-muted">{{ perc_promotores }}% dos clientes</small>
+            </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="stat-card text-center">
+                <div class="stat-icon" style="background: linear-gradient(135deg, #f2994a 0%, #f2c94c 100%);">
+                    <i class="fas fa-minus-circle"></i>
+                </div>
+                <h3 class="stat-value">{{ qtd_neutros }}</h3>
+                <p class="stat-label">Neutros (7-8)</p>
+                <small class="text-muted">{{ perc_neutros }}% dos clientes</small>
+            </div>
+        </div>
+        
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="stat-card text-center">
+                <div class="stat-icon" style="background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);">
+                    <i class="fas fa-thumbs-down"></i>
+                </div>
+                <h3 class="stat-value">{{ qtd_detratores }}</h3>
+                <p class="stat-label">Detratores (0-6)</p>
+                <small class="text-muted">{{ perc_detratores }}% dos clientes</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráficos -->
+    <div class="row mb-4">
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">Distribuição de Notas</h5>
+                    <canvas id="chartDistribuicao"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">Evolução do NPS (Últimos 30 dias)</h5>
+                    <canvas id="chartEvolucao"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Respostas -->
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <h5 class="card-title mb-3">Respostas de NPS</h5>
+            
+            <div style="max-height: 600px; overflow-y: auto;" class="table-scroll">
+                <table class="table table-hover">
+                    <thead style="position: sticky; top: 0; background: white; z-index: 10;">
+                        <tr>
+                            <th>Cliente</th>
+                            <th>Telefone</th>
+                            <th>Nota</th>
+                            <th>Categoria</th>
+                            <th>Data</th>
+                            <th>Comentário</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for cliente in clientes_nps %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('detalhe_cliente', id=cliente.id) }}">
+                                    {{ cliente.nome }}
+                                </a>
+                            </td>
+                            <td>{{ cliente.telefone }}</td>
+                            <td class="fw-bold">{{ cliente.nps_nota }}</td>
+                            <td>
+                                {% if cliente.nps_nota >= 9 %}
+                                    <span class="badge bg-success">🌟 Promotor</span>
+                                {% elif cliente.nps_nota >= 7 %}
+                                    <span class="badge bg-warning text-dark">😊 Neutro</span>
+                                {% else %}
+                                    <span class="badge bg-danger">😔 Detrator</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ cliente.nps_data.strftime('%d/%m/%Y %H:%M') if cliente.nps_data else '-' }}</td>
+                            <td>{{ cliente.nps_comentario if cliente.nps_comentario else '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Gráfico de Distribuição
+    const ctxDist = document.getElementById('chartDistribuicao');
+    new Chart(ctxDist, {
+        type: 'bar',
+        data: {
+            labels: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'],
+            datasets: [{
+                label: 'Quantidade de Respostas',
+                data: {{ distribuicao_notas | tojson }},
+                backgroundColor: [
+                    '#dc3545', '#dc3545', '#dc3545', '#dc3545', '#dc3545', '#dc3545', '#dc3545',
+                    '#ffc107', '#ffc107',
+                    '#28a745', '#28a745'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+
+    // Gráfico de Evolução
+    const ctxEvol = document.getElementById('chartEvolucao');
+    new Chart(ctxEvol, {
+        type: 'line',
+        data: {
+            labels: {{ evolucao_datas | tojson }},
+            datasets: [{
+                label: 'NPS Score',
+                data: {{ evolucao_scores | tojson }},
+                borderColor: '#667eea',
+                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    min: -100,
+                    max: 100
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

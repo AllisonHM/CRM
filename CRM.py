@@ -65,6 +65,95 @@ def verificar_eventos_proximos():
 threading.Thread(target=verificar_eventos_proximos, daemon=True).start()
 
 
+# ------------------- FUNÇÕES AUXILIARES -------------------
+def enviar_pesquisa_nps(cliente):
+    """
+    Envia pesquisa de NPS via WhatsApp quando uma mesa é ganha.
+    """
+    mensagem = f"""Olá {cliente.nome}! 👋
+
+Obrigado por fechar negócio conosco! 🎉
+
+Em uma escala de 0 a 10, o quanto você recomendaria nossa empresa para um amigo ou colega?
+
+0️⃣ = Nunca recomendaria
+🔟 = Recomendaria com certeza
+
+Por favor, responda apenas com um número de 0 a 10."""
+
+    numero_norm = normalize_phone(cliente.telefone)
+    resultado = enviar_whatsapp_zapi(numero_norm, mensagem)
+    
+    if resultado["status"] == "Sucesso":
+        # Marcar que está aguardando resposta de NPS
+        cliente.aguardando_nps = True
+        db.session.commit()
+        
+        # Salvar mensagem enviada
+        msg = WhatsAppMensagem(
+            numero=numero_norm,
+            remetente="Você",
+            mensagem=mensagem,
+            recebido_em=datetime.utcnow()
+        )
+        db.session.add(msg)
+        db.session.commit()
+        
+        return True
+    return False
+
+
+def processar_resposta_nps(cliente, texto):
+    """
+    Processa a resposta de NPS do cliente.
+    Retorna True se foi uma resposta válida de NPS.
+    """
+    # Tentar extrair número de 0 a 10
+    import re
+    numeros = re.findall(r'\b(10|[0-9])\b', texto.strip())
+    
+    if numeros:
+        nota = int(numeros[0])
+        if 0 <= nota <= 10:
+            # Registrar NPS
+            cliente.nps_nota = nota
+            cliente.nps_data = datetime.utcnow()
+            cliente.aguardando_nps = False
+            db.session.commit()
+            
+            # Enviar mensagem de agradecimento
+            numero_norm = normalize_phone(cliente.telefone)
+            
+            if nota >= 9:
+                categoria = "Promotor"
+                emoji = "🌟"
+                msg_agradecimento = f"Obrigado pela nota {nota}! {emoji}\n\nFicamos muito felizes em saber que você recomendaria nossa empresa! Seu feedback é muito importante para nós. 💙"
+            elif nota >= 7:
+                categoria = "Neutro"
+                emoji = "😊"
+                msg_agradecimento = f"Obrigado pela nota {nota}! {emoji}\n\nEstamos sempre buscando melhorar. Se tiver alguma sugestão, ficaremos felizes em ouvir!"
+            else:
+                categoria = "Detrator"
+                emoji = "😔"
+                msg_agradecimento = f"Obrigado pela nota {nota}. {emoji}\n\nLamentamos não ter atendido suas expectativas. Poderia nos dizer o que podemos melhorar? Seu feedback é muito importante para nós."
+            
+            enviar_whatsapp_zapi(numero_norm, msg_agradecimento)
+            
+            # Salvar agradecimento
+            msg = WhatsAppMensagem(
+                numero=numero_norm,
+                remetente="Você",
+                mensagem=msg_agradecimento,
+                recebido_em=datetime.utcnow()
+            )
+            db.session.add(msg)
+            db.session.commit()
+            
+            return True
+    
+    return False
+
+
 # ------------------- ROTAS -------------------
 @app.route("/")
 def home():
@@ -103,6 +192,50 @@ def menu():
     qtd_pf = Cliente.query.filter(Cliente.tipo_pessoa == 'Física').count()
     qtd_pj = Cliente.query.filter(Cliente.tipo_pessoa == 'Jurídica').count()
 
+    # Mesas de negócio por situação
+    qtd_mesas_andamento = MesaNegocio.query.filter(MesaNegocio.situacao == 'Em negociação').count()
+    qtd_mesas_ganhas = MesaNegocio.query.filter(MesaNegocio.situacao == 'Ganho').count()
+    qtd_mesas_perdidas = MesaNegocio.query.filter(MesaNegocio.situacao == 'Perdido').count()
+
+    # Valor total por situação (funil de vendas)
+    from sqlalchemy import func
+    valor_mesas_andamento = db.session.query(func.sum(MesaNegocio.valor_total)).filter(
+        MesaNegocio.situacao == 'Em negociação'
+    ).scalar() or 0
+    valor_mesas_ganhas = db.session.query(func.sum(MesaNegocio.valor_total)).filter(
+        MesaNegocio.situacao == 'Ganho'
+    ).scalar() or 0
+    valor_mesas_perdidas = db.session.query(func.sum(MesaNegocio.valor_total)).filter(
+        MesaNegocio.situacao == 'Perdido'
+    ).scalar() or 0
+
+    # Ocorrências por status
+    qtd_ocorrencias_ativo = Ocorrencia.query.filter(Ocorrencia.status == 'Ativo').count()
+    qtd_ocorrencias_resolvido = Ocorrencia.query.filter(Ocorrencia.status == 'Resolvido').count()
+    qtd_ocorrencias_cancelado = Ocorrencia.query.filter(Ocorrencia.status == 'Cancelado').count()
+
+    # Produtos cadastrados
+    qtd_produtos = Produto.query.count()
+
+    # Mensagens pendentes: contar números únicos que têm mensagem de cliente não respondida
+    # Buscar último remetente de cada conversa e contar quantas terminam com "Cliente"
+    from sqlalchemy import func
+    
+    # Subquery para pegar a última mensagem de cada número
+    ultima_msg_subq = db.session.query(
+        WhatsAppMensagem.numero,
+        func.max(WhatsAppMensagem.recebido_em).label('ultima_data')
+    ).group_by(WhatsAppMensagem.numero).subquery()
+    
+    # Contar conversas onde a última mensagem é do Cliente
+    qtd_mensagens_pendentes = db.session.query(WhatsAppMensagem).join(
+        ultima_msg_subq,
+        db.and_(
+            WhatsAppMensagem.numero == ultima_msg_subq.c.numero,
+            WhatsAppMensagem.recebido_em == ultima_msg_subq.c.ultima_data
+        )
+    ).filter(WhatsAppMensagem.remetente == "Cliente").count()
+
     return render_template(
         "menu.html",
         qtd_clientes=qtd_clientes,
@@ -112,7 +245,115 @@ def menu():
         qtd_agendas_semana=qtd_agendas_semana,
         qtd_agendas_mes=qtd_agendas_mes,
         qtd_pf=qtd_pf,
-        qtd_pj=qtd_pj
+        qtd_pj=qtd_pj,
+        qtd_mesas_andamento=qtd_mesas_andamento,
+        qtd_mesas_ganhas=qtd_mesas_ganhas,
+        qtd_mesas_perdidas=qtd_mesas_perdidas,
+        qtd_ocorrencias_ativo=qtd_ocorrencias_ativo,
+        qtd_ocorrencias_resolvido=qtd_ocorrencias_resolvido,
+        qtd_ocorrencias_cancelado=qtd_ocorrencias_cancelado,
+        qtd_produtos=qtd_produtos,
+        valor_mesas_andamento=valor_mesas_andamento,
+        valor_mesas_ganhas=valor_mesas_ganhas,
+        valor_mesas_perdidas=valor_mesas_perdidas,
+        qtd_mensagens_pendentes=qtd_mensagens_pendentes
+    )
+
+
+# --- NPS (NET PROMOTER SCORE)
+@app.route("/nps")
+def nps():
+    # Buscar todos os clientes que responderam NPS
+    clientes_nps = Cliente.query.filter(Cliente.nps_nota.isnot(None)).order_by(Cliente.nps_data.desc()).all()
+    
+    total_respostas = len(clientes_nps)
+    
+    if total_respostas == 0:
+        return render_template(
+            "nps.html",
+            nps_score=0,
+            nps_classificacao="Sem dados",
+            qtd_promotores=0,
+            qtd_neutros=0,
+            qtd_detratores=0,
+            perc_promotores=0,
+            perc_neutros=0,
+            perc_detratores=0,
+            clientes_nps=[],
+            distribuicao_notas=[0]*11,
+            evolucao_datas=[],
+            evolucao_scores=[]
+        )
+    
+    # Calcular NPS
+    promotores = [c for c in clientes_nps if c.nps_nota >= 9]
+    neutros = [c for c in clientes_nps if 7 <= c.nps_nota <= 8]
+    detratores = [c for c in clientes_nps if c.nps_nota <= 6]
+    
+    qtd_promotores = len(promotores)
+    qtd_neutros = len(neutros)
+    qtd_detratores = len(detratores)
+    
+    perc_promotores = round((qtd_promotores / total_respostas) * 100, 1)
+    perc_detratores = round((qtd_detratores / total_respostas) * 100, 1)
+    perc_neutros = round((qtd_neutros / total_respostas) * 100, 1)
+    
+    nps_score = round(perc_promotores - perc_detratores, 1)
+    
+    # Classificação do NPS
+    if nps_score >= 75:
+        nps_classificacao = "Excelente 🌟"
+    elif nps_score >= 50:
+        nps_classificacao = "Muito Bom 👍"
+    elif nps_score >= 0:
+        nps_classificacao = "Razoável 😐"
+    else:
+        nps_classificacao = "Crítico ⚠️"
+    
+    # Distribuição de notas (0 a 10)
+    distribuicao_notas = [0] * 11
+    for cliente in clientes_nps:
+        distribuicao_notas[cliente.nps_nota] += 1
+    
+    # Evolução do NPS (últimos 30 dias)
+    from datetime import timedelta
+    hoje = datetime.now()
+    inicio = hoje - timedelta(days=30)
+    
+    evolucao_datas = []
+    evolucao_scores = []
+    
+    for i in range(30):
+        data = inicio + timedelta(days=i)
+        # Clientes que responderam até essa data
+        clientes_ate_data = [c for c in clientes_nps if c.nps_data and c.nps_data.date() <= data.date()]
+        
+        if clientes_ate_data:
+            promo = len([c for c in clientes_ate_data if c.nps_nota >= 9])
+            detra = len([c for c in clientes_ate_data if c.nps_nota <= 6])
+            total = len(clientes_ate_data)
+            
+            score = round(((promo / total) - (detra / total)) * 100, 1)
+            evolucao_scores.append(score)
+        else:
+            evolucao_scores.append(0)
+        
+        evolucao_datas.append(data.strftime('%d/%m'))
+    
+    return render_template(
+        "nps.html",
+        nps_score=nps_score,
+        nps_classificacao=nps_classificacao,
+        qtd_promotores=qtd_promotores,
+        qtd_neutros=qtd_neutros,
+        qtd_detratores=qtd_detratores,
+        perc_promotores=perc_promotores,
+        perc_neutros=perc_neutros,
+        perc_detratores=perc_detratores,
+        clientes_nps=clientes_nps,
+        distribuicao_notas=distribuicao_notas,
+        evolucao_datas=evolucao_datas,
+        evolucao_scores=evolucao_scores
     )
 
 
@@ -326,8 +567,14 @@ def atualizar_mesa(id):
         flash("Informe uma nova situação.", "danger")
         return redirect(url_for("detalhe_mesa", id=id))
 
+    situacao_antiga = mesa.situacao
     mesa.situacao = nova_situacao
     db.session.commit()
+    
+    # Se a mesa foi marcada como "Ganha", enviar pesquisa de NPS
+    if nova_situacao == "Ganha" and situacao_antiga != "Ganha":
+        enviar_pesquisa_nps(mesa.cliente)
+    
     flash("Situação atualizada com sucesso!", "success")
 
     return redirect(url_for("detalhe_mesa", id=id))
@@ -466,6 +713,11 @@ def receber_mensagem_webhook():
     )
     db.session.add(msg)
     db.session.commit()
+
+    # Verificar se é resposta de NPS
+    cliente = Cliente.query.filter_by(telefone=numero).first()
+    if cliente and cliente.aguardando_nps:
+        processar_resposta_nps(cliente, text)
 
     # emitir para a sala correta
     payload = {

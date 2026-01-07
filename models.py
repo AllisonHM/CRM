@@ -22,6 +22,12 @@ class Cliente(db.Model):
     segmento = db.Column(db.String(120), nullable=True)
     qtd_funcionarios = db.Column(db.Integer, nullable=True)
 
+    # NPS (Net Promoter Score)
+    nps_nota = db.Column(db.Integer, nullable=True)  # 0-10
+    nps_data = db.Column(db.DateTime, nullable=True)
+    nps_comentario = db.Column(db.Text, nullable=True)
+    aguardando_nps = db.Column(db.Boolean, default=False)  # Flag para saber se está aguardando resposta
+
     mesas = db.relationship('MesaNegocio', backref='cliente', lazy=True)
     ocorrencias = db.relationship('Ocorrencia', backref='cliente', lazy=True)
 
