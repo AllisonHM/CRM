@@ -28,6 +28,9 @@ class Cliente(db.Model):
     nps_comentario = db.Column(db.Text, nullable=True)
     aguardando_nps = db.Column(db.Boolean, default=False)  # Flag para saber se está aguardando resposta
 
+    # Observações Gerais
+    observacoes = db.Column(db.Text, nullable=True)  # Campo para anotações e observações gerais
+
     mesas = db.relationship('MesaNegocio', backref='cliente', lazy=True)
     ocorrencias = db.relationship('Ocorrencia', backref='cliente', lazy=True)
 

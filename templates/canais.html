@@ -698,13 +698,14 @@ async function loadConversations() {
     
     // Usar um Set para evitar duplicação
     const seenNumbers = new Set();
-    conversations.clear();
+    const novasConversas = new Map();
     
     data.forEach(conv => {
       const numeroNorm = normalizeNumber(conv.numero);
       
       // Se já vimos este número, pular (evita duplicação)
       if (seenNumbers.has(numeroNorm)) {
+        console.warn(`⚠️ Número duplicado ignorado: ${numeroNorm}`);
         return;
       }
       seenNumbers.add(numeroNorm);
@@ -717,11 +718,16 @@ async function loadConversations() {
         nao_respondida: conv.nao_respondida || false
       };
 
-      conversations.set(numeroNorm, safeConv);
+      novasConversas.set(numeroNorm, safeConv);
     });
 
+    // Substituir o Map de conversas pelo novo (sem duplicatas)
+    conversations = novasConversas;
+    
     renderConversationList(container, currentActive);
     document.getElementById('total-conversas').textContent = conversations.size;
+    
+    console.log(`✅ ${conversations.size} conversas únicas carregadas`);
     
   } catch (error) {
     console.error('Erro ao carregar conversas:', error);
@@ -1020,25 +1026,47 @@ function handleNewMessage(data) {
       const conv = conversations.get(numeroNorm);
       if (conv) {
         conv.nao_respondida = false;
+        conversations.set(numeroNorm, conv);
       }
     }
   } else {
-    // Mostrar notificação
-    showNotification(`Nova mensagem de ${remetente}`, 'success');
-    playNotificationSound();
+    // Mostrar notificação apenas se for mensagem de cliente
+    if (remetente === "Cliente") {
+      showNotification(`Nova mensagem de ${data.nome || numeroNorm}`, 'success');
+      playNotificationSound();
+    }
   }
   
   // Atualizar ou criar a conversa no map local
-  const existing = conversations.get(numeroNorm) || {};
-  const merged = {
-    numero: numeroNorm,
-    nome: existing.nome && existing.nome !== numeroNorm ? existing.nome : numeroNorm,
-    mensagem: mensagem,
-    recebido_em: new Date().toISOString(),
-    nao_respondida: remetente === "Cliente"  // Marca como não respondida se for do cliente
-  };
-  conversations.set(numeroNorm, merged);
-  renderConversationList(document.getElementById('conversations-list'), activeContact?.numero);
+  const existing = conversations.get(numeroNorm);
+  
+  if (existing) {
+    // Atualizar conversa existente
+    existing.mensagem = mensagem;
+    existing.recebido_em = new Date().toISOString();
+    existing.nao_respondida = remetente === "Cliente";
+    // Atualizar nome se veio um nome melhor
+    if (data.nome && data.nome !== numeroNorm && (!existing.nome || existing.nome === numeroNorm)) {
+      existing.nome = data.nome;
+    }
+    conversations.set(numeroNorm, existing);
+  } else {
+    // Criar nova conversa
+    const newConv = {
+      numero: numeroNorm,
+      nome: data.nome || numeroNorm,
+      mensagem: mensagem,
+      recebido_em: new Date().toISOString(),
+      nao_respondida: remetente === "Cliente"
+    };
+    conversations.set(numeroNorm, newConv);
+  }
+  
+  // Reordenar e renderizar lista se não estiver em busca
+  if (!isSearching) {
+    renderConversationList(document.getElementById('conversations-list'), activeContact?.numero);
+    document.getElementById('total-conversas').textContent = conversations.size;
+  }
 }
 
 // ===========================
@@ -1077,17 +1105,28 @@ async function searchContacts(query) {
 
     clientes.forEach(cliente => {
       const numeroNorm = normalizeNumber(cliente.telefone);
-      const existing = conversations.get(numeroNorm) || {};
-      const conv = {
-        numero: numeroNorm,
-        nome: cliente.nome || existing.nome || numeroNorm,
-        mensagem: existing.mensagem || 'Iniciar conversa',
-        recebido_em: existing.recebido_em || new Date().toISOString(),
-        nao_respondida: existing.nao_respondida || false
-      };
-      conversations.set(numeroNorm, conv);
-      const element = createConversationItem(conv);
-      container.appendChild(element);
+      const existing = conversations.get(numeroNorm);
+      
+      // Se já existe conversa, usar os dados existentes, apenas atualizar o nome se necessário
+      if (existing) {
+        if (cliente.nome && (!existing.nome || existing.nome === numeroNorm)) {
+          existing.nome = cliente.nome;
+        }
+        const element = createConversationItem(existing);
+        container.appendChild(element);
+      } else {
+        // Nova conversa - criar com dados do cliente
+        const conv = {
+          numero: numeroNorm,
+          nome: cliente.nome || numeroNorm,
+          mensagem: 'Iniciar conversa',
+          recebido_em: new Date().toISOString(),
+          nao_respondida: false
+        };
+        conversations.set(numeroNorm, conv);
+        const element = createConversationItem(conv);
+        container.appendChild(element);
+      }
     });
 
     document.getElementById('total-conversas').textContent = clientes.length;

@@ -31,12 +31,20 @@ headers = {'client-token': client_token, 'Content-Type': 'application/json'}
 def enviar_whatsapp_zapi(numero, mensagem):
     url = f"https://api.z-api.io/instances/{instance}/token/{token}/send-text"
     payload = {"phone": numero, "message": mensagem}
+    
+    print(f"🌐 URL: {url}")
+    print(f"📦 Payload: phone={numero}, message_length={len(mensagem)}")
+    
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=10)
+        print(f"📡 Status Code: {response.status_code}")
+        print(f"📄 Response: {response.text[:200]}...")  # Primeiros 200 caracteres
+        
         if response.status_code == 200:
             return {"status": "Sucesso", "detalhe": response.text}
-        return {"status": "Erro", "detalhe": response.text}
+        return {"status": "Erro", "detalhe": f"Status {response.status_code}: {response.text}"}
     except Exception as e:
+        print(f"❌ EXCEÇÃO ao enviar WhatsApp: {str(e)}")
         return {"status": "Erro", "detalhe": str(e)}
     
 import threading, time
@@ -70,6 +78,10 @@ def enviar_pesquisa_nps(cliente):
     """
     Envia pesquisa de NPS via WhatsApp quando uma mesa é ganha.
     """
+    print(f"\n🔍 === INICIANDO ENVIO DE NPS ===")
+    print(f"📋 Cliente: {cliente.nome}")
+    print(f"📞 Telefone original: {cliente.telefone}")
+    
     mensagem = f"""Olá {cliente.nome}! 👋
 
 Obrigado por fechar negócio conosco! 🎉
@@ -82,9 +94,15 @@ Em uma escala de 0 a 10, o quanto você recomendaria nossa empresa para um amigo
 Por favor, responda apenas com um número de 0 a 10."""
 
     numero_norm = normalize_phone(cliente.telefone)
+    print(f"📞 Telefone normalizado: {numero_norm}")
+    
+    print(f"📤 Enviando mensagem via Z-API...")
     resultado = enviar_whatsapp_zapi(numero_norm, mensagem)
     
+    print(f"📥 Resultado do envio: {resultado}")
+    
     if resultado["status"] == "Sucesso":
+        print(f"✅ Mensagem enviada com sucesso!")
         # Marcar que está aguardando resposta de NPS
         cliente.aguardando_nps = True
         db.session.commit()
@@ -99,8 +117,11 @@ Por favor, responda apenas com um número de 0 a 10."""
         db.session.add(msg)
         db.session.commit()
         
+        print(f"✅ Cliente marcado como aguardando NPS e mensagem salva no banco")
         return True
-    return False
+    else:
+        print(f"❌ Falha no envio: {resultado.get('detalhe', 'Sem detalhes')}")
+        return False
 
 
 def processar_resposta_nps(cliente, texto):
@@ -108,18 +129,26 @@ def processar_resposta_nps(cliente, texto):
     Processa a resposta de NPS do cliente.
     Retorna True se foi uma resposta válida de NPS.
     """
+    print(f"\n📊 === PROCESSANDO RESPOSTA NPS ===")
+    print(f"👤 Cliente: {cliente.nome} (ID: {cliente.id})")
+    print(f"📝 Texto recebido: {texto}")
+    
     # Tentar extrair número de 0 a 10
     import re
     numeros = re.findall(r'\b(10|[0-9])\b', texto.strip())
     
+    print(f"🔢 Números encontrados: {numeros}")
+    
     if numeros:
         nota = int(numeros[0])
         if 0 <= nota <= 10:
+            print(f"✅ Nota válida: {nota}")
             # Registrar NPS
             cliente.nps_nota = nota
             cliente.nps_data = datetime.utcnow()
             cliente.aguardando_nps = False
             db.session.commit()
+            print(f"💾 NPS salvo no banco: nota={nota}, data={cliente.nps_data}")
             
             # Enviar mensagem de agradecimento
             numero_norm = normalize_phone(cliente.telefone)
@@ -137,7 +166,9 @@ def processar_resposta_nps(cliente, texto):
                 emoji = "😔"
                 msg_agradecimento = f"Obrigado pela nota {nota}. {emoji}\n\nLamentamos não ter atendido suas expectativas. Poderia nos dizer o que podemos melhorar? Seu feedback é muito importante para nós."
             
+            print(f"📤 Enviando agradecimento: categoria={categoria}")
             enviar_whatsapp_zapi(numero_norm, msg_agradecimento)
+            print(f"✅ Agradecimento enviado")
             
             # Salvar agradecimento
             msg = WhatsAppMensagem(
@@ -148,9 +179,11 @@ def processar_resposta_nps(cliente, texto):
             )
             db.session.add(msg)
             db.session.commit()
+            print(f"💾 Agradecimento salvo no banco")
             
             return True
     
+    print(f"⚠️ Nenhum número válido (0-10) encontrado no texto")
     return False
 
 
@@ -371,7 +404,18 @@ def detalhe_cliente(id):
 @app.route("/cliente/<int:id>/novo")
 def detalhe_cliente_novo(id):
     cliente = Cliente.query.get_or_404(id)
-    return render_template("detalhe_cliente_novo.html", cliente=cliente)
+    
+    # Calcular idade se tiver data de nascimento
+    idade = None
+    if cliente.data_nascimento:
+        from datetime import date
+        hoje = date.today()
+        idade = hoje.year - cliente.data_nascimento.year
+        # Ajustar se ainda não fez aniversário este ano
+        if (hoje.month, hoje.day) < (cliente.data_nascimento.month, cliente.data_nascimento.day):
+            idade -= 1
+    
+    return render_template("detalhe_cliente_novo.html", cliente=cliente, idade=idade)
 
 @app.route("/cliente/<int:id>/editar", methods=["GET", "POST"])
 def editar_cliente(id):
@@ -417,21 +461,33 @@ def editar_cliente(id):
             except:
                 pass
         
+        # Observações gerais
+        cliente.observacoes = request.form.get('observacoes', cliente.observacoes)
+        
         db.session.commit()
         return redirect(url_for('detalhe_cliente_novo', id=cliente.id))
     
     return render_template("editar_cliente.html", cliente=cliente)
+
+@app.route("/cliente/<int:id>/observacoes", methods=["POST"])
+def atualizar_observacoes(id):
+    cliente = Cliente.query.get_or_404(id)
+    cliente.observacoes = request.form.get('observacoes', '')
+    db.session.commit()
+    flash('Observações atualizadas com sucesso!', 'success')
+    return redirect(url_for('detalhe_cliente_novo', id=cliente.id))
 
 # --- MESAS DE NEGÓCIO
 @app.route("/cliente/<int:id>/add_mesa", methods=["GET", "POST"])
 def add_mesa(id):
     cliente = Cliente.query.get_or_404(id)
     if request.method == "POST":
+        situacao = request.form["situacao"]
         mesa = MesaNegocio(
             cliente_id=id,
             topico=request.form["topico"],
             produtos=request.form["produtos"],
-            situacao=request.form["situacao"],
+            situacao=situacao,
             valor_total=float(request.form["valor_total"]),
             descricao=request.form.get("descricao"),
             data_registro=datetime.today().date(),
@@ -439,6 +495,20 @@ def add_mesa(id):
         )
         db.session.add(mesa)
         db.session.commit()
+        
+        # Se criou a mesa já como "Ganho", enviar NPS
+        if situacao == "Ganho":
+            print(f"🔍 Mesa criada como Ganho. Enviando NPS para {cliente.nome}")
+            try:
+                resultado = enviar_pesquisa_nps(cliente)
+                if resultado:
+                    flash(f"✅ Mesa criada e pesquisa NPS enviada para {cliente.nome}!", "success")
+                else:
+                    flash("⚠️ Mesa criada, mas houve erro ao enviar pesquisa NPS.", "warning")
+            except Exception as e:
+                flash(f"⚠️ Mesa criada, mas erro ao enviar NPS: {str(e)}", "warning")
+                print(f"❌ ERRO ao enviar NPS: {str(e)}")
+        
         return redirect(url_for("mesas_negocio"))
     return render_template("add_mesa.html", cliente=cliente)
 
@@ -571,11 +641,26 @@ def atualizar_mesa(id):
     mesa.situacao = nova_situacao
     db.session.commit()
     
-    # Se a mesa foi marcada como "Ganha", enviar pesquisa de NPS
-    if nova_situacao == "Ganha" and situacao_antiga != "Ganha":
-        enviar_pesquisa_nps(mesa.cliente)
-    
-    flash("Situação atualizada com sucesso!", "success")
+    # Se a mesa foi marcada como "Ganho", enviar pesquisa de NPS
+    if nova_situacao == "Ganho" and situacao_antiga != "Ganho":
+        if mesa.cliente:
+            print(f"🔍 DEBUG: Enviando NPS para cliente: {mesa.cliente.nome} - Tel: {mesa.cliente.telefone}")
+            try:
+                resultado = enviar_pesquisa_nps(mesa.cliente)
+                if resultado:
+                    flash(f"✅ Situação atualizada e pesquisa NPS enviada com sucesso para {mesa.cliente.nome}!", "success")
+                    print(f"✅ NPS enviado com sucesso para {mesa.cliente.nome}")
+                else:
+                    flash("⚠️ Situação atualizada, mas houve erro ao enviar pesquisa NPS.", "warning")
+                    print(f"❌ Erro ao enviar NPS para {mesa.cliente.nome}")
+            except Exception as e:
+                flash(f"⚠️ Situação atualizada, mas houve erro ao enviar pesquisa NPS: {str(e)}", "warning")
+                print(f"❌ ERRO ao enviar NPS: {str(e)}")
+        else:
+            flash("⚠️ Situação atualizada, mas esta mesa não possui cliente vinculado para enviar NPS.", "warning")
+            print("❌ Mesa sem cliente vinculado")
+    else:
+        flash("Situação atualizada com sucesso!", "success")
 
     return redirect(url_for("detalhe_mesa", id=id))
 
@@ -698,13 +783,10 @@ def receber_mensagem_webhook():
         print("Webhook ignorado: texto igual a instanceId")
         return {"status": "ignored"}, 200
 
-    # normaliza número para apenas dígitos
-    numero = str(phone)
-    numero = numero.replace("+", "").replace(" ", "").strip()
-    import re
-    numero = re.sub(r"\D", "", numero)
+    # NORMALIZAR número usando a mesma função em todo o sistema
+    numero = normalize_phone(phone)
 
-    # salvar no banco (WhatsAppMensagem)
+    # salvar no banco (WhatsAppMensagem) com número NORMALIZADO
     msg = WhatsAppMensagem(
         numero=numero,
         remetente="Cliente",
@@ -715,32 +797,54 @@ def receber_mensagem_webhook():
     db.session.commit()
 
     # Verificar se é resposta de NPS
-    cliente = Cliente.query.filter_by(telefone=numero).first()
-    if cliente and cliente.aguardando_nps:
-        processar_resposta_nps(cliente, text)
+    print(f"\n🔍 === WEBHOOK: VERIFICANDO NPS ===")
+    print(f"📞 Número recebido: {phone}")
+    print(f"📞 Número normalizado: {numero}")
+    
+    # Usar função inteligente para buscar cliente
+    cliente = find_cliente_by_phone(numero)
+    
+    if cliente:
+        print(f"✅ Cliente encontrado: {cliente.nome} (Tel: {cliente.telefone})")
+        print(f"⏳ Aguardando NPS? {cliente.aguardando_nps}")
+        
+        if cliente.aguardando_nps:
+            print(f"📊 Processando resposta de NPS...")
+            resultado = processar_resposta_nps(cliente, text)
+            if resultado:
+                print(f"✅ Resposta NPS processada com sucesso!")
+            else:
+                print(f"⚠️ Texto não era uma resposta válida de NPS")
+        else:
+            print(f"ℹ️ Cliente não está aguardando NPS")
+    else:
+        print(f"❌ Cliente não encontrado para o número {numero}")
+        # Listar alguns clientes para debug
+        alguns_clientes = Cliente.query.limit(5).all()
+        print(f"📋 Primeiros clientes no banco:")
+        for c in alguns_clientes:
+            print(f"  - {c.nome}: {c.telefone}")
 
     # emitir para a sala correta
+    # Buscar nome do cliente para enviar no payload
+    cliente_found = find_cliente_by_phone(numero)
+    nome_cliente = cliente_found.nome if cliente_found else numero
+    
     payload = {
         "id": msg.id,
         "numero": numero,
+        "nome": nome_cliente,
         "remetente": "Cliente",
         "mensagem": text,
         "hora": datetime.now().strftime("%H:%M")
     }
 
-    rooms_to_emit = {numero}
-    if len(numero) >= 6:
-        rooms_to_emit.add(numero[-6:])
-    if len(numero) >= 8:
-        rooms_to_emit.add(numero[-8:])
-
-    for r in rooms_to_emit:
-        try:
-            socketio.emit("nova_mensagem", payload, room=r)
-        except Exception:
-            pass
-
-    print(f"✅ Mensagem emitida para salas: {', '.join(sorted(rooms_to_emit))}")
+    # Emitir apenas para a sala do número normalizado (evita duplicação)
+    try:
+        socketio.emit("nova_mensagem", payload, room=numero)
+        print(f"✅ Mensagem emitida para sala: {numero}")
+    except Exception as e:
+        print(f"❌ Erro ao emitir mensagem: {e}")
 
     return {"status": "ok"}, 200
 
@@ -750,21 +854,13 @@ def join_room_event(data):
     if not numero:
         return
 
-    numero_norm = numero.replace("+", "").replace(" ", "").strip()
-    # entra na sala completa e em salas por sufixo (últimos 6 e 8 dígitos) para tolerância de formatos
-    rooms_joined = set()
+    # Normalizar e entrar apenas na sala do número completo (evita duplicação)
+    numero_norm = normalize_phone(numero)
+    if not numero_norm:
+        return
+    
     join_room(numero_norm)
-    rooms_joined.add(numero_norm)
-    if len(numero_norm) >= 6:
-        s6 = numero_norm[-6:]
-        join_room(s6)
-        rooms_joined.add(s6)
-    if len(numero_norm) >= 8:
-        s8 = numero_norm[-8:]
-        join_room(s8)
-        rooms_joined.add(s8)
-
-    print(f"🔵 Usuário entrou nas salas: {', '.join(sorted(rooms_joined))}")
+    print(f"🔵 Usuário entrou na sala: {numero_norm}")
 
 @app.route("/canais/enviar", methods=["POST"])
 def enviar_mensagem_canais():
@@ -791,17 +887,23 @@ def enviar_mensagem_canais():
         db.session.commit()
 
         # emitir para a sala
+        # Buscar nome do cliente para enviar no payload
+        cliente_found = find_cliente_by_phone(numero_norm)
+        nome_cliente = cliente_found.nome if cliente_found else numero_norm
+        
         payload = {
             "id": msg.id,
             "numero": numero_norm,
+            "nome": nome_cliente,
             "remetente": "Você",
             "mensagem": mensagem,
             "hora": datetime.now().strftime("%H:%M")
         }
         try:
             socketio.emit("nova_mensagem", payload, room=numero_norm)
-        except Exception:
-            pass
+            print(f"✅ Mensagem 'Você' emitida para sala: {numero_norm}")
+        except Exception as e:
+            print(f"❌ Erro ao emitir: {e}")
 
         return jsonify({"status": "Sucesso"})
 
@@ -845,9 +947,25 @@ def canais():
 
 
 def normalize_phone(phone):
-    """Normaliza número de telefone removendo todos os caracteres não-numéricos"""
+    """
+    Normaliza número de telefone removendo caracteres não-numéricos.
+    Para números brasileiros com celular, garante que tenha o 9 dígito (padrão 13 dígitos total).
+    Formato esperado: 55 (país) + DD (DDD) + 9XXXXXXXX (celular com 9 dígitos)
+    """
     import re
-    return re.sub(r'\D', '', str(phone)) if phone else ''
+    numero = re.sub(r'\D', '', str(phone)) if phone else ''
+    
+    # Se é número brasileiro (começa com 55) e tem 12 dígitos
+    # Adiciona o 9 extra para padronizar em 13 dígitos
+    if numero.startswith('55') and len(numero) == 12:
+        # DDD começa na posição 2 (após '55')
+        # Número do celular começa na posição 4
+        # Celulares brasileiros devem ter 9 dígitos (9XXXX-XXXX)
+        # Se tem 12 dígitos, está faltando um 9, então adiciona
+        numero = numero[:4] + '9' + numero[4:]
+        print(f"🔧 Número ajustado de 12 para 13 dígitos")
+    
+    return numero
 
 def find_cliente_by_phone(numero_normalizado):
     """
@@ -918,9 +1036,9 @@ def find_cliente_by_phone(numero_normalizado):
 @app.route("/canais/ultimas")
 def ultimas_notificacoes():
     """
-    Retorna as últimas mensagens recebidas agrupadas por número de telefone.
+    Retorna as últimas mensagens recebidas agrupadas por número de telefone NORMALIZADO.
     Para cada número, retorna apenas a mensagem mais recente.
-    Evita duplicações normalizando números de telefone e usando busca inteligente de cliente.
+    Evita duplicações normalizando TODOS os números antes de agrupar.
     """
     from sqlalchemy import func
     
@@ -932,7 +1050,11 @@ def ultimas_notificacoes():
     # Agrupar por número normalizado, mantendo apenas a mais recente
     conversas_dict = {}
     for msg in all_msgs:
+        # SEMPRE normalizar o número
         numero_norm = normalize_phone(msg.numero)
+        
+        if not numero_norm:
+            continue  # Pular se não conseguiu normalizar
         
         # Se este número normalizado ainda não foi visto, salvar
         if numero_norm not in conversas_dict:
@@ -950,7 +1072,7 @@ def ultimas_notificacoes():
         nao_respondida = msg.remetente == "Cliente"
         
         resultado.append({
-            "numero": numero_norm,
+            "numero": numero_norm,  # SEMPRE usar número normalizado
             "nome": nome,
             "mensagem": msg.mensagem,
             "recebido_em": msg.recebido_em.strftime("%Y-%m-%d %H:%M:%S"),
@@ -959,6 +1081,8 @@ def ultimas_notificacoes():
     
     # Ordenar por data (mais recentes primeiro)
     resultado.sort(key=lambda x: x['recebido_em'], reverse=True)
+    
+    print(f"📤 Retornando {len(resultado)} conversas únicas para o frontend")
     
     return jsonify(resultado[:20])  # Limitar a 20 conversas
 
@@ -984,6 +1108,33 @@ def buscar_clientes():
             "telefone": c.telefone
         }
         for c in clientes
+    ])
+
+@app.route("/api/produtos/busca")
+def buscar_produtos():
+    """API para buscar produtos com pesquisa"""
+    q = request.args.get("q", "").strip()
+
+    if len(q) < 1:
+        # Se não houver busca, retornar todos (limitado)
+        produtos = Produto.query.limit(50).all()
+    else:
+        # Buscar por nome ou descrição
+        produtos = Produto.query.filter(
+            or_(
+                Produto.nome.ilike(f"%{q}%"),
+                Produto.descricao.ilike(f"%{q}%")
+            )
+        ).limit(50).all()
+
+    return jsonify([
+        {
+            "id": p.id,
+            "nome": p.nome,
+            "descricao": p.descricao,
+            "quantidade": p.quantidade
+        }
+        for p in produtos
     ])
 
 # busca histórico por número (usa numero como string)

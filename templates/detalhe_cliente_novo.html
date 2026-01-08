@@ -394,6 +394,7 @@
         <button class="tab-btn ativo" onclick="scrollToSection('info-geral')">ℹ️ Geral</button>
         <button class="tab-btn" onclick="scrollToSection('info-contato')">📞 Contato</button>
         <button class="tab-btn" onclick="scrollToSection('info-endereco')">🏠 Endereço</button>
+        <button class="tab-btn" onclick="scrollToSection('observacoes')">📝 Observações</button>
         {% if 'Física' in cliente.tipo_pessoa or 'PF' in cliente.tipo_pessoa %}
             <button class="tab-btn" onclick="scrollToSection('dados-pessoais')">🧍 Dados Pessoais</button>
             <button class="tab-btn" onclick="scrollToSection('perfil-comercial')">💼 Perfil e Comercial</button>
@@ -470,6 +471,35 @@
     </div>
 
     <!-- ============================================ -->
+    <!-- OBSERVAÇÕES GERAIS -->
+    <!-- ============================================ -->
+    <div id="observacoes" class="section">
+        <div class="section-title">
+            <span>📝</span>
+            Observações Gerais
+        </div>
+
+        <div class="campo" style="width: 100%;">
+            <label style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <span>Anotações e Observações</span>
+                <button type="button" class="btn-editar" style="padding: 6px 12px; font-size: 0.85rem;" onclick="toggleEditarObservacoes()">✏️ Editar</button>
+            </label>
+            
+            <div id="observacoes-view" style="padding: 15px; background: white; border-radius: 8px; border: 1px solid #e0e0e0; min-height: 100px; white-space: pre-wrap;">
+                {{ cliente.observacoes if cliente.observacoes else 'Nenhuma observação registrada.' }}
+            </div>
+
+            <form id="observacoes-form" method="POST" action="{{ url_for('atualizar_observacoes', id=cliente.id) }}" style="display: none;">
+                <textarea name="observacoes" rows="8" style="width: 100%; padding: 15px; border-radius: 8px; border: 1px solid #d0d0d0; font-family: inherit; font-size: 0.95rem; resize: vertical;">{{ cliente.observacoes if cliente.observacoes else '' }}</textarea>
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button type="submit" class="btn-editar" style="padding: 8px 16px;">💾 Salvar</button>
+                    <button type="button" class="btn-voltar" style="padding: 8px 16px;" onclick="toggleEditarObservacoes()">✖️ Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ============================================ -->
     <!-- DADOS PESSOAIS (APENAS PARA PF) -->
     <!-- ============================================ -->
     {% if 'Física' in cliente.tipo_pessoa or 'PF' in cliente.tipo_pessoa %}
@@ -494,8 +524,8 @@
             <div class="campo">
                 <label>Idade (calculada)</label>
                 <p>
-                    {% if cliente.data_nascimento %}
-                        — (será calculada)
+                    {% if idade is not none %}
+                        {{ idade }} anos
                     {% else %}
                         —
                     {% endif %}
@@ -607,9 +637,23 @@
         }
     }
 
+    // Função para alternar entre visualização e edição de observações
+    function toggleEditarObservacoes() {
+        const viewDiv = document.getElementById('observacoes-view');
+        const formDiv = document.getElementById('observacoes-form');
+        
+        if (viewDiv.style.display === 'none') {
+            viewDiv.style.display = 'block';
+            formDiv.style.display = 'none';
+        } else {
+            viewDiv.style.display = 'none';
+            formDiv.style.display = 'block';
+        }
+    }
+
     // Atualizar abas ao scroller
     window.addEventListener('scroll', () => {
-        const sections = ['info-geral', 'info-contato', 'info-endereco', 'dados-pessoais', 'perfil-comercial'];
+        const sections = ['info-geral', 'info-contato', 'info-endereco', 'observacoes', 'dados-pessoais', 'perfil-comercial'];
         const tabs = document.querySelectorAll('.tab-btn');
 
         for (let section of sections) {

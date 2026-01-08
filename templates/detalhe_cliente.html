@@ -3,7 +3,81 @@
 
 {% block content %}
 
-<h1 class="section-title">👤 {{ cliente.nome }}</h1>
+<style>
+.nps-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: 15px;
+    vertical-align: middle;
+}
+
+.nps-circle {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 18px;
+    color: white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.nps-circle.promotor {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+}
+
+.nps-circle.neutro {
+    background: linear-gradient(135deg, #f2994a 0%, #f2c94c 100%);
+    color: #333;
+}
+
+.nps-circle.detrator {
+    background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+}
+
+.nps-label {
+    font-size: 14px;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 12px;
+}
+
+.nps-label.promotor {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.nps-label.neutro {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.nps-label.detrator {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+</style>
+
+<h1 class="section-title">
+    👤 {{ cliente.nome }}
+    {% if cliente.nps_nota is not none %}
+        <span class="nps-badge">
+            {% if cliente.nps_nota >= 9 %}
+                <span class="nps-circle promotor">{{ cliente.nps_nota }}</span>
+                <span class="nps-label promotor">🌟 Promotor</span>
+            {% elif cliente.nps_nota >= 7 %}
+                <span class="nps-circle neutro">{{ cliente.nps_nota }}</span>
+                <span class="nps-label neutro">😊 Neutro</span>
+            {% else %}
+                <span class="nps-circle detrator">{{ cliente.nps_nota }}</span>
+                <span class="nps-label detrator">😔 Detrator</span>
+            {% endif %}
+        </span>
+    {% endif %}
+</h1>
 
 <div class="mb-4 d-flex gap-2">
   <a href="{{ url_for('planner') }}" class="btn btn-primary btn-rounded">📅 Planner</a>

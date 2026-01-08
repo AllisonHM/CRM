@@ -14,8 +14,6 @@
   <div class="card-body">
     <form method="POST">
 
-    <form method="POST">
-
       <div class="form-group-crm">
         <label for="topico">Tópico</label>
         <input type="text" id="topico" name="topico" class="form-control" required>
@@ -23,7 +21,39 @@
 
       <div class="form-group-crm">
         <label for="produtos">Produtos</label>
-        <textarea id="produtos" name="produtos" class="form-control" rows="4" required></textarea>
+        <div style="position: relative;">
+          <input 
+            type="text" 
+            id="produto-search" 
+            class="form-control" 
+            placeholder="🔍 Buscar produtos..."
+            autocomplete="off"
+          >
+          <div id="produto-dropdown" style="
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          ">
+            <div id="produto-list"></div>
+          </div>
+        </div>
+        
+        <!-- Lista de produtos selecionados -->
+        <div id="produtos-selecionados" style="margin-top: 10px;">
+          <!-- Os produtos selecionados aparecerão aqui -->
+        </div>
+        
+        <!-- Campo oculto para enviar os produtos no formulário -->
+        <textarea id="produtos" name="produtos" style="display: none;"></textarea>
       </div>
 
       <div class="form-group-crm">
@@ -45,5 +75,156 @@
     </form>
   </div>
 </div>
+
+<style>
+.produto-item {
+  padding: 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background 0.2s;
+}
+.produto-item:hover {
+  background: #f8f9fa;
+}
+.produto-item:last-child {
+  border-bottom: none;
+}
+.produto-nome {
+  font-weight: 600;
+  color: #111b21;
+  margin-bottom: 4px;
+}
+.produto-descricao {
+  font-size: 0.85rem;
+  color: #667781;
+}
+.produto-quantidade {
+  font-size: 0.8rem;
+  color: #25d366;
+  margin-top: 4px;
+}
+.produto-selecionado {
+  display: inline-flex;
+  align-items: center;
+  background: #e3f2fd;
+  padding: 8px 12px;
+  border-radius: 20px;
+  margin: 5px 5px 0 0;
+  font-size: 0.9rem;
+}
+.produto-selecionado .remove-btn {
+  margin-left: 8px;
+  cursor: pointer;
+  color: #d32f2f;
+  font-weight: bold;
+}
+.produto-selecionado .remove-btn:hover {
+  color: #b71c1c;
+}
+</style>
+
+<script>
+let produtosSelecionados = [];
+let timeoutBusca;
+
+const produtoSearch = document.getElementById('produto-search');
+const produtoDropdown = document.getElementById('produto-dropdown');
+const produtoList = document.getElementById('produto-list');
+const produtosSelecionadosDiv = document.getElementById('produtos-selecionados');
+const produtosTextarea = document.getElementById('produtos');
+
+// Buscar produtos
+produtoSearch.addEventListener('input', function() {
+  clearTimeout(timeoutBusca);
+  const query = this.value.trim();
+  
+  if (query.length === 0) {
+    produtoDropdown.style.display = 'none';
+    return;
+  }
+  
+  timeoutBusca = setTimeout(() => {
+    fetch(`/api/produtos/busca?q=${encodeURIComponent(query)}`)
+      .then(res => res.json())
+      .then(produtos => {
+        if (produtos.length === 0) {
+          produtoList.innerHTML = '<div style="padding: 12px; color: #999;">Nenhum produto encontrado</div>';
+        } else {
+          produtoList.innerHTML = produtos.map(p => `
+            <div class="produto-item" onclick="selecionarProduto(${p.id}, '${p.nome.replace(/'/g, "\\'")}', '${(p.descricao || '').replace(/'/g, "\\'")}')">
+              <div class="produto-nome">${p.nome}</div>
+              ${p.descricao ? `<div class="produto-descricao">${p.descricao}</div>` : ''}
+              <div class="produto-quantidade">📦 Estoque: ${p.quantidade}</div>
+            </div>
+          `).join('');
+        }
+        produtoDropdown.style.display = 'block';
+      })
+      .catch(err => {
+        console.error('Erro ao buscar produtos:', err);
+        produtoList.innerHTML = '<div style="padding: 12px; color: #d32f2f;">Erro ao buscar produtos</div>';
+      });
+  }, 300);
+});
+
+// Fechar dropdown ao clicar fora
+document.addEventListener('click', function(e) {
+  if (!produtoSearch.contains(e.target) && !produtoDropdown.contains(e.target)) {
+    produtoDropdown.style.display = 'none';
+  }
+});
+
+// Selecionar produto
+function selecionarProduto(id, nome, descricao) {
+  // Verificar se já foi selecionado
+  if (produtosSelecionados.some(p => p.id === id)) {
+    alert('Este produto já foi adicionado!');
+    return;
+  }
+  
+  produtosSelecionados.push({ id, nome, descricao });
+  renderProdutosSelecionados();
+  
+  // Limpar campo de busca
+  produtoSearch.value = '';
+  produtoDropdown.style.display = 'none';
+}
+
+// Remover produto
+function removerProduto(id) {
+  produtosSelecionados = produtosSelecionados.filter(p => p.id !== id);
+  renderProdutosSelecionados();
+}
+
+// Renderizar produtos selecionados
+function renderProdutosSelecionados() {
+  if (produtosSelecionados.length === 0) {
+    produtosSelecionadosDiv.innerHTML = '<div style="color: #999; font-size: 0.9rem; margin-top: 8px;">Nenhum produto selecionado</div>';
+    produtosTextarea.value = '';
+  } else {
+    produtosSelecionadosDiv.innerHTML = produtosSelecionados.map(p => `
+      <span class="produto-selecionado">
+        ${p.nome}
+        <span class="remove-btn" onclick="removerProduto(${p.id})">✕</span>
+      </span>
+    `).join('');
+    
+    // Atualizar textarea oculto com os nomes dos produtos
+    produtosTextarea.value = produtosSelecionados.map(p => p.nome).join(', ');
+  }
+}
+
+// Inicializar
+renderProdutosSelecionados();
+
+// Validar antes de enviar
+document.querySelector('form').addEventListener('submit', function(e) {
+  if (produtosSelecionados.length === 0) {
+    e.preventDefault();
+    alert('Selecione pelo menos um produto!');
+    produtoSearch.focus();
+  }
+});
+</script>
 
 {% endblock %}
