@@ -1,7 +1,7 @@
 """add observacoes to cliente
 
 Revision ID: add_observacoes_cliente
-Revises: add_nps_fields_to_cliente
+Revises: add_nps_20260106
 Create Date: 2026-01-07 22:00:00.000000
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'add_observacoes_cliente'
-down_revision = 'add_nps_fields_to_cliente'
+down_revision = 'add_nps_20260106'
 branch_labels = None
 depends_on = None
 

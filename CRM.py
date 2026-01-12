@@ -1,11 +1,13 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, flash
+from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, session
 from flask_socketio import SocketIO, join_room
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from datetime import datetime, timedelta
+from functools import wraps
 import requests
 from flask_migrate import Migrate
 from database import db
-from models import Cliente, MesaNegocio, Ocorrencia, WhatsAppMensagem, ChatbotRegra, Produto, Movimentacao, PlannerEvento
-from sqlalchemy import or_
+from models import Cliente, MesaNegocio, Ocorrencia, WhatsAppMensagem, ChatbotRegra, Produto, Movimentacao, PlannerEvento, UsuarioCRM
+from sqlalchemy import or_, and_
 
 app = Flask(__name__)
 app.secret_key = "seusegredo"
@@ -17,6 +19,36 @@ db.init_app(app)
 with app.app_context():
     db.create_all()
 
+# ------------------- FLASK-LOGIN -------------------
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+login_manager.login_message = 'Por favor, faça login para acessar esta página.'
+
+@login_manager.user_loader
+def load_user(user_id):
+    return UsuarioCRM.query.get(int(user_id))
+
+# Decorador para verificar permissões
+def permission_required(modulo):
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not current_user.is_authenticated:
+                return redirect(url_for('login'))
+            if not current_user.tem_permissao(modulo):
+                flash('Você não tem permissão para acessar este módulo.', 'danger')
+                return redirect(url_for('menu'))
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+# Função auxiliar para filtrar dados por usuário
+def get_usuario_filter():
+    """Retorna o ID do usuário principal para filtrar dados"""
+    if current_user.tipo_usuario == 'super_admin':
+        return None  # Super admin vê tudo
+    return current_user.get_usuario_principal_id()
 
 socketio = SocketIO(app, cors_allowed_origins="*")
 
@@ -28,8 +60,15 @@ token = "E4E83715DE9F517EFB9A28CA"
 client_token = "Fc5c052a80080460b823a2e506d4d6167S"
 headers = {'client-token': client_token, 'Content-Type': 'application/json'}
 
-def enviar_whatsapp_zapi(numero, mensagem):
-    url = f"https://api.z-api.io/instances/{instance}/token/{token}/send-text"
+def enviar_whatsapp_zapi(numero, mensagem, instance_id=None, token_id=None):
+    """Envia mensagem via Z-API usando a instância do cliente ou do admin"""
+    # Se não fornecido, usar o número do usuário logado
+    if not instance_id:
+        instance_id = instance
+    if not token_id:
+        token_id = token
+    
+    url = f"https://api.z-api.io/instances/{instance_id}/token/{token_id}/send-text"
     payload = {"phone": numero, "message": mensagem}
     
     print(f"🌐 URL: {url}")
@@ -71,6 +110,356 @@ def verificar_eventos_proximos():
             time.sleep(60)  # roda a cada 60 segundos
 
 threading.Thread(target=verificar_eventos_proximos, daemon=True).start()
+
+
+# ------------------- ROTAS DE AUTENTICAÇÃO -------------------
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('menu'))
+    
+    if request.method == 'POST':
+        email = request.form.get('email')
+        senha = request.form.get('senha')
+        
+        usuario = UsuarioCRM.query.filter_by(email=email).first()
+        
+        if usuario and usuario.check_password(senha):
+            if not usuario.ativo:
+                flash('Seu usuário está inativo. Entre em contato com o administrador.', 'danger')
+                return redirect(url_for('login'))
+            
+            login_user(usuario)
+            flash(f'Bem-vindo, {usuario.nome}!', 'success')
+            
+            # Redirecionar para a página solicitada ou menu
+            next_page = request.args.get('next')
+            return redirect(next_page) if next_page else redirect(url_for('menu'))
+        else:
+            flash('Email ou senha incorretos.', 'danger')
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash('Você saiu do sistema.', 'info')
+    return redirect(url_for('login'))
+
+@app.route('/criar_super_admin')
+def criar_super_admin():
+    """Rota temporária para criar o primeiro super admin"""
+    # Verificar se já existe um super admin
+    super_admin_existe = UsuarioCRM.query.filter_by(tipo_usuario='super_admin').first()
+    if super_admin_existe:
+        return "Super Admin já existe!"
+    
+    # Criar super admin
+    super_admin = UsuarioCRM(
+        nome="Administrador",
+        email="admin@crm.com",
+        tipo_usuario="super_admin",
+        ativo=True
+    )
+    super_admin.set_password("admin123")  # ALTERAR ESTA SENHA APÓS PRIMEIRO LOGIN!
+    
+    db.session.add(super_admin)
+    db.session.commit()
+    
+    return "Super Admin criado com sucesso! Email: admin@crm.com | Senha: admin123"
+
+
+# ------------------- GESTÃO DE USUÁRIOS (SUPER ADMIN) -------------------
+@app.route('/usuarios')
+@login_required
+def listar_usuarios():
+    """Lista todos os usuários do tipo admin (clientes)"""
+    if current_user.tipo_usuario != 'super_admin':
+        flash('Acesso negado. Apenas Super Admin pode acessar.', 'danger')
+        return redirect(url_for('menu'))
+    
+    usuarios = UsuarioCRM.query.filter(UsuarioCRM.tipo_usuario.in_(['admin', 'colaborador'])).all()
+    return render_template('listar_usuarios.html', usuarios=usuarios)
+
+@app.route('/usuarios/add', methods=['GET', 'POST'])
+@login_required
+def add_usuario():
+    """Adiciona novo usuário (cliente admin)"""
+    if current_user.tipo_usuario != 'super_admin':
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('menu'))
+    
+    if request.method == 'POST':
+        nome = request.form.get('nome')
+        email = request.form.get('email')
+        senha = request.form.get('senha')
+        numero_whatsapp = request.form.get('numero_whatsapp')
+        api_instance = request.form.get('api_instance')
+        api_token = request.form.get('api_token')
+        
+        # Módulos disponíveis
+        modulos = ['clientes', 'mesas', 'ocorrencias', 'produtos', 'whatsapp', 'chatbot', 'planner', 'nps', 'relatorios']
+        permissoes = {modulo: modulo in request.form.getlist('permissoes') for modulo in modulos}
+        
+        # Verificar se email já existe
+        if UsuarioCRM.query.filter_by(email=email).first():
+            flash('Este email já está cadastrado.', 'danger')
+            return redirect(url_for('add_usuario'))
+        
+        # Criar novo usuário
+        novo_usuario = UsuarioCRM(
+            nome=nome,
+            email=email,
+            numero_whatsapp=numero_whatsapp,
+            api_instance=api_instance,
+            api_token=api_token,
+            tipo_usuario='admin',
+            permissoes=permissoes,
+            ativo=True
+        )
+        novo_usuario.set_password(senha)
+        
+        db.session.add(novo_usuario)
+        db.session.commit()
+        
+        flash(f'Usuário {nome} criado com sucesso!', 'success')
+        return redirect(url_for('listar_usuarios'))
+    
+    # Módulos disponíveis
+    modulos_disponiveis = [
+        {'id': 'clientes', 'nome': 'Clientes', 'icone': '👥'},
+        {'id': 'mesas', 'nome': 'Mesas de Negócio', 'icone': '💼'},
+        {'id': 'ocorrencias', 'nome': 'Ocorrências', 'icone': '⚠️'},
+        {'id': 'produtos', 'nome': 'Produtos', 'icone': '📦'},
+        {'id': 'whatsapp', 'nome': 'WhatsApp', 'icone': '💬'},
+        {'id': 'chatbot', 'nome': 'Chatbot', 'icone': '🤖'},
+        {'id': 'planner', 'nome': 'Planner', 'icone': '📅'},
+        {'id': 'nps', 'nome': 'NPS', 'icone': '⭐'},
+        {'id': 'relatorios', 'nome': 'Relatórios', 'icone': '📊'}
+    ]
+    
+    return render_template('add_usuario.html', modulos=modulos_disponiveis)
+
+@app.route('/usuarios/editar/<int:id>', methods=['GET', 'POST'])
+@login_required
+def editar_usuario(id):
+    """Edita usuário existente"""
+    if current_user.tipo_usuario != 'super_admin':
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('menu'))
+    
+    usuario = UsuarioCRM.query.get_or_404(id)
+    
+    if request.method == 'POST':
+        usuario.nome = request.form.get('nome')
+        usuario.email = request.form.get('email')
+        usuario.numero_whatsapp = request.form.get('numero_whatsapp')
+        usuario.api_instance = request.form.get('api_instance')
+        usuario.api_token = request.form.get('api_token')
+        usuario.ativo = 'ativo' in request.form
+        
+        # Atualizar senha se fornecida
+        nova_senha = request.form.get('senha')
+        if nova_senha:
+            usuario.set_password(nova_senha)
+        
+        # Atualizar permissões
+        modulos = ['clientes', 'mesas', 'ocorrencias', 'produtos', 'whatsapp', 'chatbot', 'planner', 'nps', 'relatorios']
+        permissoes = {modulo: modulo in request.form.getlist('permissoes') for modulo in modulos}
+        usuario.permissoes = permissoes
+        
+        db.session.commit()
+        flash(f'Usuário {usuario.nome} atualizado com sucesso!', 'success')
+        return redirect(url_for('listar_usuarios'))
+    
+    # Módulos disponíveis
+    modulos_disponiveis = [
+        {'id': 'clientes', 'nome': 'Clientes', 'icone': '👥'},
+        {'id': 'mesas', 'nome': 'Mesas de Negócio', 'icone': '💼'},
+        {'id': 'ocorrencias', 'nome': 'Ocorrências', 'icone': '⚠️'},
+        {'id': 'produtos', 'nome': 'Produtos', 'icone': '📦'},
+        {'id': 'whatsapp', 'nome': 'WhatsApp', 'icone': '💬'},
+        {'id': 'chatbot', 'nome': 'Chatbot', 'icone': '🤖'},
+        {'id': 'planner', 'nome': 'Planner', 'icone': '📅'},
+        {'id': 'nps', 'nome': 'NPS', 'icone': '⭐'},
+        {'id': 'relatorios', 'nome': 'Relatórios', 'icone': '📊'}
+    ]
+    
+    return render_template('editar_usuario.html', usuario=usuario, modulos=modulos_disponiveis)
+
+@app.route('/usuarios/deletar/<int:id>', methods=['POST'])
+@login_required
+def deletar_usuario(id):
+    """Deleta usuário"""
+    if current_user.tipo_usuario != 'super_admin':
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('menu'))
+    
+    usuario = UsuarioCRM.query.get_or_404(id)
+    
+    if usuario.tipo_usuario == 'super_admin':
+        flash('Não é possível deletar um Super Admin!', 'danger')
+        return redirect(url_for('listar_usuarios'))
+    
+    nome = usuario.nome
+    db.session.delete(usuario)
+    db.session.commit()
+    
+    flash(f'Usuário {nome} deletado com sucesso!', 'success')
+    return redirect(url_for('listar_usuarios'))
+
+
+# ------------------- GESTÃO DE COLABORADORES (SUPER_ADMIN APENAS) -------------------
+@app.route('/colaboradores')
+@login_required
+def listar_colaboradores():
+    """Lista todos os colaboradores - APENAS SUPER_ADMIN"""
+    if current_user.tipo_usuario != 'super_admin':
+        flash('Acesso negado. Apenas o administrador master pode gerenciar colaboradores.', 'danger')
+        return redirect(url_for('menu'))
+    
+    # Verificar se há filtro por cliente
+    cliente_id = request.args.get('cliente_id', type=int)
+    
+    if cliente_id:
+        # Filtrar colaboradores de um cliente específico
+        colaboradores = UsuarioCRM.query.filter_by(
+            tipo_usuario='colaborador',
+            usuario_pai_id=cliente_id
+        ).order_by(UsuarioCRM.nome).all()
+        cliente = UsuarioCRM.query.get(cliente_id)
+        cliente_nome = cliente.nome if cliente else None
+    else:
+        # Super admin vê todos os colaboradores
+        colaboradores = UsuarioCRM.query.filter_by(tipo_usuario='colaborador').order_by(UsuarioCRM.nome).all()
+        cliente_nome = None
+    
+    return render_template('listar_colaboradores.html', colaboradores=colaboradores, cliente_filtro=cliente_nome)
+
+@app.route('/colaboradores/add', methods=['GET', 'POST'])
+@login_required
+def add_colaborador():
+    """Adiciona novo colaborador - APENAS SUPER_ADMIN"""
+    if current_user.tipo_usuario != 'super_admin':
+        flash('Acesso negado. Apenas o administrador master pode gerenciar colaboradores.', 'danger')
+        return redirect(url_for('menu'))
+    
+    if request.method == 'POST':
+        nome = request.form.get('nome')
+        email = request.form.get('email')
+        senha = request.form.get('senha')
+        
+        # Permissões
+        modulos = ['clientes', 'mesas', 'ocorrencias', 'produtos', 'whatsapp', 'chatbot', 'planner', 'nps', 'relatorios']
+        permissoes = {modulo: modulo in request.form.getlist('permissoes') for modulo in modulos}
+        
+        # Verificar se email já existe
+        if UsuarioCRM.query.filter_by(email=email).first():
+            flash('Este email já está cadastrado.', 'danger')
+            return redirect(url_for('add_colaborador'))
+        
+        # Obter o cliente (admin) a quem pertencerá o colaborador
+        usuario_pai_id = request.form.get('usuario_pai_id')
+        if not usuario_pai_id:
+            flash('Selecione o cliente para este colaborador.', 'danger')
+            return redirect(url_for('add_colaborador'))
+        
+        # Criar novo colaborador
+        novo_colaborador = UsuarioCRM(
+            nome=nome,
+            email=email,
+            tipo_usuario='colaborador',
+            usuario_pai_id=int(usuario_pai_id),
+            permissoes=permissoes,
+            ativo=True
+        )
+        novo_colaborador.set_password(senha)
+        
+        db.session.add(novo_colaborador)
+        db.session.commit()
+        
+        flash(f'Colaborador {nome} criado com sucesso!', 'success')
+        return redirect(url_for('listar_colaboradores'))
+    
+    # Módulos disponíveis
+    modulos_disponiveis = [
+        {'id': 'clientes', 'nome': 'Clientes', 'icone': '👥'},
+        {'id': 'mesas', 'nome': 'Mesas de Negócio', 'icone': '💼'},
+        {'id': 'ocorrencias', 'nome': 'Ocorrências', 'icone': '⚠️'},
+        {'id': 'produtos', 'nome': 'Produtos', 'icone': '📦'},
+        {'id': 'whatsapp', 'nome': 'WhatsApp', 'icone': '💬'},
+        {'id': 'chatbot', 'nome': 'Chatbot', 'icone': '🤖'},
+        {'id': 'planner', 'nome': 'Planner', 'icone': '📅'},
+        {'id': 'nps', 'nome': 'NPS', 'icone': '⭐'},
+        {'id': 'relatorios', 'nome': 'Relatórios', 'icone': '📊'}
+    ]
+    
+    # Buscar todos os clientes (admin) para selecionar
+    clientes = UsuarioCRM.query.filter_by(tipo_usuario='admin', ativo=True).order_by(UsuarioCRM.nome).all()
+    
+    return render_template('add_colaborador.html', modulos=modulos_disponiveis, clientes=clientes)
+
+@app.route('/colaboradores/editar/<int:id>', methods=['GET', 'POST'])
+@login_required
+def editar_colaborador(id):
+    """Edita colaborador existente - APENAS SUPER_ADMIN"""
+    if current_user.tipo_usuario != 'super_admin':
+        flash('Acesso negado. Apenas o administrador master pode gerenciar colaboradores.', 'danger')
+        return redirect(url_for('menu'))
+    
+    colaborador = UsuarioCRM.query.get_or_404(id)
+    
+    if request.method == 'POST':
+        colaborador.nome = request.form.get('nome')
+        colaborador.email = request.form.get('email')
+        colaborador.ativo = 'ativo' in request.form
+        
+        # Atualizar senha se fornecida
+        nova_senha = request.form.get('senha')
+        if nova_senha:
+            colaborador.set_password(nova_senha)
+        
+        # Atualizar permissões
+        modulos = ['clientes', 'mesas', 'ocorrencias', 'produtos', 'whatsapp', 'chatbot', 'planner', 'nps', 'relatorios']
+        permissoes = {modulo: modulo in request.form.getlist('permissoes') for modulo in modulos}
+        colaborador.permissoes = permissoes
+        
+        db.session.commit()
+        flash(f'Colaborador {colaborador.nome} atualizado com sucesso!', 'success')
+        return redirect(url_for('listar_colaboradores'))
+    
+    # Módulos disponíveis
+    modulos_disponiveis = [
+        {'id': 'clientes', 'nome': 'Clientes', 'icone': '👥'},
+        {'id': 'mesas', 'nome': 'Mesas de Negócio', 'icone': '💼'},
+        {'id': 'ocorrencias', 'nome': 'Ocorrências', 'icone': '⚠️'},
+        {'id': 'produtos', 'nome': 'Produtos', 'icone': '📦'},
+        {'id': 'whatsapp', 'nome': 'WhatsApp', 'icone': '💬'},
+        {'id': 'chatbot', 'nome': 'Chatbot', 'icone': '🤖'},
+        {'id': 'planner', 'nome': 'Planner', 'icone': '📅'},
+        {'id': 'nps', 'nome': 'NPS', 'icone': '⭐'},
+        {'id': 'relatorios', 'nome': 'Relatórios', 'icone': '📊'}
+    ]
+    
+    return render_template('editar_colaborador.html', colaborador=colaborador, modulos=modulos_disponiveis)
+
+@app.route('/colaboradores/deletar/<int:id>', methods=['POST'])
+@login_required
+def deletar_colaborador(id):
+    """Deleta colaborador - APENAS SUPER_ADMIN"""
+    if current_user.tipo_usuario != 'super_admin':
+        flash('Acesso negado. Apenas o administrador master pode gerenciar colaboradores.', 'danger')
+        return redirect(url_for('menu'))
+    
+    colaborador = UsuarioCRM.query.get_or_404(id)
+    
+    nome = colaborador.nome
+    db.session.delete(colaborador)
+    db.session.commit()
+    
+    flash(f'Colaborador {nome} deletado com sucesso!', 'success')
+    return redirect(url_for('listar_colaboradores'))
 
 
 # ------------------- FUNÇÕES AUXILIARES -------------------
@@ -189,23 +578,48 @@ def processar_resposta_nps(cliente, texto):
 
 # ------------------- ROTAS -------------------
 @app.route("/")
+@login_required
 def home():
     return redirect(url_for("menu"))
 
 @app.route('/menu')
+@login_required
 def menu():
-    qtd_clientes = Cliente.query.count()
-    qtd_mesas = MesaNegocio.query.count()
-    qtd_ocorrencias = Ocorrencia.query.count()
+    # Obter filtro de usuário
+    user_id = get_usuario_filter()
+    
+    # Preparar filtros base
+    if user_id:
+        base_filter_cliente = Cliente.usuario_crm_id == user_id
+        base_filter_mesa = MesaNegocio.usuario_crm_id == user_id
+        base_filter_ocorrencia = Ocorrencia.usuario_crm_id == user_id
+        base_filter_produto = Produto.usuario_crm_id == user_id
+        base_filter_planner = PlannerEvento.usuario_crm_id == user_id
+        base_filter_mensagem = WhatsAppMensagem.usuario_crm_id == user_id
+    else:
+        base_filter_cliente = True
+        base_filter_mesa = True
+        base_filter_ocorrencia = True
+        base_filter_produto = True
+        base_filter_planner = True
+        base_filter_mensagem = True
+    
+    qtd_clientes = Cliente.query.filter(base_filter_cliente).count()
+    qtd_mesas = MesaNegocio.query.filter(base_filter_mesa).count()
+    qtd_ocorrencias = Ocorrencia.query.filter(base_filter_ocorrencia).count()
 
     # Contagem de agendas no dia de hoje
     hoje = datetime.today().date()
-    qtd_agendas_hoje = PlannerEvento.query.filter(PlannerEvento.data == hoje).count()
+    qtd_agendas_hoje = PlannerEvento.query.filter(
+        base_filter_planner,
+        PlannerEvento.data == hoje
+    ).count()
 
     # Agendas da semana (próximos 7 dias)
     data_inicio_semana = hoje
     data_fim_semana = hoje + timedelta(days=7)
     qtd_agendas_semana = PlannerEvento.query.filter(
+        base_filter_planner,
         PlannerEvento.data >= data_inicio_semana,
         PlannerEvento.data < data_fim_semana
     ).count()
@@ -217,38 +631,66 @@ def menu():
     else:
         ultimo_dia_mes = primeiro_dia_mes.replace(month=hoje.month + 1) - timedelta(days=1)
     qtd_agendas_mes = PlannerEvento.query.filter(
+        base_filter_planner,
         PlannerEvento.data >= primeiro_dia_mes,
         PlannerEvento.data <= ultimo_dia_mes
     ).count()
 
     # Pessoas físicas / jurídicas
-    qtd_pf = Cliente.query.filter(Cliente.tipo_pessoa == 'Física').count()
-    qtd_pj = Cliente.query.filter(Cliente.tipo_pessoa == 'Jurídica').count()
+    qtd_pf = Cliente.query.filter(base_filter_cliente, Cliente.tipo_pessoa == 'Física').count()
+    qtd_pj = Cliente.query.filter(base_filter_cliente, Cliente.tipo_pessoa == 'Jurídica').count()
 
     # Mesas de negócio por situação
-    qtd_mesas_andamento = MesaNegocio.query.filter(MesaNegocio.situacao == 'Em negociação').count()
-    qtd_mesas_ganhas = MesaNegocio.query.filter(MesaNegocio.situacao == 'Ganho').count()
-    qtd_mesas_perdidas = MesaNegocio.query.filter(MesaNegocio.situacao == 'Perdido').count()
+    qtd_mesas_andamento = MesaNegocio.query.filter(base_filter_mesa, MesaNegocio.situacao == 'Em negociação').count()
+    qtd_mesas_ganhas = MesaNegocio.query.filter(base_filter_mesa, MesaNegocio.situacao == 'Ganho').count()
+    qtd_mesas_perdidas = MesaNegocio.query.filter(base_filter_mesa, MesaNegocio.situacao == 'Perdido').count()
 
     # Valor total por situação (funil de vendas)
     from sqlalchemy import func
     valor_mesas_andamento = db.session.query(func.sum(MesaNegocio.valor_total)).filter(
+        base_filter_mesa,
         MesaNegocio.situacao == 'Em negociação'
     ).scalar() or 0
     valor_mesas_ganhas = db.session.query(func.sum(MesaNegocio.valor_total)).filter(
+        base_filter_mesa,
         MesaNegocio.situacao == 'Ganho'
     ).scalar() or 0
     valor_mesas_perdidas = db.session.query(func.sum(MesaNegocio.valor_total)).filter(
+        base_filter_mesa,
         MesaNegocio.situacao == 'Perdido'
     ).scalar() or 0
 
+    # Valor de vendas por período (apenas mesas ganhas)
+    # Vendas do dia
+    valor_vendas_dia = db.session.query(func.sum(MesaNegocio.valor_total)).filter(
+        base_filter_mesa,
+        MesaNegocio.situacao == 'Ganho',
+        MesaNegocio.data_registro == hoje
+    ).scalar() or 0
+    
+    # Vendas da semana
+    valor_vendas_semana = db.session.query(func.sum(MesaNegocio.valor_total)).filter(
+        base_filter_mesa,
+        MesaNegocio.situacao == 'Ganho',
+        MesaNegocio.data_registro >= data_inicio_semana,
+        MesaNegocio.data_registro < data_fim_semana
+    ).scalar() or 0
+    
+    # Vendas do mês
+    valor_vendas_mes = db.session.query(func.sum(MesaNegocio.valor_total)).filter(
+        base_filter_mesa,
+        MesaNegocio.situacao == 'Ganho',
+        MesaNegocio.data_registro >= primeiro_dia_mes,
+        MesaNegocio.data_registro <= ultimo_dia_mes
+    ).scalar() or 0
+
     # Ocorrências por status
-    qtd_ocorrencias_ativo = Ocorrencia.query.filter(Ocorrencia.status == 'Ativo').count()
-    qtd_ocorrencias_resolvido = Ocorrencia.query.filter(Ocorrencia.status == 'Resolvido').count()
-    qtd_ocorrencias_cancelado = Ocorrencia.query.filter(Ocorrencia.status == 'Cancelado').count()
+    qtd_ocorrencias_ativo = Ocorrencia.query.filter(base_filter_ocorrencia, Ocorrencia.status == 'Ativo').count()
+    qtd_ocorrencias_resolvido = Ocorrencia.query.filter(base_filter_ocorrencia, Ocorrencia.status == 'Resolvido').count()
+    qtd_ocorrencias_cancelado = Ocorrencia.query.filter(base_filter_ocorrencia, Ocorrencia.status == 'Cancelado').count()
 
     # Produtos cadastrados
-    qtd_produtos = Produto.query.count()
+    qtd_produtos = Produto.query.filter(base_filter_produto).count()
 
     # Mensagens pendentes: contar números únicos que têm mensagem de cliente não respondida
     # Buscar último remetente de cada conversa e contar quantas terminam com "Cliente"
@@ -258,7 +700,7 @@ def menu():
     ultima_msg_subq = db.session.query(
         WhatsAppMensagem.numero,
         func.max(WhatsAppMensagem.recebido_em).label('ultima_data')
-    ).group_by(WhatsAppMensagem.numero).subquery()
+    ).filter(base_filter_mensagem).group_by(WhatsAppMensagem.numero).subquery()
     
     # Contar conversas onde a última mensagem é do Cliente
     qtd_mensagens_pendentes = db.session.query(WhatsAppMensagem).join(
@@ -267,7 +709,7 @@ def menu():
             WhatsAppMensagem.numero == ultima_msg_subq.c.numero,
             WhatsAppMensagem.recebido_em == ultima_msg_subq.c.ultima_data
         )
-    ).filter(WhatsAppMensagem.remetente == "Cliente").count()
+    ).filter(base_filter_mensagem, WhatsAppMensagem.remetente == "Cliente").count()
 
     return render_template(
         "menu.html",
@@ -289,15 +731,27 @@ def menu():
         valor_mesas_andamento=valor_mesas_andamento,
         valor_mesas_ganhas=valor_mesas_ganhas,
         valor_mesas_perdidas=valor_mesas_perdidas,
+        valor_vendas_dia=valor_vendas_dia,
+        valor_vendas_semana=valor_vendas_semana,
+        valor_vendas_mes=valor_vendas_mes,
         qtd_mensagens_pendentes=qtd_mensagens_pendentes
     )
 
 
 # --- NPS (NET PROMOTER SCORE)
 @app.route("/nps")
+@login_required
+@permission_required('nps')
 def nps():
-    # Buscar todos os clientes que responderam NPS
-    clientes_nps = Cliente.query.filter(Cliente.nps_nota.isnot(None)).order_by(Cliente.nps_data.desc()).all()
+    # Buscar todos os clientes que responderam NPS (filtrar por usuário)
+    user_id = get_usuario_filter()
+    if user_id:
+        clientes_nps = Cliente.query.filter(
+            Cliente.usuario_crm_id == user_id,
+            Cliente.nps_nota.isnot(None)
+        ).order_by(Cliente.nps_data.desc()).all()
+    else:
+        clientes_nps = Cliente.query.filter(Cliente.nps_nota.isnot(None)).order_by(Cliente.nps_data.desc()).all()
     
     total_respostas = len(clientes_nps)
     
@@ -392,16 +846,26 @@ def nps():
 
 # --- RELACIONAMENTO
 @app.route("/relacionamento")
+@login_required
+@permission_required('clientes')
 def relacionamento():
-    clientes = Cliente.query.all()
+    user_id = get_usuario_filter()
+    if user_id:
+        clientes = Cliente.query.filter_by(usuario_crm_id=user_id).all()
+    else:
+        clientes = Cliente.query.all()
     return render_template("relacionamento.html", clientes=clientes)
 
 @app.route("/cliente/<int:id>")
+@login_required
+@permission_required('clientes')
 def detalhe_cliente(id): 
     cliente = Cliente.query.get_or_404(id)
     return render_template("detalhe_cliente.html", cliente=cliente)
 
 @app.route("/cliente/<int:id>/novo")
+@login_required
+@permission_required('clientes')
 def detalhe_cliente_novo(id):
     cliente = Cliente.query.get_or_404(id)
     
@@ -418,6 +882,8 @@ def detalhe_cliente_novo(id):
     return render_template("detalhe_cliente_novo.html", cliente=cliente, idade=idade)
 
 @app.route("/cliente/<int:id>/editar", methods=["GET", "POST"])
+@login_required
+@permission_required('clientes')
 def editar_cliente(id):
     cliente = Cliente.query.get_or_404(id)
     if request.method == "POST":
@@ -470,6 +936,8 @@ def editar_cliente(id):
     return render_template("editar_cliente.html", cliente=cliente)
 
 @app.route("/cliente/<int:id>/observacoes", methods=["POST"])
+@login_required
+@permission_required('clientes')
 def atualizar_observacoes(id):
     cliente = Cliente.query.get_or_404(id)
     cliente.observacoes = request.form.get('observacoes', '')
@@ -479,11 +947,14 @@ def atualizar_observacoes(id):
 
 # --- MESAS DE NEGÓCIO
 @app.route("/cliente/<int:id>/add_mesa", methods=["GET", "POST"])
+@login_required
+@permission_required('mesas')
 def add_mesa(id):
     cliente = Cliente.query.get_or_404(id)
     if request.method == "POST":
         situacao = request.form["situacao"]
         mesa = MesaNegocio(
+            usuario_crm_id=current_user.get_usuario_principal_id(),
             cliente_id=id,
             topico=request.form["topico"],
             produtos=request.form["produtos"],
@@ -513,21 +984,32 @@ def add_mesa(id):
     return render_template("add_mesa.html", cliente=cliente)
 
 @app.route("/mesas_negocio")
+@login_required
+@permission_required('mesas')
 def mesas_negocio():
-    mesas = MesaNegocio.query.all()
+    user_id = get_usuario_filter()
+    if user_id:
+        mesas = MesaNegocio.query.filter_by(usuario_crm_id=user_id).all()
+    else:
+        mesas = MesaNegocio.query.all()
     return render_template("mesas_negocio.html", mesas=mesas)
 
 @app.route("/mesas/<int:id>")
+@login_required
+@permission_required('mesas')
 def detalhe_mesa(id):
     mesa = MesaNegocio.query.get_or_404(id)
     return render_template("detalhe_mesa.html", mesa=mesa)
 
 # --- OCORRÊNCIAS
 @app.route("/cliente/<int:id>/add_ocorrencia", methods=["GET", "POST"])
+@login_required
+@permission_required('ocorrencias')
 def add_ocorrencia(id):
     cliente = Cliente.query.get_or_404(id)
     if request.method == "POST":
         ocorrencia = Ocorrencia(
+            usuario_crm_id=current_user.get_usuario_principal_id(),
             cliente_id=id,
             topico=request.form["topico"],
             status=request.form["status"],
@@ -541,11 +1023,19 @@ def add_ocorrencia(id):
     return render_template("add_ocorrencia.html", cliente=cliente)
 
 @app.route("/ocorrencias")
+@login_required
+@permission_required('ocorrencias')
 def ocorrencias():
-    ocorrencias = Ocorrencia.query.all()
+    user_id = get_usuario_filter()
+    if user_id:
+        ocorrencias = Ocorrencia.query.filter_by(usuario_crm_id=user_id).all()
+    else:
+        ocorrencias = Ocorrencia.query.all()
     return render_template("ocorrencias.html", ocorrencias=ocorrencias)
 
 @app.route("/ocorrencia/<int:id>")
+@login_required
+@permission_required('ocorrencias')
 def detalhe_ocorrencia(id):
     ocorrencia = Ocorrencia.query.get_or_404(id)
     # pega o cliente se houver relação
@@ -553,6 +1043,8 @@ def detalhe_ocorrencia(id):
     return render_template("detalhe_ocorrencia.html", ocorrencia=ocorrencia, cliente=cliente)
 
 @app.route("/ocorrencia/<int:id>/atualizar", methods=["POST"])
+@login_required
+@permission_required('ocorrencias')
 def atualizar_ocorrencia(id):
     ocorrencia = Ocorrencia.query.get_or_404(id)
     situacao = request.form.get("situacao")
@@ -563,6 +1055,8 @@ def atualizar_ocorrencia(id):
 
 # --- CADASTRO CLIENTE
 @app.route("/cadastro", methods=["GET", "POST"])
+@login_required
+@permission_required('clientes')
 def cadastro():
     if request.method == "POST":
         nome = request.form["nome"]
@@ -570,7 +1064,13 @@ def cadastro():
         email = request.form["email"]
         tipo_pessoa = request.form["tipo_pessoa"]
 
-        cliente = Cliente(nome=nome, telefone=telefone, email=email, tipo_pessoa=tipo_pessoa)
+        cliente = Cliente(
+            usuario_crm_id=current_user.get_usuario_principal_id(),
+            nome=nome, 
+            telefone=telefone, 
+            email=email, 
+            tipo_pessoa=tipo_pessoa
+        )
 
         if tipo_pessoa == "Física":
             if request.form.get("data_nascimento"):
@@ -591,11 +1091,17 @@ def cadastro():
         return redirect(url_for("cadastro"))
 
     # 🔹 Lista de clientes mostrada na página
-    clientes = Cliente.query.all()
+    user_id = get_usuario_filter()
+    if user_id:
+        clientes = Cliente.query.filter_by(usuario_crm_id=user_id).all()
+    else:
+        clientes = Cliente.query.all()
     return render_template("cadastro.html", clientes=clientes)
 
 
 @app.route("/cliente/<int:id>/excluir", methods=["POST"])
+@login_required
+@permission_required('clientes')
 def excluir_cliente(id):
     cliente = Cliente.query.get_or_404(id)
     
@@ -617,6 +1123,8 @@ def excluir_cliente(id):
     return redirect(url_for('cadastro'))
 
 @app.route("/cliente/<int:id>/delete", methods=["POST"])
+@login_required
+@permission_required('clientes')
 def deletar_cliente(id):
     cliente = Cliente.query.get_or_404(id)
     try:
@@ -666,13 +1174,29 @@ def atualizar_mesa(id):
 
 # --- WHATSAPP
 @app.route("/whatsapp")
+@login_required
+@permission_required('whatsapp')
 def whatsapp_index():
-    mensagens = WhatsAppMensagem.query.all()
+    # Verificar se o usuário tem API configurada
+    usuario_principal_id = current_user.get_usuario_principal_id()
+    usuario_principal = UsuarioCRM.query.get(usuario_principal_id)
+    
+    if not usuario_principal or not usuario_principal.tem_api_configurada():
+        flash('As credenciais da API Z-API não foram configuradas. Entre em contato com o administrador.', 'warning')
+        return render_template('api_nao_configurada.html', modulo='WhatsApp')
+    
+    user_id = get_usuario_filter()
+    if user_id:
+        mensagens = WhatsAppMensagem.query.filter_by(usuario_crm_id=user_id).all()
+    else:
+        mensagens = WhatsAppMensagem.query.all()
     return render_template("whatsapp.html", mensagens=mensagens)
 
 
 
 @app.route("/whatsapp/enviar", methods=["POST"])
+@login_required
+@permission_required('whatsapp')
 def whatsapp_enviar():
     data = request.get_json(silent=True)
     if data:
@@ -685,7 +1209,14 @@ def whatsapp_enviar():
     if not numero or not mensagem:
         return render_template("mensagem_status.html", status="erro", voltar_url=url_for("whatsapp_index"))
 
-    resultado = enviar_whatsapp_zapi(numero, mensagem)
+    # Usar as credenciais do usuário principal (cliente)
+    usuario_principal_id = current_user.get_usuario_principal_id()
+    usuario_principal = UsuarioCRM.query.get(usuario_principal_id)
+    
+    if not usuario_principal or not usuario_principal.tem_api_configurada():
+        return render_template("mensagem_status.html", status="erro", voltar_url=url_for("whatsapp_index"))
+    
+    resultado = enviar_whatsapp_zapi(numero, mensagem, usuario_principal.api_instance, usuario_principal.api_token)
 
     if resultado["status"] == "Sucesso":
         return render_template("mensagem_status.html", status="sucesso", voltar_url=url_for("whatsapp_index"))
@@ -863,6 +1394,7 @@ def join_room_event(data):
     print(f"🔵 Usuário entrou na sala: {numero_norm}")
 
 @app.route("/canais/enviar", methods=["POST"])
+@login_required
 def enviar_mensagem_canais():
     data = request.get_json()
     numero = data.get("numero")
@@ -872,16 +1404,24 @@ def enviar_mensagem_canais():
         return jsonify({"status": "Erro"}), 400
 
     numero_norm = normalize_phone(numero)
+    
+    # Usar as credenciais do usuário principal (cliente)
+    usuario_principal_id = current_user.get_usuario_principal_id()
+    usuario_principal = UsuarioCRM.query.get(usuario_principal_id)
+    
+    if not usuario_principal or not usuario_principal.tem_api_configurada():
+        return jsonify({"status": "Erro", "mensagem": "API não configurada"}), 400
 
-    resultado = enviar_whatsapp_zapi(numero_norm, mensagem)
+    resultado = enviar_whatsapp_zapi(numero_norm, mensagem, usuario_principal.api_instance, usuario_principal.api_token)
 
     if resultado["status"] == "Sucesso":
-        # salvar no banco
+        # salvar no banco vinculado ao usuario
         msg = WhatsAppMensagem(
             numero=numero_norm,
             remetente="Você",
             mensagem=mensagem,
-            recebido_em=datetime.utcnow()
+            recebido_em=datetime.utcnow(),
+            usuario_crm_id=usuario_principal_id
         )
         db.session.add(msg)
         db.session.commit()
@@ -912,37 +1452,77 @@ def enviar_mensagem_canais():
 
 # --- CHATBOT
 @app.route("/chatbot", methods=["GET", "POST"])
+@login_required
+@permission_required('chatbot')
 def configurar_chatbot():
     if request.method == "POST":
         palavra = request.form["palavra_chave"]
         resposta = request.form["resposta"]
-        regra = ChatbotRegra(palavra_chave=palavra, resposta=resposta)
+        user_id = get_usuario_filter()
+        regra = ChatbotRegra(
+            palavra_chave=palavra, 
+            resposta=resposta,
+            usuario_crm_id=user_id if user_id else current_user.id
+        )
         db.session.add(regra)
         db.session.commit()
 
 @app.route("/mensagens")
+@login_required
+@permission_required('whatsapp')
 def mensagens():
-    mensagens = WhatsAppMensagem.query.order_by(WhatsAppMensagem.recebido_em.desc()).all()
+    user_id = get_usuario_filter()
+    if user_id:
+        mensagens = WhatsAppMensagem.query.filter_by(usuario_crm_id=user_id).order_by(WhatsAppMensagem.recebido_em.desc()).all()
+    else:
+        mensagens = WhatsAppMensagem.query.order_by(WhatsAppMensagem.recebido_em.desc()).all()
     return render_template("mensagens.html", mensagens=mensagens)
 
 @app.route("/configuracoes", methods=["GET", "POST"])
+@login_required
+@permission_required('chatbot')
 def configuracoes():
+    user_id = get_usuario_filter()
+    
     if request.method == "POST":
         palavra = request.form["palavra"]
         resposta = request.form["resposta"]
         prioridade = request.form["prioridade"]
-        regra = ChatbotRegra(palavra_chave=palavra, resposta=resposta, prioridade=prioridade)
+        regra = ChatbotRegra(
+            palavra_chave=palavra, 
+            resposta=resposta, 
+            prioridade=prioridade,
+            usuario_crm_id=user_id if user_id else current_user.id
+        )
         db.session.add(regra)
         db.session.commit()
         flash("Regra adicionada com sucesso!")
         return redirect(url_for("configuracoes"))
 
-    regras = ChatbotRegra.query.all()
+    # Filtrar regras por usuário
+    if user_id:
+        regras = ChatbotRegra.query.filter_by(usuario_crm_id=user_id).all()
+    else:
+        regras = ChatbotRegra.query.all()
+    
     return render_template("configuracoes.html", regras=regras)
 
 @app.route("/canais")
+@login_required
 def canais():
-    clientes = Cliente.query.order_by(Cliente.nome).all()
+    # Verificar se o usuário tem API configurada
+    usuario_principal_id = current_user.get_usuario_principal_id()
+    usuario_principal = UsuarioCRM.query.get(usuario_principal_id)
+    
+    if not usuario_principal or not usuario_principal.tem_api_configurada():
+        flash('As credenciais da API Z-API não foram configuradas. Entre em contato com o administrador.', 'warning')
+        return render_template('api_nao_configurada.html', modulo='Canais')
+    
+    user_id = get_usuario_filter()
+    if user_id:
+        clientes = Cliente.query.filter_by(usuario_crm_id=user_id).order_by(Cliente.nome).all()
+    else:
+        clientes = Cliente.query.order_by(Cliente.nome).all()
     return render_template("canais.html", clientes=clientes)
 
 
@@ -1034,18 +1614,27 @@ def find_cliente_by_phone(numero_normalizado):
     return None
 
 @app.route("/canais/ultimas")
+@login_required
 def ultimas_notificacoes():
     """
     Retorna as últimas mensagens recebidas agrupadas por número de telefone NORMALIZADO.
     Para cada número, retorna apenas a mensagem mais recente.
     Evita duplicações normalizando TODOS os números antes de agrupar.
+    Filtrado por usuário.
     """
     from sqlalchemy import func
     
-    # Obter todas as mensagens ordenadas por data desc
-    all_msgs = db.session.query(WhatsAppMensagem).order_by(
-        WhatsAppMensagem.recebido_em.desc()
-    ).all()
+    user_id = get_usuario_filter()
+    
+    # Obter todas as mensagens filtradas por usuário
+    if user_id:
+        all_msgs = db.session.query(WhatsAppMensagem).filter_by(
+            usuario_crm_id=user_id
+        ).order_by(WhatsAppMensagem.recebido_em.desc()).all()
+    else:
+        all_msgs = db.session.query(WhatsAppMensagem).order_by(
+            WhatsAppMensagem.recebido_em.desc()
+        ).all()
     
     # Agrupar por número normalizado, mantendo apenas a mais recente
     conversas_dict = {}
@@ -1088,18 +1677,33 @@ def ultimas_notificacoes():
 
 
 @app.route("/api/clientes/busca")
+@login_required
 def buscar_clientes():
     q = request.args.get("q", "").strip()
 
     if len(q) < 2:
         return jsonify([])
 
-    clientes = Cliente.query.filter(
-        or_(
-            Cliente.nome.ilike(f"%{q}%"),
-            Cliente.telefone.ilike(f"%{q}%")
-        )
-    ).limit(20).all()
+    user_id = get_usuario_filter()
+    
+    # Filtrar clientes por usuário
+    if user_id:
+        clientes = Cliente.query.filter(
+            and_(
+                or_(
+                    Cliente.nome.ilike(f"%{q}%"),
+                    Cliente.telefone.ilike(f"%{q}%")
+                ),
+                Cliente.usuario_crm_id == user_id
+            )
+        ).limit(20).all()
+    else:
+        clientes = Cliente.query.filter(
+            or_(
+                Cliente.nome.ilike(f"%{q}%"),
+                Cliente.telefone.ilike(f"%{q}%")
+            )
+        ).limit(20).all()
 
     return jsonify([
         {
@@ -1111,21 +1715,28 @@ def buscar_clientes():
     ])
 
 @app.route("/api/produtos/busca")
+@login_required
 def buscar_produtos():
-    """API para buscar produtos com pesquisa"""
+    """API para buscar produtos com pesquisa - filtrado por usuario"""
     q = request.args.get("q", "").strip()
-
-    if len(q) < 1:
-        # Se não houver busca, retornar todos (limitado)
-        produtos = Produto.query.limit(50).all()
+    user_id = get_usuario_filter()
+    
+    # Construir query base com filtro de usuário
+    if user_id:
+        query = Produto.query.filter_by(usuario_crm_id=user_id)
     else:
+        query = Produto.query
+
+    if len(q) >= 1:
         # Buscar por nome ou descrição
-        produtos = Produto.query.filter(
+        query = query.filter(
             or_(
                 Produto.nome.ilike(f"%{q}%"),
                 Produto.descricao.ilike(f"%{q}%")
             )
-        ).limit(50).all()
+        )
+    
+    produtos = query.limit(50).all()
 
     return jsonify([
         {
@@ -1139,14 +1750,22 @@ def buscar_produtos():
 
 # busca histórico por número (usa numero como string)
 @app.route("/canais/<string:numero>/mensagens")
+@login_required
 def carregar_mensagens(numero):
     # normalizar numero (remover espaços/+ e caracteres não numéricos)
     numero_norm = normalize_phone(numero)
+    user_id = get_usuario_filter()
     
-    # busca por número normalizado
-    msgs = WhatsAppMensagem.query.filter_by(numero=numero_norm).order_by(
-        WhatsAppMensagem.recebido_em.asc()
-    ).all()
+    # busca por número normalizado e filtrado por usuário
+    if user_id:
+        msgs = WhatsAppMensagem.query.filter_by(
+            numero=numero_norm,
+            usuario_crm_id=user_id
+        ).order_by(WhatsAppMensagem.recebido_em.asc()).all()
+    else:
+        msgs = WhatsAppMensagem.query.filter_by(numero=numero_norm).order_by(
+            WhatsAppMensagem.recebido_em.asc()
+        ).all()
     
     mensagens_list = []
     for m in msgs:
@@ -1162,26 +1781,39 @@ def carregar_mensagens(numero):
     return jsonify({"cliente": {"numero": numero_norm, "nome": nome}, "mensagens": mensagens_list})
 
 @app.route("/canais/<string:numero>/deletar", methods=["DELETE"])
+@login_required
 def deletar_conversa(numero):
     """
     Deleta todas as mensagens de uma conversa.
     """
     numero_norm = numero.replace("+", "").replace(" ", "").strip()
+    user_id = get_usuario_filter()
     
     try:
         # Buscar todas as mensagens do número
         s6 = numero_norm[-6:] if len(numero_norm) >= 6 else None
         s8 = numero_norm[-8:] if len(numero_norm) >= 8 else None
         
-        from sqlalchemy import or_
+        from sqlalchemy import or_, and_
         filters = [WhatsAppMensagem.numero == numero_norm]
         if s8:
             filters.append(WhatsAppMensagem.numero.like(f"%{s8}"))
         if s6:
             filters.append(WhatsAppMensagem.numero.like(f"%{s6}"))
         
+        # Filtrar por usuário também
+        if user_id:
+            query = WhatsAppMensagem.query.filter(
+                and_(
+                    or_(*filters),
+                    WhatsAppMensagem.usuario_crm_id == user_id
+                )
+            )
+        else:
+            query = WhatsAppMensagem.query.filter(or_(*filters))
+        
         # Deletar mensagens
-        WhatsAppMensagem.query.filter(or_(*filters)).delete()
+        query.delete()
         db.session.commit()
         
         return jsonify({"success": True, "message": "Conversa deletada com sucesso"}), 200
@@ -1225,15 +1857,24 @@ def send_message(ticket_id):
 
 
 @app.route("/produtos")
+@login_required
+@permission_required('produtos')
 def produtos():
     # página principal do controle de produtos
     return render_template("produtos.html")
 
 # Endpoint para listar produtos (JSON) - usado pelo frontend para atualizar lista
 @app.route("/api/produtos")
+@login_required
 def api_listar_produtos():
+    user_id = get_usuario_filter()
     q = request.args.get("q", "").strip()
-    query = Produto.query
+    
+    if user_id:
+        query = Produto.query.filter_by(usuario_crm_id=user_id)
+    else:
+        query = Produto.query
+    
     if q:
         query = query.filter(Produto.nome.ilike(f"%{q}%"))
     produtos = query.order_by(Produto.nome).all()
@@ -1251,6 +1892,7 @@ def api_listar_produtos():
 
 # Cadastrar produto (via fetch / form)
 @app.route("/api/produtos/add", methods=["POST"])
+@login_required
 def api_add_produto():
     dados = request.get_json() or {}
     nome = (dados.get("nome") or "").strip()
@@ -1261,16 +1903,27 @@ def api_add_produto():
         return jsonify({"status": "erro", "detalhe": "Descrição é obrigatória"}), 400
 
     # evita duplicados
-    if Produto.query.filter_by(nome=nome).first():
-        return jsonify({"status": "erro", "detalhe": "Produto com esse nome já existe"}), 400
+    user_id = get_usuario_filter()
+    if user_id:
+        if Produto.query.filter_by(usuario_crm_id=user_id, nome=nome).first():
+            return jsonify({"status": "erro", "detalhe": "Produto com esse nome já existe"}), 400
+    else:
+        if Produto.query.filter_by(nome=nome).first():
+            return jsonify({"status": "erro", "detalhe": "Produto com esse nome já existe"}), 400
 
-    p = Produto(nome=nome, descricao=descricao, quantidade=0)
+    p = Produto(
+        usuario_crm_id=current_user.get_usuario_principal_id(),
+        nome=nome, 
+        descricao=descricao, 
+        quantidade=0
+    )
     db.session.add(p)
     db.session.commit()
     return jsonify({"status": "sucesso", "produto": {"id": p.id, "nome": p.nome}}), 201
 
 # Realizar movimentação (entrada/saída)
 @app.route("/api/produtos/<int:produto_id>/movimentar", methods=["POST"])
+@login_required
 def api_movimentar(produto_id):
     dados = request.get_json() or {}
     tipo = dados.get("tipo")  # 'entrada' ou 'saida'
@@ -1353,12 +2006,23 @@ def api_deletar_produto(produto_id):
     return jsonify({"status": "sucesso", "mensagem": f"Produto '{nome_produto}' excluído com sucesso"}), 200
 
 @app.route("/produtos/<int:produto_id>/movimentacoes")
+@login_required
+@permission_required('produtos')
 def historico_movimentacoes(produto_id):
-    produto = Produto.query.get_or_404(produto_id)
+    user_id = get_usuario_filter()
+    
+    # Verificar se o produto pertence ao usuário
+    if user_id:
+        produto = Produto.query.filter_by(id=produto_id, usuario_crm_id=user_id).first_or_404()
+    else:
+        produto = Produto.query.get_or_404(produto_id)
+    
     movimentacoes = Movimentacao.query.filter_by(produto_id=produto.id).order_by(Movimentacao.data.desc()).all()
     return render_template("movimentacoes.html", produto=produto, movimentacoes=movimentacoes)
 
 @app.route("/planner")
+@login_required
+@permission_required('planner')
 def planner():
     # Semana desejada
     week_offset = int(request.args.get("week", 0))
@@ -1377,11 +2041,20 @@ def planner():
         horarios.append(hora_atual.time())
         hora_atual += timedelta(minutes=30)
 
-    # Eventos da semana
-    eventos = PlannerEvento.query.filter(
-        PlannerEvento.data >= monday,
-        PlannerEvento.data <= monday + timedelta(days=6)
-    ).all()
+    # Eventos da semana filtrados por usuário
+    user_id = get_usuario_filter()
+    
+    if user_id:
+        eventos = PlannerEvento.query.filter(
+            PlannerEvento.data >= monday,
+            PlannerEvento.data <= monday + timedelta(days=6),
+            PlannerEvento.usuario_crm_id == user_id
+        ).all()
+    else:
+        eventos = PlannerEvento.query.filter(
+            PlannerEvento.data >= monday,
+            PlannerEvento.data <= monday + timedelta(days=6)
+        ).all()
 
     return render_template(
         "planner.html",

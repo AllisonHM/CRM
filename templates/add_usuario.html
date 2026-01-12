@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Adicionar Usuário - CRM{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="section-title">➕ Adicionar Novo Usuário (Cliente)</h1>
+                <a href="{{ url_for('listar_usuarios') }}" class="btn btn-secondary">
+                    <i class="bi bi-arrow-left"></i> Voltar
+                </a>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <div class="card card-accent">
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('add_usuario') }}">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="nome" class="form-label">Nome Completo *</label>
+                                <input type="text" class="form-control" id="nome" name="nome" required>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label for="email" class="form-label">Email (Login) *</label>
+                                <input type="email" class="form-control" id="email" name="email" required>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="senha" class="form-label">Senha *</label>
+                                <input type="password" class="form-control" id="senha" name="senha" required minlength="6">
+                                <small class="text-muted">Mínimo 6 caracteres</small>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label for="numero_whatsapp" class="form-label">Número WhatsApp</label>
+                                <input type="text" class="form-control" id="numero_whatsapp" name="numero_whatsapp" 
+                                       placeholder="5547999999999">
+                                <small class="text-muted">Formato: DDI + DDD + Número</small>
+                            </div>
+                        </div>
+
+                        <hr class="my-3">
+                        <h5 class="mb-3">🔌 Configuração da API Z-API</h5>
+                        <p class="text-muted mb-3">Configure as credenciais para integração com WhatsApp</p>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="api_instance" class="form-label">Instance ID *</label>
+                                <input type="text" class="form-control" id="api_instance" name="api_instance" 
+                                       placeholder="Ex: 3E70C9784E1060A6F423AE9094E04006" required>
+                                <small class="text-muted">ID da instância Z-API</small>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label for="api_token" class="form-label">Token *</label>
+                                <input type="text" class="form-control" id="api_token" name="api_token" 
+                                       placeholder="Ex: E4E83715DE9F517EFB9A28CA" required>
+                                <small class="text-muted">Token de autenticação Z-API</small>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <h4 class="mb-3">📋 Permissões de Acesso</h4>
+                        <p class="text-muted mb-3">Selecione os módulos que este usuário poderá acessar:</p>
+
+                        <div class="row">
+                            {% for modulo in modulos %}
+                            <div class="col-md-6 mb-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="permissoes" 
+                                           value="{{ modulo.id }}" id="perm_{{ modulo.id }}" checked>
+                                    <label class="form-check-label" for="perm_{{ modulo.id }}">
+                                        {{ modulo.icone }} {{ modulo.nome }}
+                                    </label>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <div class="d-grid gap-2 mt-4">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-check-circle"></i> Criar Usuário
+                            </button>
+                            <a href="{{ url_for('listar_usuarios') }}" class="btn btn-secondary">
+                                Cancelar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+{% endblock %}

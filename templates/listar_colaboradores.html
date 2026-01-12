@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Meus Colaboradores - CRM{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="section-title">👨‍💼 Colaboradores</h1>
+            {% if cliente_filtro %}
+            <p class="text-muted">Filtrando por: <strong>{{ cliente_filtro }}</strong> 
+                <a href="{{ url_for('listar_colaboradores') }}" class="btn btn-sm btn-secondary">Ver todos</a>
+            </p>
+            {% endif %}
+        </div>
+        <a href="{{ url_for('add_colaborador') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Adicionar Colaborador
+        </a>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="card card-accent">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Permissões</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for colaborador in colaboradores %}
+                        <tr>
+                            <td><strong>{{ colaborador.nome }}</strong></td>
+                            <td>{{ colaborador.email }}</td>
+                            <td>
+                                {% if colaborador.ativo %}
+                                    <span class="badge bg-success">Ativo</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Inativo</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if colaborador.permissoes %}
+                                    {% set count = colaborador.permissoes.values()|select('true')|list|length %}
+                                    <small class="text-muted">{{ count }} módulos</small>
+                                {% else %}
+                                    <small class="text-muted">Sem permissões</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <a href="{{ url_for('editar_colaborador', id=colaborador.id) }}" class="btn btn-sm btn-warning">
+                                        <i class="bi bi-pencil"></i> Editar
+                                    </a>
+                                    <form method="POST" action="{{ url_for('deletar_colaborador', id=colaborador.id) }}" style="display:inline;" 
+                                          onsubmit="return confirm('Tem certeza que deseja deletar este colaborador?');">
+                                        <button type="submit" class="btn btn-sm btn-danger">
+                                            <i class="bi bi-trash"></i> Deletar
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">
+                                Nenhum colaborador cadastrado ainda.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+{% endblock %}

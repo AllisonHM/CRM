@@ -72,14 +72,14 @@
     <table class="table table-crm" id="tabelaOcorrencias">
         <thead>
             <tr>
-                <th>ID</th>
+                <th>Data de Registro</th>
                 <th>Cliente</th>
                 <th>Tópico</th>
                 <th>Situação</th>
                 <th>Ações</th>
             </tr>
             <tr class="filter-row">
-                <th><input type="text" id="filterID" placeholder="Filtrar..."></th>
+                <th><input type="text" id="filterData" placeholder="Filtrar..."></th>
                 <th><input type="text" id="filterCliente" placeholder="Filtrar..."></th>
                 <th><input type="text" id="filterTopico" placeholder="Filtrar..."></th>
                 <th>
@@ -97,7 +97,7 @@
         <tbody>
             {% for o in ocorrencias %}
             <tr>
-                <td>{{ o.id }}</td>
+                <td>{{ o.data_registro.strftime('%d/%m/%Y') if o.data_registro else '—' }}</td>
 
                 <td>
                     {{ (o.cliente.nome if o.cliente else (o.cliente_nome if o.cliente_nome else '—')) }}
@@ -132,7 +132,7 @@
 
 <script>
   // Adiciona listeners aos filtros
-  document.getElementById('filterID').addEventListener('keyup', filtrarTabela);
+  document.getElementById('filterData').addEventListener('keyup', filtrarTabela);
   document.getElementById('filterCliente').addEventListener('keyup', filtrarTabela);
   document.getElementById('filterTopico').addEventListener('keyup', filtrarTabela);
   document.getElementById('filterSituacao').addEventListener('change', filtrarTabela);
@@ -141,24 +141,24 @@
     const tabela = document.getElementById('tabelaOcorrencias');
     const linhas = tabela.querySelectorAll('tbody tr');
     
-    const filterID = document.getElementById('filterID').value.toLowerCase();
+    const filterData = document.getElementById('filterData').value.toLowerCase();
     const filterCliente = document.getElementById('filterCliente').value.toLowerCase();
     const filterTopico = document.getElementById('filterTopico').value.toLowerCase();
     const filterSituacao = document.getElementById('filterSituacao').value;
 
     linhas.forEach(linha => {
       const colunas = linha.querySelectorAll('td');
-      const id = colunas[0].textContent.toLowerCase();
+      const data = colunas[0].textContent.toLowerCase();
       const cliente = colunas[1].textContent.toLowerCase();
       const topico = colunas[2].textContent.toLowerCase();
       const situacao = colunas[3].textContent;
 
-      const matchID = id.includes(filterID);
+      const matchData = data.includes(filterData);
       const matchCliente = cliente.includes(filterCliente);
       const matchTopico = topico.includes(filterTopico);
       const matchSituacao = filterSituacao === '' || situacao.includes(filterSituacao);
 
-      if (matchID && matchCliente && matchTopico && matchSituacao) {
+      if (matchData && matchCliente && matchTopico && matchSituacao) {
         linha.style.display = '';
       } else {
         linha.style.display = 'none';
@@ -182,7 +182,7 @@
     });
 
     // Adiciona cabeçalho
-    const headers = ['ID', 'Cliente', 'Tópico', 'Situação'].map(h => `"${h}"`).join(',');
+    const headers = ['Data de Registro', 'Cliente', 'Tópico', 'Situação'].map(h => `"${h}"`).join(',');
     csv = headers + '\n' + csv;
 
     // Cria download

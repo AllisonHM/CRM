@@ -1,10 +1,70 @@
 # models.py
 from database import db
 from datetime import datetime
+from werkzeug.security import generate_password_hash, check_password_hash
+from flask_login import UserMixin
+
+class UsuarioCRM(UserMixin, db.Model):
+    """Representa cada instância/usuário do CRM com seu próprio número de WhatsApp"""
+    __tablename__ = 'usuario_crm'
+    id = db.Column(db.Integer, primary_key=True)
+    nome = db.Column(db.String(200), nullable=False)
+    email = db.Column(db.String(200), nullable=False, unique=True)  # Login
+    senha_hash = db.Column(db.String(255), nullable=False)
+    numero_whatsapp = db.Column(db.String(50), nullable=True)
+    
+    # Credenciais da API Z-API (configuradas pelo super_admin)
+    api_instance = db.Column(db.String(255), nullable=True)  # Instance ID da Z-API
+    api_token = db.Column(db.String(255), nullable=True)  # Token da API de WhatsApp
+    
+    dias_quarentena_nps = db.Column(db.Integer, default=30)  # Intervalo mínimo em dias para envio de NPS
+    
+    # Hierarquia de usuários
+    tipo_usuario = db.Column(db.String(20), nullable=False, default='colaborador')  # super_admin, admin, colaborador
+    usuario_pai_id = db.Column(db.Integer, db.ForeignKey('usuario_crm.id'), nullable=True)  # Admin do colaborador
+    
+    # Permissões (JSON com módulos permitidos)
+    permissoes = db.Column(db.JSON, nullable=True)  # Ex: {"clientes": true, "produtos": false, ...}
+    
+    ativo = db.Column(db.Boolean, default=True)
+    data_cadastro = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relacionamentos
+    clientes = db.relationship('Cliente', backref='usuario_crm', lazy=True, foreign_keys='Cliente.usuario_crm_id')
+    colaboradores = db.relationship('UsuarioCRM', backref=db.backref('usuario_pai', remote_side=[id]), lazy=True)
+    
+    def set_password(self, senha):
+        """Define a senha do usuário (hash)"""
+        self.senha_hash = generate_password_hash(senha)
+    
+    def check_password(self, senha):
+        """Verifica se a senha está correta"""
+        return check_password_hash(self.senha_hash, senha)
+    
+    def tem_permissao(self, modulo):
+        """Verifica se o usuário tem permissão para acessar um módulo"""
+        if self.tipo_usuario == 'super_admin':
+            return True
+        if self.tipo_usuario == 'admin':
+            return True
+        if self.permissoes and isinstance(self.permissoes, dict):
+            return self.permissoes.get(modulo, False)
+        return False
+    
+    def get_usuario_principal_id(self):
+        """Retorna o ID do usuário principal (admin ou próprio ID se for admin/super_admin)"""
+        if self.tipo_usuario in ['super_admin', 'admin']:
+            return self.id
+        return self.usuario_pai_id if self.usuario_pai_id else self.id
+    
+    def tem_api_configurada(self):
+        """Verifica se o usuário tem as credenciais da API Z-API configuradas"""
+        return bool(self.api_instance and self.api_token)
 
 class Cliente(db.Model):
     __tablename__ = 'cliente'
     id = db.Column(db.Integer, primary_key=True)
+    usuario_crm_id = db.Column(db.Integer, db.ForeignKey('usuario_crm.id'), nullable=True)  # Vincula cliente à instância do CRM
     nome = db.Column(db.String(100), nullable=False)
     tipo_pessoa = db.Column(db.String(50), nullable=False, default='Cliente')
     email = db.Column(db.String(100))
@@ -27,6 +87,7 @@ class Cliente(db.Model):
     nps_data = db.Column(db.DateTime, nullable=True)
     nps_comentario = db.Column(db.Text, nullable=True)
     aguardando_nps = db.Column(db.Boolean, default=False)  # Flag para saber se está aguardando resposta
+    data_ultimo_nps_envio = db.Column(db.DateTime, nullable=True)  # Data do último envio de solicitação NPS
 
     # Observações Gerais
     observacoes = db.Column(db.Text, nullable=True)  # Campo para anotações e observações gerais
@@ -38,6 +99,7 @@ class MesaNegocio(db.Model):
     __tablename__ = 'mesa_negocio'
 
     id = db.Column(db.Integer, primary_key=True)
+    usuario_crm_id = db.Column(db.Integer, db.ForeignKey('usuario_crm.id'), nullable=True)
     cliente_id = db.Column(db.Integer, db.ForeignKey('cliente.id'), nullable=True)
     topico = db.Column(db.String(150), nullable=False)
     produtos = db.Column(db.String(250), nullable=True)
@@ -49,6 +111,7 @@ class MesaNegocio(db.Model):
 
 class Ocorrencia(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    usuario_crm_id = db.Column(db.Integer, db.ForeignKey('usuario_crm.id'), nullable=True)
     cliente_id = db.Column(db.Integer, db.ForeignKey('cliente.id'), nullable=False)
     topico = db.Column(db.String(200), nullable=False)
     status = db.Column(db.String(20), nullable=False)
@@ -59,6 +122,7 @@ class Ocorrencia(db.Model):
 class WhatsAppMensagem(db.Model):
     __tablename__ = 'whatsapp_mensagem'
     id = db.Column(db.Integer, primary_key=True)
+    usuario_crm_id = db.Column(db.Integer, db.ForeignKey('usuario_crm.id'), nullable=True)
     numero = db.Column(db.String(50), nullable=False)
     remetente = db.Column(db.String(100))  # <-- esta linha é obrigatória
     mensagem = db.Column(db.Text, nullable=False)
@@ -66,6 +130,7 @@ class WhatsAppMensagem(db.Model):
 
 class ChatbotRegra(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    usuario_crm_id = db.Column(db.Integer, db.ForeignKey('usuario_crm.id'), nullable=True)
     palavra_chave = db.Column(db.String(50), nullable=False)
     resposta = db.Column(db.Text, nullable=False)
     prioridade = db.Column(db.String(20), default="Normal")
@@ -74,6 +139,7 @@ class ChatbotRegra(db.Model):
 class Produto(db.Model):
     __tablename__ = "produto"
     id = db.Column(db.Integer, primary_key=True)
+    usuario_crm_id = db.Column(db.Integer, db.ForeignKey('usuario_crm.id'), nullable=True)
     nome = db.Column(db.String(200), nullable=False, unique=True)
     descricao = db.Column(db.Text, nullable=False)
     quantidade = db.Column(db.Integer, nullable=False, default=0)
@@ -104,6 +170,7 @@ class PlannerEvento(db.Model):
     __tablename__ = "planner_evento"
 
     id = db.Column(db.Integer, primary_key=True)
+    usuario_crm_id = db.Column(db.Integer, db.ForeignKey('usuario_crm.id'), nullable=True)
     tipo = db.Column(db.String(50), nullable=False)  # agendamento, contato, periodo
     cliente = db.Column(db.String(120), nullable=True)
     data = db.Column(db.Date, nullable=False)

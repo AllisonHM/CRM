@@ -94,6 +94,43 @@
   </div>
 </div>
 
+<!-- Cards de Vendas por Período -->
+<div class="row mt-4">
+  <div class="col-md-12 mb-3">
+    <h3 class="section-title">💸 Vendas por Período</h3>
+  </div>
+  
+  <!-- Card: Vendas do Dia -->
+  <div class="col-md-4 mb-4">
+    <div class="card card-accent">
+      <div class="card-header">📅 Vendas do Dia</div>
+      <div class="card-body">
+        <canvas id="chartVendasDia" height="100"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Card: Vendas da Semana -->
+  <div class="col-md-4 mb-4">
+    <div class="card card-accent">
+      <div class="card-header">📊 Vendas da Semana</div>
+      <div class="card-body">
+        <canvas id="chartVendasSemana" height="100"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Card: Vendas do Mês -->
+  <div class="col-md-4 mb-4">
+    <div class="card card-accent">
+      <div class="card-header">📈 Vendas do Mês</div>
+      <div class="card-body">
+        <canvas id="chartVendasMes" height="100"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -110,6 +147,9 @@
   const valorMesasAndamento = {{ valor_mesas_andamento | default(0) }};
   const valorMesasGanhas = {{ valor_mesas_ganhas | default(0) }};
   const valorMesasPerdidas = {{ valor_mesas_perdidas | default(0) }};
+  const valorVendasDia = {{ valor_vendas_dia | default(0) }};
+  const valorVendasSemana = {{ valor_vendas_semana | default(0) }};
+  const valorVendasMes = {{ valor_vendas_mes | default(0) }};
 
   // Gráfico: Clientes (Pessoas Física vs Jurídica)
   const ctxClientes = document.getElementById('chartClientes').getContext('2d');
@@ -270,6 +310,144 @@
               return context.dataset.label + ': R$ ' + context.parsed.x.toFixed(2).replace('.', ',');
             }
           }
+        }
+      }
+    }
+  });
+
+  // Gráfico: Vendas do Dia
+  const ctxVendasDia = document.getElementById('chartVendasDia').getContext('2d');
+  new Chart(ctxVendasDia, {
+    type: 'bar',
+    data: {
+      labels: ['Vendas Hoje'],
+      datasets: [{
+        label: 'Valor',
+        data: [valorVendasDia],
+        backgroundColor: '#27ae60',
+        borderColor: '#27ae60',
+        borderWidth: 1,
+        borderRadius: 6
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              return 'R$ ' + context.parsed.x.toFixed(2).replace('.', ',');
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          beginAtZero: true,
+          ticks: { 
+            color: '#2c3e50',
+            callback: function(value) {
+              return 'R$ ' + value.toFixed(0);
+            }
+          }
+        },
+        y: {
+          ticks: { color: '#2c3e50' }
+        }
+      }
+    }
+  });
+
+  // Gráfico: Vendas da Semana
+  const ctxVendasSemana = document.getElementById('chartVendasSemana').getContext('2d');
+  new Chart(ctxVendasSemana, {
+    type: 'bar',
+    data: {
+      labels: ['Vendas Semana'],
+      datasets: [{
+        label: 'Valor',
+        data: [valorVendasSemana],
+        backgroundColor: '#3498db',
+        borderColor: '#3498db',
+        borderWidth: 1,
+        borderRadius: 6
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              return 'R$ ' + context.parsed.x.toFixed(2).replace('.', ',');
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          beginAtZero: true,
+          ticks: { 
+            color: '#2c3e50',
+            callback: function(value) {
+              return 'R$ ' + value.toFixed(0);
+            }
+          }
+        },
+        y: {
+          ticks: { color: '#2c3e50' }
+        }
+      }
+    }
+  });
+
+  // Gráfico: Vendas do Mês
+  const ctxVendasMes = document.getElementById('chartVendasMes').getContext('2d');
+  new Chart(ctxVendasMes, {
+    type: 'bar',
+    data: {
+      labels: ['Vendas Mês'],
+      datasets: [{
+        label: 'Valor',
+        data: [valorVendasMes],
+        backgroundColor: '#9b59b6',
+        borderColor: '#9b59b6',
+        borderWidth: 1,
+        borderRadius: 6
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              return 'R$ ' + context.parsed.x.toFixed(2).replace('.', ',');
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          beginAtZero: true,
+          ticks: { 
+            color: '#2c3e50',
+            callback: function(value) {
+              return 'R$ ' + value.toFixed(0);
+            }
+          }
+        },
+        y: {
+          ticks: { color: '#2c3e50' }
         }
       }
     }
