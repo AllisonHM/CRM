@@ -4,7 +4,7 @@ Script para adicionar colunas diretamente no PostgreSQL na ordem correta
 """
 
 from CRM import app
-from database import db
+from database_rls import db
 
 def adicionar_colunas():
     """Adiciona colunas uma por uma na ordem correta"""

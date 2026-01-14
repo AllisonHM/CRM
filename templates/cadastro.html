@@ -115,7 +115,7 @@
                     <td>{{ cliente.telefone }}</td>
                     <td>{{ cliente.tipo_pessoa }}</td>
                     <td>
-                        <form action="{{ url_for('excluir_cliente', id=cliente.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('⚠️ ATENÇÃO!\n\nVocê está prestes a excluir o cliente:\n\n« {{ cliente.nome }} »\n\nTodos os dados vinculados (mesas de negócio e ocorrências) também serão DELETADOS!\n\nTem certeza que deseja continuar?');">
+                        <form action="{{ url_for('excluir_cliente', id=cliente.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('⚠️ ATENÇÃO!\n\nVocê está prestes a excluir o cliente:\n\n« {{ cliente.nome }} »\n\nTodos os dados vinculados (negócios e ocorrências) também serão DELETADOS!\n\nTem certeza que deseja continuar?');">
                             <button type="submit" class="btn btn-danger btn-sm">🗑️ Excluir</button>
                         </form>
                     </td>

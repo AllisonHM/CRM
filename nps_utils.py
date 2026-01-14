@@ -1,7 +1,7 @@
 # nps_utils.py
 from datetime import datetime, timedelta
 from models import Cliente, UsuarioCRM
-from database import db
+from database_rls import db
 
 def obter_clientes_aptos_nps(usuario_crm_id):
     """

@@ -5,7 +5,7 @@ Execute este script após rodar as migrações.
 """
 
 from CRM import app
-from database import db
+from database_rls import db
 from models import UsuarioCRM
 
 def criar_usuario_crm_inicial():

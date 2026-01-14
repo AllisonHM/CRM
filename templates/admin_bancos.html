@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+{% block title %}Gerenciar Bancos de Dados{% endblock %}
+
+{% block content %}
+
+<style>
+  .banco-card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 15px;
+    border-left: 4px solid var(--accent-yellow);
+    transition: 0.3s;
+  }
+  
+  .banco-card:hover {
+    transform: translateX(5px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+  
+  .status-badge {
+    display: inline-block;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+  
+  .status-ativo {
+    background: rgba(40, 167, 69, 0.2);
+    color: #28a745;
+  }
+  
+  .status-inativo {
+    background: rgba(220, 53, 69, 0.2);
+    color: #dc3545;
+  }
+  
+  .db-info {
+    font-family: 'Courier New', monospace;
+    background: rgba(0,0,0,0.05);
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+  }
+  
+  .action-btn {
+    padding: 8px 15px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: 0.3s;
+    margin-right: 8px;
+  }
+  
+  .btn-migrar {
+    background: var(--accent-yellow);
+    color: #000;
+  }
+  
+  .btn-migrar:hover {
+    background: var(--hover-yellow);
+  }
+  
+  .btn-backup {
+    background: #17a2b8;
+    color: white;
+  }
+  
+  .btn-backup:hover {
+    background: #138496;
+  }
+  
+  .btn-danger-custom {
+    background: #dc3545;
+    color: white;
+  }
+  
+  .btn-danger-custom:hover {
+    background: #c82333;
+  }
+  
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 30px;
+  }
+  
+  .stat-card {
+    background: var(--gradient-primary);
+    color: white;
+    padding: 20px;
+    border-radius: 10px;
+    text-align: center;
+  }
+  
+  .stat-number {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin: 10px 0;
+  }
+  
+  .stat-label {
+    font-size: 0.9rem;
+    opacity: 0.9;
+  }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1 class="section-title">🗄️ Gerenciar Bancos de Dados</h1>
+  <button class="btn-export" onclick="migrarTodos()">🔄 Migrar Todos</button>
+</div>
+
+<!-- Estatísticas -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Total de Bancos</div>
+    <div class="stat-number">{{ bancos|length }}</div>
+  </div>
+  
+  <div class="stat-card">
+    <div class="stat-label">Clientes Ativos</div>
+    <div class="stat-number">{{ bancos|selectattr('ativo', 'equalto', true)|list|length }}</div>
+  </div>
+  
+  <div class="stat-card">
+    <div class="stat-label">Clientes Inativos</div>
+    <div class="stat-number">{{ bancos|rejectattr('ativo', 'equalto', true)|list|length }}</div>
+  </div>
+</div>
+
+<!-- Lista de Bancos -->
+<div class="table-responsive">
+  {% for banco in bancos %}
+  <div class="banco-card" id="banco-{{ banco.cliente_id }}">
+    <div class="row align-items-center">
+      <div class="col-md-4">
+        <h5 style="margin-bottom: 5px;">
+          <span class="status-badge {% if banco.ativo %}status-ativo{% else %}status-inativo{% endif %}">
+            {% if banco.ativo %}● Ativo{% else %}○ Inativo{% endif %}
+          </span>
+        </h5>
+        <h4 style="margin: 10px 0;">{{ banco.cliente_nome }}</h4>
+        <div class="db-info">{{ banco.db_name }}</div>
+      </div>
+      
+      <div class="col-md-4">
+        <div style="padding: 10px 0;">
+          <strong>ID do Cliente:</strong> #{{ banco.cliente_id }}<br>
+          <strong>Email:</strong> {{ banco.email }}<br>
+          {% if banco.total_clientes is defined %}
+          <strong>Registros:</strong> {{ banco.total_clientes }} clientes, {{ banco.total_negocios }} negócios
+          {% endif %}
+        </div>
+      </div>
+      
+      <div class="col-md-4 text-end">
+        <button class="action-btn btn-migrar" onclick="migrarBanco({{ banco.cliente_id }})">
+          🔄 Migrar
+        </button>
+        <button class="action-btn btn-backup" onclick="backupBanco({{ banco.cliente_id }})">
+          💾 Backup
+        </button>
+        {% if not banco.ativo %}
+        <button class="action-btn btn-danger-custom" onclick="excluirBanco({{ banco.cliente_id }}, '{{ banco.cliente_nome }}')">
+          🗑️ Excluir
+        </button>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+  
+  {% if not bancos %}
+  <div class="alert alert-info">
+    <strong>ℹ️ Nenhum banco de cliente criado ainda.</strong><br>
+    Quando você criar novos clientes (admins), os bancos aparecerão aqui.
+  </div>
+  {% endif %}
+</div>
+
+<script>
+function migrarBanco(clienteId) {
+  if (!confirm('Executar migrações no banco deste cliente?')) return;
+  
+  fetch(`/admin/migrar_banco/${clienteId}`, { method: 'POST' })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        alert('✅ ' + data.mensagem);
+      } else {
+        alert('❌ Erro: ' + data.erro);
+      }
+    })
+    .catch(err => {
+      alert('❌ Erro na requisição: ' + err);
+    });
+}
+
+function backupBanco(clienteId) {
+  if (!confirm('Criar backup do banco deste cliente?')) return;
+  
+  fetch(`/admin/backup_banco/${clienteId}`, { method: 'POST' })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        alert('✅ Backup criado: ' + data.arquivo);
+      } else {
+        alert('❌ Erro: ' + data.erro);
+      }
+    })
+    .catch(err => {
+      alert('❌ Erro na requisição: ' + err);
+    });
+}
+
+function excluirBanco(clienteId, nomeCliente) {
+  const confirmacao = prompt(
+    `⚠️ ATENÇÃO!\n\n` +
+    `Você está prestes a EXCLUIR PERMANENTEMENTE o banco de dados de:\n\n` +
+    `« ${nomeCliente} »\n\n` +
+    `Esta ação é IRREVERSÍVEL e todos os dados serão PERDIDOS!\n\n` +
+    `Digite "CONFIRMAR EXCLUSAO" para prosseguir:`
+  );
+  
+  if (confirmacao !== 'CONFIRMAR EXCLUSAO') {
+    alert('Exclusão cancelada.');
+    return;
+  }
+  
+  fetch(`/admin/excluir_banco/${clienteId}`, { method: 'DELETE' })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        alert('✅ ' + data.mensagem);
+        // Remove card da tela
+        document.getElementById(`banco-${clienteId}`).remove();
+      } else {
+        alert('❌ Erro: ' + data.erro);
+      }
+    })
+    .catch(err => {
+      alert('❌ Erro na requisição: ' + err);
+    });
+}
+
+function migrarTodos() {
+  if (!confirm('Executar migrações em TODOS os bancos de clientes?\n\nIsso pode levar alguns minutos.')) return;
+  
+  alert('🔄 Iniciando migração em todos os bancos...\n\nIsso pode demorar. Aguarde...');
+  
+  fetch('/admin/migrar_todos', { method: 'POST' })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        alert('✅ Migração concluída!\n\n' + data.detalhes);
+        location.reload();
+      } else {
+        alert('❌ Erro: ' + data.erro);
+      }
+    })
+    .catch(err => {
+      alert('❌ Erro na requisição: ' + err);
+    });
+}
+</script>
+
+{% endblock %}

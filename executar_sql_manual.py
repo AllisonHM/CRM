@@ -5,7 +5,7 @@ e adicionar as colunas necessárias.
 """
 
 from CRM import app
-from database import db
+from database_rls import db
 
 def executar_sql_manual():
     """Executa SQL para adicionar colunas manualmente"""

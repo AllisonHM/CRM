@@ -1,23 +1,33 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, session
+from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, session, g
 from flask_socketio import SocketIO, join_room
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from datetime import datetime, timedelta
 from functools import wraps
 import requests
+import logging
 from flask_migrate import Migrate
-from database import db
+from database_rls import db, tenant_db, init_db
 from models import Cliente, MesaNegocio, Ocorrencia, WhatsAppMensagem, ChatbotRegra, Produto, Movimentacao, PlannerEvento, UsuarioCRM
 from sqlalchemy import or_, and_
+
+# Configurar logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = "seusegredo"
 
-# ------------------- BANCO -------------------
+# ------------------- BANCO COM RLS -------------------
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg2://postgres:Amovoce123%40@localhost:1222/crm'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ECHO'] = False  # True para debug SQL
+
+# Inicializa DB com suporte a RLS
 db.init_app(app)
-with app.app_context():
-    db.create_all()
+tenant_db.init_app(app)
 
 # ------------------- FLASK-LOGIN -------------------
 login_manager = LoginManager()
@@ -45,9 +55,15 @@ def permission_required(modulo):
 
 # Função auxiliar para filtrar dados por usuário
 def get_usuario_filter():
-    """Retorna o ID do usuário principal para filtrar dados"""
+    """Retorna o ID do usuário principal para filtrar dados
+    
+    NOTA: Com RLS ativo, esta função não é mais necessária para segurança,
+    mas mantemos para compatibilidade com código legado.
+    O PostgreSQL RLS automaticamente filtra os dados pelo tenant_id.
+    """
     if current_user.tipo_usuario == 'super_admin':
-        return None  # Super admin vê tudo
+        # Super admin pode ver tudo (RLS será desabilitado manualmente quando necessário)
+        return None
     return current_user.get_usuario_principal_id()
 
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -2141,8 +2157,22 @@ requests.post(
 )
 
 if __name__ == "__main__":
+    # Inicializa o banco de dados
+    with app.app_context():
+        try:
+            db.create_all()
+            logger.info("✅ Banco de dados inicializado com sucesso")
+            logger.info("✅ RLS (Row Level Security) ativo")
+            logger.info("✅ Isolamento multi-tenant configurado")
+        except Exception as e:
+            logger.error(f"❌ Erro ao inicializar banco: {e}")
+    
+    print("=" * 60)
+    print("✅ CRM Multi-Tenant com RLS Ativo")
     print("✅ Servidor rodando em: http://127.0.0.1:5000")
-    # use socketio.run para suportar corretamente socket.io
+    print("=" * 60)
+    
+    # Use socketio.run para suportar corretamente socket.io
     socketio.run(app, debug=True, host='127.0.0.1', port=5000)
 
 
