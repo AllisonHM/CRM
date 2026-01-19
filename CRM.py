@@ -7,7 +7,7 @@ import requests
 import logging
 from flask_migrate import Migrate
 from database_rls import db, tenant_db, init_db
-from models import Cliente, MesaNegocio, Ocorrencia, WhatsAppMensagem, ChatbotRegra, Produto, Movimentacao, PlannerEvento, UsuarioCRM
+from models import Cliente, MesaNegocio, Ocorrencia, WhatsAppMensagem, ChatbotRegra, Produto, Movimentacao, PlannerEvento, UsuarioCRM, ConfiguracaoUsuario, Parametrizacao
 from sqlalchemy import or_, and_
 
 # Configurar logging
@@ -162,6 +162,102 @@ def logout():
     logout_user()
     flash('Você saiu do sistema.', 'info')
     return redirect(url_for('login'))
+
+
+# ------------------- CONFIGURAÇÕES DO USUÁRIO -------------------
+@app.route('/configuracoes', methods=['GET', 'POST'])
+@login_required
+def configuracoes():
+    """Página de configurações pessoais do usuário"""
+    # Buscar ou criar configuração do usuário
+    config = ConfiguracaoUsuario.query.filter_by(usuario_crm_id=current_user.id).first()
+    if not config:
+        config = ConfiguracaoUsuario(usuario_crm_id=current_user.id)
+        db.session.add(config)
+        db.session.commit()
+    
+    if request.method == 'POST':
+        acao = request.form.get('acao')
+        
+        if acao == 'alterar_senha':
+            senha_atual = request.form.get('senha_atual')
+            nova_senha = request.form.get('nova_senha')
+            confirmar_senha = request.form.get('confirmar_senha')
+            
+            # Verificar senha atual
+            if not current_user.check_password(senha_atual):
+                flash('Senha atual incorreta!', 'danger')
+                return redirect(url_for('configuracoes'))
+            
+            # Verificar se as senhas novas coincidem
+            if nova_senha != confirmar_senha:
+                flash('As senhas não coincidem!', 'danger')
+                return redirect(url_for('configuracoes'))
+            
+            # Verificar comprimento mínimo
+            if len(nova_senha) < 6:
+                flash('A senha deve ter no mínimo 6 caracteres!', 'danger')
+                return redirect(url_for('configuracoes'))
+            
+            # Alterar senha
+            current_user.set_password(nova_senha)
+            db.session.commit()
+            flash('Senha alterada com sucesso!', 'success')
+            return redirect(url_for('configuracoes'))
+        
+        elif acao == 'salvar_preferencias':
+            # Atualizar preferências
+            config.tema = request.form.get('tema', 'claro')
+            config.notificacoes_email = 'notificacoes_email' in request.form
+            config.notificacoes_sistema = 'notificacoes_sistema' in request.form
+            
+            db.session.commit()
+            flash('Preferências salvas com sucesso!', 'success')
+            return redirect(url_for('configuracoes'))
+    
+    return render_template('configuracoes_conta.html', config=config)
+
+
+@app.route('/parametrizacoes', methods=['GET', 'POST'])
+@login_required
+def parametrizacoes():
+    """Página de parametrizações do sistema (apenas para admin e super_admin)"""
+    if current_user.tipo_usuario not in ['super_admin', 'admin']:
+        flash('Acesso negado. Apenas administradores podem acessar parametrizações.', 'danger')
+        return redirect(url_for('menu'))
+    
+    # Buscar ou criar parametrização do usuário
+    param = Parametrizacao.query.filter_by(usuario_crm_id=current_user.id).first()
+    if not param:
+        param = Parametrizacao(usuario_crm_id=current_user.id)
+        db.session.add(param)
+        db.session.commit()
+    
+    if request.method == 'POST':
+        # Atualizar mensagens automáticas
+        param.mensagem_boas_vindas = request.form.get('mensagem_boas_vindas', '')
+        param.mensagem_ausencia = request.form.get('mensagem_ausencia', '')
+        param.mensagem_encerramento = request.form.get('mensagem_encerramento', '')
+        param.mensagem_nps = request.form.get('mensagem_nps', '')
+        
+        # Atualizar configurações
+        param.resposta_automatica_ativa = 'resposta_automatica_ativa' in request.form
+        
+        # Horários de atendimento
+        horario_inicio = request.form.get('horario_atendimento_inicio')
+        horario_fim = request.form.get('horario_atendimento_fim')
+        
+        if horario_inicio:
+            param.horario_atendimento_inicio = datetime.strptime(horario_inicio, '%H:%M').time()
+        if horario_fim:
+            param.horario_atendimento_fim = datetime.strptime(horario_fim, '%H:%M').time()
+        
+        db.session.commit()
+        flash('Parametrizações salvas com sucesso!', 'success')
+        return redirect(url_for('parametrizacoes'))
+    
+    return render_template('parametrizacoes.html', param=param)
+
 
 @app.route('/criar_super_admin')
 def criar_super_admin():
@@ -326,29 +422,38 @@ def deletar_usuario(id):
     return redirect(url_for('listar_usuarios'))
 
 
-# ------------------- GESTÃO DE COLABORADORES (SUPER_ADMIN APENAS) -------------------
+# ------------------- GESTÃO DE COLABORADORES (SUPER_ADMIN E ADMIN) -------------------
 @app.route('/colaboradores')
 @login_required
 def listar_colaboradores():
-    """Lista todos os colaboradores - APENAS SUPER_ADMIN"""
-    if current_user.tipo_usuario != 'super_admin':
-        flash('Acesso negado. Apenas o administrador master pode gerenciar colaboradores.', 'danger')
+    """Lista todos os colaboradores - SUPER_ADMIN vê todos, ADMIN vê apenas os seus"""
+    if current_user.tipo_usuario not in ['super_admin', 'admin']:
+        flash('Acesso negado. Apenas administradores podem gerenciar colaboradores.', 'danger')
         return redirect(url_for('menu'))
     
-    # Verificar se há filtro por cliente
+    # Verificar se há filtro por cliente (apenas para super_admin)
     cliente_id = request.args.get('cliente_id', type=int)
     
-    if cliente_id:
-        # Filtrar colaboradores de um cliente específico
+    if current_user.tipo_usuario == 'super_admin':
+        # Super admin pode ver todos os colaboradores ou filtrar por cliente
+        if cliente_id:
+            # Filtrar colaboradores de um cliente específico
+            colaboradores = UsuarioCRM.query.filter_by(
+                tipo_usuario='colaborador',
+                usuario_pai_id=cliente_id
+            ).order_by(UsuarioCRM.nome).all()
+            cliente = UsuarioCRM.query.get(cliente_id)
+            cliente_nome = cliente.nome if cliente else None
+        else:
+            # Super admin vê todos os colaboradores
+            colaboradores = UsuarioCRM.query.filter_by(tipo_usuario='colaborador').order_by(UsuarioCRM.nome).all()
+            cliente_nome = None
+    else:
+        # Admin vê apenas seus próprios colaboradores
         colaboradores = UsuarioCRM.query.filter_by(
             tipo_usuario='colaborador',
-            usuario_pai_id=cliente_id
+            usuario_pai_id=current_user.id
         ).order_by(UsuarioCRM.nome).all()
-        cliente = UsuarioCRM.query.get(cliente_id)
-        cliente_nome = cliente.nome if cliente else None
-    else:
-        # Super admin vê todos os colaboradores
-        colaboradores = UsuarioCRM.query.filter_by(tipo_usuario='colaborador').order_by(UsuarioCRM.nome).all()
         cliente_nome = None
     
     return render_template('listar_colaboradores.html', colaboradores=colaboradores, cliente_filtro=cliente_nome)
@@ -356,9 +461,9 @@ def listar_colaboradores():
 @app.route('/colaboradores/add', methods=['GET', 'POST'])
 @login_required
 def add_colaborador():
-    """Adiciona novo colaborador - APENAS SUPER_ADMIN"""
-    if current_user.tipo_usuario != 'super_admin':
-        flash('Acesso negado. Apenas o administrador master pode gerenciar colaboradores.', 'danger')
+    """Adiciona novo colaborador - SUPER_ADMIN pode escolher o admin, ADMIN cria vinculado a si mesmo"""
+    if current_user.tipo_usuario not in ['super_admin', 'admin']:
+        flash('Acesso negado. Apenas administradores podem gerenciar colaboradores.', 'danger')
         return redirect(url_for('menu'))
     
     if request.method == 'POST':
@@ -375,18 +480,24 @@ def add_colaborador():
             flash('Este email já está cadastrado.', 'danger')
             return redirect(url_for('add_colaborador'))
         
-        # Obter o cliente (admin) a quem pertencerá o colaborador
-        usuario_pai_id = request.form.get('usuario_pai_id')
-        if not usuario_pai_id:
-            flash('Selecione o cliente para este colaborador.', 'danger')
-            return redirect(url_for('add_colaborador'))
+        # Determinar o usuario_pai_id
+        if current_user.tipo_usuario == 'super_admin':
+            # Super admin pode escolher o cliente
+            usuario_pai_id = request.form.get('usuario_pai_id')
+            if not usuario_pai_id:
+                flash('Selecione o cliente para este colaborador.', 'danger')
+                return redirect(url_for('add_colaborador'))
+            usuario_pai_id = int(usuario_pai_id)
+        else:
+            # Admin cria colaborador vinculado a si mesmo
+            usuario_pai_id = current_user.id
         
         # Criar novo colaborador
         novo_colaborador = UsuarioCRM(
             nome=nome,
             email=email,
             tipo_usuario='colaborador',
-            usuario_pai_id=int(usuario_pai_id),
+            usuario_pai_id=usuario_pai_id,
             permissoes=permissoes,
             ativo=True
         )
@@ -411,20 +522,28 @@ def add_colaborador():
         {'id': 'relatorios', 'nome': 'Relatórios', 'icone': '📊'}
     ]
     
-    # Buscar todos os clientes (admin) para selecionar
-    clientes = UsuarioCRM.query.filter_by(tipo_usuario='admin', ativo=True).order_by(UsuarioCRM.nome).all()
+    # Buscar todos os clientes (admin) para selecionar (apenas para super_admin)
+    if current_user.tipo_usuario == 'super_admin':
+        clientes = UsuarioCRM.query.filter_by(tipo_usuario='admin', ativo=True).order_by(UsuarioCRM.nome).all()
+    else:
+        clientes = None
     
     return render_template('add_colaborador.html', modulos=modulos_disponiveis, clientes=clientes)
 
 @app.route('/colaboradores/editar/<int:id>', methods=['GET', 'POST'])
 @login_required
 def editar_colaborador(id):
-    """Edita colaborador existente - APENAS SUPER_ADMIN"""
-    if current_user.tipo_usuario != 'super_admin':
-        flash('Acesso negado. Apenas o administrador master pode gerenciar colaboradores.', 'danger')
+    """Edita colaborador existente - SUPER_ADMIN edita qualquer um, ADMIN edita apenas os seus"""
+    if current_user.tipo_usuario not in ['super_admin', 'admin']:
+        flash('Acesso negado. Apenas administradores podem gerenciar colaboradores.', 'danger')
         return redirect(url_for('menu'))
     
     colaborador = UsuarioCRM.query.get_or_404(id)
+    
+    # Admin só pode editar seus próprios colaboradores
+    if current_user.tipo_usuario == 'admin' and colaborador.usuario_pai_id != current_user.id:
+        flash('Acesso negado. Você só pode editar seus próprios colaboradores.', 'danger')
+        return redirect(url_for('listar_colaboradores'))
     
     if request.method == 'POST':
         colaborador.nome = request.form.get('nome')
@@ -1494,10 +1613,10 @@ def mensagens():
         mensagens = WhatsAppMensagem.query.order_by(WhatsAppMensagem.recebido_em.desc()).all()
     return render_template("mensagens.html", mensagens=mensagens)
 
-@app.route("/configuracoes", methods=["GET", "POST"])
+@app.route("/configuracoes_chatbot", methods=["GET", "POST"])
 @login_required
 @permission_required('chatbot')
-def configuracoes():
+def configuracoes_chatbot():
     user_id = get_usuario_filter()
     
     if request.method == "POST":
@@ -1513,7 +1632,7 @@ def configuracoes():
         db.session.add(regra)
         db.session.commit()
         flash("Regra adicionada com sucesso!")
-        return redirect(url_for("configuracoes"))
+        return redirect(url_for("configuracoes_chatbot"))
 
     # Filtrar regras por usuário
     if user_id:

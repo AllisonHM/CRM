@@ -150,7 +150,12 @@
                             </a>
                             <ul class="dropdown-menu">
                                 <li><a class="dropdown-item" href="{{ url_for('listar_usuarios') }}">👥 Gerenciar Clientes</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('listar_colaboradores') }}">👨‍💼 Gerenciar Colaboradores</a></li>
                             </ul>
+                        </li>
+                        {% elif current_user.tipo_usuario == 'admin' %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('listar_colaboradores') }}">👨‍💼 Meus Colaboradores</a>
                         </li>
                         {% endif %}
                         
@@ -163,6 +168,11 @@
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end">
                                 <li><span class="dropdown-item-text"><small>{{ current_user.email }}</small></span></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{{ url_for('configuracoes') }}">⚙️ Configurações</a></li>
+                                {% if current_user.tipo_usuario in ['super_admin', 'admin'] %}
+                                <li><a class="dropdown-item" href="{{ url_for('parametrizacoes') }}">🔧 Parametrizações</a></li>
+                                {% endif %}
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="{{ url_for('logout') }}">🚪 Sair</a></li>
                             </ul>

@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block title %}Parametrizações - CRM{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="section-title">🔧 Parametrizações do Sistema</h1>
+    
+    <p class="text-muted mb-4">
+        Configure mensagens automáticas, horários de atendimento e outras parametrizações do seu CRM.
+    </p>
+
+    <form method="POST" action="{{ url_for('parametrizacoes') }}">
+        <div class="row">
+            <!-- Card: Mensagens Automáticas -->
+            <div class="col-12 mb-4">
+                <div class="card card-accent">
+                    <div class="card-header">
+                        <h5 class="mb-0">💬 Mensagens Automáticas</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="mensagem_boas_vindas" class="form-label">
+                                    👋 Mensagem de Boas-Vindas
+                                </label>
+                                <textarea class="form-control" id="mensagem_boas_vindas" name="mensagem_boas_vindas" 
+                                          rows="3" placeholder="Mensagem enviada ao iniciar conversa">{{ param.mensagem_boas_vindas }}</textarea>
+                                <small class="text-muted">Enviada quando um cliente inicia conversa</small>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label for="mensagem_ausencia" class="form-label">
+                                    🌙 Mensagem de Ausência
+                                </label>
+                                <textarea class="form-control" id="mensagem_ausencia" name="mensagem_ausencia" 
+                                          rows="3" placeholder="Mensagem enviada fora do horário">{{ param.mensagem_ausencia }}</textarea>
+                                <small class="text-muted">Enviada fora do horário de atendimento</small>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label for="mensagem_encerramento" class="form-label">
+                                    👋 Mensagem de Encerramento
+                                </label>
+                                <textarea class="form-control" id="mensagem_encerramento" name="mensagem_encerramento" 
+                                          rows="3" placeholder="Mensagem de despedida">{{ param.mensagem_encerramento }}</textarea>
+                                <small class="text-muted">Mensagem de despedida ao cliente</small>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label for="mensagem_nps" class="form-label">
+                                    ⭐ Mensagem de Solicitação NPS
+                                </label>
+                                <textarea class="form-control" id="mensagem_nps" name="mensagem_nps" 
+                                          rows="3" placeholder="Mensagem para solicitar NPS">{{ param.mensagem_nps }}</textarea>
+                                <small class="text-muted">Enviada para solicitar avaliação do cliente</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card: Horário de Atendimento -->
+            <div class="col-md-6 mb-4">
+                <div class="card card-accent">
+                    <div class="card-header">
+                        <h5 class="mb-0">🕐 Horário de Atendimento</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="horario_atendimento_inicio" class="form-label">
+                                🌅 Horário de Início
+                            </label>
+                            <input type="time" class="form-control" id="horario_atendimento_inicio" 
+                                   name="horario_atendimento_inicio" 
+                                   value="{{ param.horario_atendimento_inicio.strftime('%H:%M') if param.horario_atendimento_inicio else '' }}">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="horario_atendimento_fim" class="form-label">
+                                🌆 Horário de Término
+                            </label>
+                            <input type="time" class="form-control" id="horario_atendimento_fim" 
+                                   name="horario_atendimento_fim"
+                                   value="{{ param.horario_atendimento_fim.strftime('%H:%M') if param.horario_atendimento_fim else '' }}">
+                        </div>
+                        
+                        <div class="alert alert-info mb-0">
+                            <small>
+                                <i class="bi bi-info-circle"></i> 
+                                Durante o horário configurado, as mensagens automáticas não serão enviadas.
+                                Fora do horário, a mensagem de ausência será enviada automaticamente.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card: Configurações Gerais -->
+            <div class="col-md-6 mb-4">
+                <div class="card card-accent">
+                    <div class="card-header">
+                        <h5 class="mb-0">⚙️ Configurações Gerais</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="resposta_automatica_ativa" 
+                                   name="resposta_automatica_ativa" {% if param.resposta_automatica_ativa %}checked{% endif %}>
+                            <label class="form-check-label" for="resposta_automatica_ativa">
+                                <strong>🤖 Ativar Respostas Automáticas</strong>
+                            </label>
+                            <div class="form-text">
+                                Quando ativo, o sistema enviará automaticamente as mensagens configuradas 
+                                conforme as regras estabelecidas.
+                            </div>
+                        </div>
+                        
+                        <div class="alert alert-warning mb-0">
+                            <small>
+                                <i class="bi bi-exclamation-triangle"></i> 
+                                <strong>Atenção:</strong> As mensagens automáticas só funcionam se você tiver 
+                                a API do WhatsApp configurada.
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Botões de Ação -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <button type="submit" class="btn btn-success btn-lg me-2">
+                            <i class="bi bi-save"></i> Salvar Parametrizações
+                        </button>
+                        <a href="{{ url_for('menu') }}" class="btn btn-secondary btn-lg">
+                            <i class="bi bi-x-circle"></i> Cancelar
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <!-- Card de Ajuda -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card border-info">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">💡 Dicas de Uso</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="mb-0">
+                        <li>
+                            <strong>Mensagem de Boas-Vindas:</strong> É enviada automaticamente quando um novo 
+                            cliente entra em contato pela primeira vez ou após um período de inatividade.
+                        </li>
+                        <li>
+                            <strong>Mensagem de Ausência:</strong> É enviada quando o cliente envia mensagem 
+                            fora do horário de atendimento configurado.
+                        </li>
+                        <li>
+                            <strong>Mensagem NPS:</strong> É enviada automaticamente após um atendimento ou 
+                            venda concluída para avaliar a satisfação do cliente.
+                        </li>
+                        <li>
+                            <strong>Horários:</strong> Configure os horários de funcionamento do seu negócio 
+                            para controlar o envio de mensagens automáticas.
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .card-accent {
+        border-top: 4px solid var(--primary-purple);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .card-header {
+        background: linear-gradient(135deg, #4a235a 0%, #6c3483 100%);
+        color: white !important;
+    }
+    
+    .card-header h5 {
+        color: white !important;
+    }
+    
+    .form-check-input:checked {
+        background-color: var(--primary-purple);
+        border-color: var(--primary-purple);
+    }
+    
+    textarea.form-control {
+        resize: vertical;
+    }
+</style>
+{% endblock %}

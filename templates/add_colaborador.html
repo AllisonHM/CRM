@@ -33,6 +33,7 @@
                             <small class="text-muted">Mínimo 6 caracteres</small>
                         </div>
 
+                        {% if clientes %}
                         <div class="mb-3">
                             <label for="usuario_pai_id" class="form-label">Cliente (Empresa) *</label>
                             <select class="form-select" id="usuario_pai_id" name="usuario_pai_id" required>
@@ -43,6 +44,7 @@
                             </select>
                             <small class="text-muted">O colaborador será vinculado a este cliente</small>
                         </div>
+                        {% endif %}
 
                         <hr class="my-4">
 

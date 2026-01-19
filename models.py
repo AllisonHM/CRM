@@ -179,3 +179,46 @@ class PlannerEvento(db.Model):
     descricao = db.Column(db.Text, nullable=True)
 
 
+class ConfiguracaoUsuario(db.Model):
+    """Configurações pessoais do usuário (tema, preferências, etc.)"""
+    __tablename__ = 'configuracao_usuario'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_crm_id = db.Column(db.Integer, db.ForeignKey('usuario_crm.id'), nullable=False, unique=True)
+    
+    # Preferências de interface
+    tema = db.Column(db.String(20), default='claro')  # claro, escuro
+    idioma = db.Column(db.String(10), default='pt-br')
+    
+    # Notificações
+    notificacoes_email = db.Column(db.Boolean, default=True)
+    notificacoes_sistema = db.Column(db.Boolean, default=True)
+    
+    data_atualizacao = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relacionamento
+    usuario = db.relationship('UsuarioCRM', backref=db.backref('configuracao', uselist=False))
+
+
+class Parametrizacao(db.Model):
+    """Parametrizações do sistema (mensagens automáticas, templates, etc.)"""
+    __tablename__ = 'parametrizacao'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_crm_id = db.Column(db.Integer, db.ForeignKey('usuario_crm.id'), nullable=False)
+    
+    # Mensagens automáticas
+    mensagem_boas_vindas = db.Column(db.Text, default='Olá! Bem-vindo ao nosso atendimento. Como posso ajudá-lo?')
+    mensagem_ausencia = db.Column(db.Text, default='No momento estamos ausentes. Retornaremos em breve!')
+    mensagem_encerramento = db.Column(db.Text, default='Obrigado pelo contato! Até breve.')
+    mensagem_nps = db.Column(db.Text, default='Em uma escala de 0 a 10, o quanto você recomendaria nossos serviços?')
+    
+    # Configurações gerais
+    horario_atendimento_inicio = db.Column(db.Time, nullable=True)
+    horario_atendimento_fim = db.Column(db.Time, nullable=True)
+    resposta_automatica_ativa = db.Column(db.Boolean, default=False)
+    
+    data_atualizacao = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relacionamento
+    usuario = db.relationship('UsuarioCRM', backref='parametrizacoes')
