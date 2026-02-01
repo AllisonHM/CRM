@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Sistema CRM completo para gestão de clientes, negócios e relacionamento">
+    <title>SeuCRM - Gerencie seus clientes de forma simples</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <h1 class="logo">🚀 SeuCRM</h1>
+            <nav>
+                <a href="#beneficios">Benefícios</a>
+                <a href="#funcionalidades">Funcionalidades</a>
+                <a href="#contato">Contato</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <h2 class="hero-title">Gerencie seus clientes de forma simples e eficiente</h2>
+            <p class="hero-subtitle">O CRM completo para pequenas e médias empresas</p>
+            <a href="#contato" class="btn-primary">Experimente Grátis</a>
+        </div>
+    </section>
+
+    <!-- Benefícios -->
+    <section id="beneficios" class="beneficios">
+        <div class="container">
+            <h2>Por que escolher nosso CRM?</h2>
+            <div class="grid">
+                <div class="card">
+                    <span class="icon">📊</span>
+                    <h3>Gestão Completa</h3>
+                    <p>Controle clientes, negócios e ocorrências em um só lugar</p>
+                </div>
+                <div class="card">
+                    <span class="icon">💬</span>
+                    <h3>WhatsApp Integrado</h3>
+                    <p>Atenda seus clientes direto pelo WhatsApp</p>
+                </div>
+                <div class="card">
+                    <span class="icon">📈</span>
+                    <h3>Análises e Relatórios</h3>
+                    <p>Acompanhe o desempenho do seu negócio em tempo real</p>
+                </div>
+                <div class="card">
+                    <span class="icon">🎯</span>
+                    <h3>Funil de Vendas</h3>
+                    <p>Gerencie suas oportunidades e feche mais negócios</p>
+                </div>
+                <div class="card">
+                    <span class="icon">📅</span>
+                    <h3>Agenda Integrada</h3>
+                    <p>Organize compromissos e nunca perca um follow-up</p>
+                </div>
+                <div class="card">
+                    <span class="icon">🔒</span>
+                    <h3>Seguro e Confiável</h3>
+                    <p>Seus dados protegidos com tecnologia de ponta</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Funcionalidades -->
+    <section id="funcionalidades" class="funcionalidades">
+        <div class="container">
+            <h2>Tudo que você precisa em um só lugar</h2>
+            <div class="features-list">
+                <div class="feature-item">
+                    <span class="check">✓</span>
+                    <div>
+                        <h4>Cadastro de Clientes</h4>
+                        <p>Informações completas de pessoas físicas e jurídicas</p>
+                    </div>
+                </div>
+                <div class="feature-item">
+                    <span class="check">✓</span>
+                    <div>
+                        <h4>Gestão de Negócios</h4>
+                        <p>Acompanhe todas as oportunidades de venda</p>
+                    </div>
+                </div>
+                <div class="feature-item">
+                    <span class="check">✓</span>
+                    <div>
+                        <h4>Histórico de Interações</h4>
+                        <p>Registre todas as ocorrências e conversas</p>
+                    </div>
+                </div>
+                <div class="feature-item">
+                    <span class="check">✓</span>
+                    <div>
+                        <h4>Sistema de NPS</h4>
+                        <p>Meça a satisfação dos seus clientes automaticamente</p>
+                    </div>
+                </div>
+                <div class="feature-item">
+                    <span class="check">✓</span>
+                    <div>
+                        <h4>Multi-usuário</h4>
+                        <p>Trabalhe em equipe com permissões personalizadas</p>
+                    </div>
+                </div>
+                <div class="feature-item">
+                    <span class="check">✓</span>
+                    <div>
+                        <h4>Produtos e Estoque</h4>
+                        <p>Controle seu inventário de forma simples</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Formulário de Contato -->
+    <section id="contato" class="contato">
+        <div class="container">
+            <h2>Entre em contato conosco</h2>
+            <p class="contato-subtitle">Preencha o formulário e nossa equipe entrará em contato em breve</p>
+            
+            <form id="formLead" class="form-lead">
+                <div class="form-group">
+                    <label for="nome">Nome Completo *</label>
+                    <input 
+                        type="text" 
+                        id="nome" 
+                        name="nome" 
+                        required 
+                        minlength="3"
+                        placeholder="Seu nome completo"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="email">E-mail *</label>
+                    <input 
+                        type="email" 
+                        id="email" 
+                        name="email" 
+                        required
+                        placeholder="seu@email.com"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="telefone">Telefone *</label>
+                    <input 
+                        type="tel" 
+                        id="telefone" 
+                        name="telefone" 
+                        required 
+                        placeholder="(11) 98888-7777"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="mensagem">Mensagem (opcional)</label>
+                    <textarea 
+                        id="mensagem" 
+                        name="mensagem" 
+                        rows="4" 
+                        placeholder="Como podemos ajudar você?"
+                    ></textarea>
+                </div>
+
+                <button type="submit" class="btn-submit" id="btnSubmit">
+                    Enviar Mensagem
+                </button>
+
+                <div id="mensagemStatus" class="mensagem-status"></div>
+            </form>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>SeuCRM</h3>
+                    <p>A solução completa para gestão de relacionamento com clientes</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Links Rápidos</h4>
+                    <ul>
+                        <li><a href="#beneficios">Benefícios</a></li>
+                        <li><a href="#funcionalidades">Funcionalidades</a></li>
+                        <li><a href="#contato">Contato</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Contato</h4>
+                    <p>Email: contato@seucrm.com</p>
+                    <p>Telefone: (11) 98888-7777</p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2026 SeuCRM. Todos os direitos reservados.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+# =============================================
+# 📦 DEPENDÊNCIAS PARA INTEGRAÇÃO SITE → CRM
+# =============================================
+#
+# Adicionar estas linhas ao arquivo requirements.txt existente
+# ou criar se não existir
+#
+# =============================================
+
+flask-cors==4.0.0
+flask-limiter==3.5.0
+python-dotenv==1.0.0
