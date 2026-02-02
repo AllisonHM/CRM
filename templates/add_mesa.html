@@ -52,8 +52,9 @@
           <!-- Os produtos selecionados aparecerão aqui -->
         </div>
         
-        <!-- Campo oculto para enviar os produtos no formulário -->
+        <!-- Campos ocultos para enviar os produtos no formulário -->
         <textarea id="produtos" name="produtos" style="display: none;"></textarea>
+        <textarea id="produtos_quantidades" name="produtos_quantidades" style="display: none;"></textarea>
       </div>
 
       <div class="form-group-crm">
@@ -104,16 +105,25 @@
   margin-top: 4px;
 }
 .produto-selecionado {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   background: #e3f2fd;
   padding: 8px 12px;
   border-radius: 20px;
   margin: 5px 5px 0 0;
   font-size: 0.9rem;
+  gap: 8px;
+}
+.produto-selecionado .quantidade-input {
+  width: 60px;
+  padding: 2px 6px;
+  border: 1px solid #90caf9;
+  border-radius: 4px;
+  text-align: center;
+  font-size: 0.85rem;
 }
 .produto-selecionado .remove-btn {
-  margin-left: 8px;
+  margin-left: 4px;
   cursor: pointer;
   color: #d32f2f;
   font-weight: bold;
@@ -132,6 +142,7 @@ const produtoDropdown = document.getElementById('produto-dropdown');
 const produtoList = document.getElementById('produto-list');
 const produtosSelecionadosDiv = document.getElementById('produtos-selecionados');
 const produtosTextarea = document.getElementById('produtos');
+const produtosQuantidadesTextarea = document.getElementById('produtos_quantidades');
 
 // Buscar produtos
 produtoSearch.addEventListener('input', function() {
@@ -151,7 +162,7 @@ produtoSearch.addEventListener('input', function() {
           produtoList.innerHTML = '<div style="padding: 12px; color: #999;">Nenhum produto encontrado</div>';
         } else {
           produtoList.innerHTML = produtos.map(p => `
-            <div class="produto-item" onclick="selecionarProduto(${p.id}, '${p.nome.replace(/'/g, "\\'")}', '${(p.descricao || '').replace(/'/g, "\\'")}')">
+            <div class="produto-item" onclick="selecionarProduto(${p.id}, '${p.nome.replace(/'/g, "\\'")}', '${(p.descricao || '').replace(/'/g, "\\'")}', ${p.quantidade})">
               <div class="produto-nome">${p.nome}</div>
               ${p.descricao ? `<div class="produto-descricao">${p.descricao}</div>` : ''}
               <div class="produto-quantidade">📦 Estoque: ${p.quantidade}</div>
@@ -175,14 +186,14 @@ document.addEventListener('click', function(e) {
 });
 
 // Selecionar produto
-function selecionarProduto(id, nome, descricao) {
+function selecionarProduto(id, nome, descricao, estoqueDisponivel) {
   // Verificar se já foi selecionado
   if (produtosSelecionados.some(p => p.id === id)) {
     alert('Este produto já foi adicionado!');
     return;
   }
   
-  produtosSelecionados.push({ id, nome, descricao });
+  produtosSelecionados.push({ id, nome, descricao, quantidade: 1, estoqueDisponivel });
   renderProdutosSelecionados();
   
   // Limpar campo de busca
@@ -196,21 +207,57 @@ function removerProduto(id) {
   renderProdutosSelecionados();
 }
 
+// Atualizar quantidade
+function atualizarQuantidade(id, novaQuantidade) {
+  const produto = produtosSelecionados.find(p => p.id === id);
+  if (produto) {
+    const qtd = parseInt(novaQuantidade) || 0;
+    if (qtd > produto.estoqueDisponivel) {
+      alert(`Quantidade máxima disponível em estoque: ${produto.estoqueDisponivel}`);
+      return;
+    }
+    if (qtd < 0) {
+      alert('A quantidade não pode ser negativa!');
+      return;
+    }
+    produto.quantidade = qtd;
+    renderProdutosSelecionados();
+  }
+}
+
 // Renderizar produtos selecionados
 function renderProdutosSelecionados() {
   if (produtosSelecionados.length === 0) {
     produtosSelecionadosDiv.innerHTML = '<div style="color: #999; font-size: 0.9rem; margin-top: 8px;">Nenhum produto selecionado</div>';
     produtosTextarea.value = '';
+    produtosQuantidadesTextarea.value = '';
   } else {
     produtosSelecionadosDiv.innerHTML = produtosSelecionados.map(p => `
       <span class="produto-selecionado">
         ${p.nome}
+        <span style="color: #666; font-size: 0.85rem;">Qtd:</span>
+        <input 
+          type="number" 
+          class="quantidade-input" 
+          value="${p.quantidade}" 
+          min="0"
+          max="${p.estoqueDisponivel}"
+          onchange="atualizarQuantidade(${p.id}, this.value)"
+          onclick="event.stopPropagation()"
+        >
         <span class="remove-btn" onclick="removerProduto(${p.id})">✕</span>
       </span>
     `).join('');
     
     // Atualizar textarea oculto com os nomes dos produtos
     produtosTextarea.value = produtosSelecionados.map(p => p.nome).join(', ');
+    
+    // Atualizar textarea oculto com as quantidades (JSON)
+    const quantidades = {};
+    produtosSelecionados.forEach(p => {
+      quantidades[p.id] = p.quantidade;
+    });
+    produtosQuantidadesTextarea.value = JSON.stringify(quantidades);
   }
 }
 
@@ -223,6 +270,15 @@ document.querySelector('form').addEventListener('submit', function(e) {
     e.preventDefault();
     alert('Selecione pelo menos um produto!');
     produtoSearch.focus();
+    return;
+  }
+  
+  // Validar se todas as quantidades são maiores que 0
+  const produtosSemQuantidade = produtosSelecionados.filter(p => !p.quantidade || p.quantidade <= 0);
+  if (produtosSemQuantidade.length > 0) {
+    e.preventDefault();
+    alert('Todos os produtos devem ter quantidade maior que 0!');
+    return;
   }
 });
 </script>

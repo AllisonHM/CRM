@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 import requests
 import logging
+import json
 from flask_migrate import Migrate
 from database_rls import db, tenant_db, init_db
 from models import Cliente, MesaNegocio, Ocorrencia, WhatsAppMensagem, ChatbotRegra, Produto, Movimentacao, PlannerEvento, UsuarioCRM, ConfiguracaoUsuario, Parametrizacao
@@ -1088,11 +1089,20 @@ def add_mesa(id):
     cliente = Cliente.query.get_or_404(id)
     if request.method == "POST":
         situacao = request.form["situacao"]
+        produtos_quantidades_json = request.form.get("produtos_quantidades", "{}")
+        
+        # Parse das quantidades
+        try:
+            produtos_quantidades = json.loads(produtos_quantidades_json) if produtos_quantidades_json else {}
+        except:
+            produtos_quantidades = {}
+        
         mesa = MesaNegocio(
             usuario_crm_id=current_user.get_usuario_principal_id(),
             cliente_id=id,
             topico=request.form["topico"],
             produtos=request.form["produtos"],
+            produtos_quantidades=produtos_quantidades,
             situacao=situacao,
             valor_total=float(request.form["valor_total"]),
             descricao=request.form.get("descricao"),
@@ -1100,6 +1110,45 @@ def add_mesa(id):
             hora_registro=datetime.now().time()
         )
         db.session.add(mesa)
+        db.session.flush()  # Para obter o ID da mesa antes do commit
+        
+        # Se criou a mesa como "Ganho", dar baixa no estoque
+        if situacao == "Ganho" and produtos_quantidades:
+            try:
+                for produto_id_str, quantidade in produtos_quantidades.items():
+                    produto_id = int(produto_id_str)
+                    quantidade = int(quantidade)
+                    
+                    # Buscar produto
+                    produto = Produto.query.get(produto_id)
+                    if produto and quantidade > 0:
+                        # Verificar se há estoque suficiente
+                        if produto.quantidade < quantidade:
+                            db.session.rollback()
+                            flash(f'⚠️ Estoque insuficiente para o produto "{produto.nome}". Disponível: {produto.quantidade}, Solicitado: {quantidade}', 'warning')
+                            return redirect(url_for('add_mesa', id=id))
+                        
+                        # Dar baixa no estoque
+                        produto.quantidade -= quantidade
+                        produto.ultima_movimentacao_data = datetime.utcnow()
+                        produto.ultima_movimentacao_descricao = f"Venda - Mesa #{mesa.id}"
+                        
+                        # Registrar movimentação
+                        movimentacao = Movimentacao(
+                            produto_id=produto_id,
+                            tipo='saida',
+                            quantidade=quantidade,
+                            descricao=f"Venda fechada - Mesa #{mesa.id} - Cliente: {cliente.nome}"
+                        )
+                        db.session.add(movimentacao)
+                        
+                flash(f'✅ Mesa criada e baixa no estoque realizada com sucesso!', 'success')
+            except Exception as e:
+                db.session.rollback()
+                flash(f'⚠️ Erro ao dar baixa no estoque: {str(e)}', 'warning')
+                logger.error(f"Erro ao dar baixa no estoque: {str(e)}")
+                return redirect(url_for('add_mesa', id=id))
+        
         db.session.commit()
         
         # Se criou a mesa já como "Ganho", enviar NPS
@@ -1108,11 +1157,11 @@ def add_mesa(id):
             try:
                 resultado = enviar_pesquisa_nps(cliente)
                 if resultado:
-                    flash(f"✅ Mesa criada e pesquisa NPS enviada para {cliente.nome}!", "success")
+                    flash(f"✅ Pesquisa NPS enviada para {cliente.nome}!", "success")
                 else:
-                    flash("⚠️ Mesa criada, mas houve erro ao enviar pesquisa NPS.", "warning")
+                    flash("⚠️ Houve erro ao enviar pesquisa NPS.", "warning")
             except Exception as e:
-                flash(f"⚠️ Mesa criada, mas erro ao enviar NPS: {str(e)}", "warning")
+                flash(f"⚠️ Erro ao enviar NPS: {str(e)}", "warning")
                 print(f"❌ ERRO ao enviar NPS: {str(e)}")
         
         return redirect(url_for("mesas_negocio"))

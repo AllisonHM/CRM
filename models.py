@@ -103,6 +103,7 @@ class MesaNegocio(db.Model):
     cliente_id = db.Column(db.Integer, db.ForeignKey('cliente.id'), nullable=True)
     topico = db.Column(db.String(150), nullable=False)
     produtos = db.Column(db.String(250), nullable=True)
+    produtos_quantidades = db.Column(db.JSON, nullable=True)  # Armazena {produto_id: quantidade}
     valor_total = db.Column(db.Float, nullable=True)
     situacao = db.Column(db.String(50), nullable=False, default="Em negociação")
     descricao = db.Column(db.Text, nullable=True)
