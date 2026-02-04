@@ -179,7 +179,8 @@
         <td>${p.quantidade}</td>
         <td>${p.ultima_movimentacao_data ? p.ultima_movimentacao_data + " — " + (p.ultima_movimentacao_descricao || "") : "-"}</td>
         <td>
-          <button class="btn btn-sm btn-outline-danger" onclick="excluirProduto(${p.id}, '${p.nome.replace(/'/g,'\\\'')}')">Excluir</button>
+          <button class="btn btn-sm btn-outline-secondary me-2" onclick="verHistorico(${p.id}, '${p.nome.replace(/'/g,'\\\'')}')">Histórico</button>
+          <button class="btn btn-sm btn-outline-danger" onclick="excluirProduto(${p.id}, '${p.nome.replace(/'/g,'\\\'')}')">Excluir produto</button>
         </td>
       `;
       tbody.appendChild(tr);
@@ -264,7 +265,7 @@
             <td>${m.data_registro}</td>
             <td><span class="badge ${m.tipo === 'entrada' ? 'bg-success' : 'bg-danger'}">${m.tipo.toUpperCase()}</span></td>
             <td>${m.quantidade}</td>
-            <td>${m.descricao}</td>
+            <td>${m.descricao || '-'}</td>
           `;
           histBody.appendChild(tr);
         });
@@ -366,7 +367,8 @@
         <td>${p.quantidade}</td>
         <td>${p.ultima_movimentacao_data ? p.ultima_movimentacao_data + " — " + (p.ultima_movimentacao_descricao || "") : "-"}</td>
         <td>
-          <button class="btn btn-sm btn-outline-danger" onclick="excluirProduto(${p.id}, '${p.nome.replace(/'/g,'\\\'')}')">Excluir</button>
+          <button class="btn btn-sm btn-outline-secondary me-2" onclick="verHistorico(${p.id}, '${p.nome.replace(/'/g,'\\\'')}')">Histórico</button>
+          <button class="btn btn-sm btn-outline-danger" onclick="excluirProduto(${p.id}, '${p.nome.replace(/'/g,'\\\'')}')">Excluir produto</button>
         </td>
       `;
       tbody.appendChild(tr);
@@ -451,7 +453,7 @@
             <td>${m.data_registro}</td>
             <td><span class="badge ${m.tipo === 'entrada' ? 'bg-success' : 'bg-danger'}">${m.tipo.toUpperCase()}</span></td>
             <td>${m.quantidade}</td>
-            <td>${m.descricao}</td>
+            <td>${m.descricao || '-'}</td>
           `;
           histBody.appendChild(tr);
         });
