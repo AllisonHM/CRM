@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Relatórios{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-3">📊 Relatórios</h1>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <div class="text-muted">Conversão</div>
+                    <div class="h4">{{ conversao }}%</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <div class="text-muted">Tempo de ciclo (dias)</div>
+                    <div class="h4">{{ tempo_ciclo_medio }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <div class="text-muted">Mesas (ganhas)</div>
+                    <div class="h4">{{ mesas_ganhas }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <div class="text-muted">Ocorrências</div>
+                    <div class="h4">{{ ocorrencias_total }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5>Conversão do Funil</h5>
+                    <canvas id="graficoConversao"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5>Vendas por mês</h5>
+                    <canvas id="graficoVendas"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5>NPS (média mensal)</h5>
+                    <canvas id="graficoNps"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5>Respostas de NPS (volume)</h5>
+                    <canvas id="graficoNpsVolume"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const conversaoCtx = document.getElementById('graficoConversao');
+    new Chart(conversaoCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Ganho', 'Perdido', 'Em negociação'],
+            datasets: [{
+                data: [{{ mesas_ganhas }}, {{ mesas_perdidas }}, {{ mesas_andamento }}],
+                backgroundColor: ['#28a745', '#dc3545', '#ffc107']
+            }]
+        }
+    });
+
+    const vendasCtx = document.getElementById('graficoVendas');
+    new Chart(vendasCtx, {
+        type: 'bar',
+        data: {
+            labels: {{ vendas_labels|tojson }},
+            datasets: [{
+                label: 'Vendas (R$)',
+                data: {{ vendas_valores|tojson }},
+                backgroundColor: '#0d6efd'
+            }]
+        }
+    });
+
+    const npsCtx = document.getElementById('graficoNps');
+    new Chart(npsCtx, {
+        type: 'line',
+        data: {
+            labels: {{ meses_labels|tojson }},
+            datasets: [{
+                label: 'NPS (média)',
+                data: {{ nps_medias|tojson }},
+                borderColor: '#7D3C98',
+                backgroundColor: 'rgba(125, 60, 152, 0.2)',
+                tension: 0.3
+            }]
+        }
+    });
+
+    const npsVolCtx = document.getElementById('graficoNpsVolume');
+    new Chart(npsVolCtx, {
+        type: 'bar',
+        data: {
+            labels: {{ meses_labels|tojson }},
+            datasets: [{
+                label: 'Respostas',
+                data: {{ nps_quantidades|tojson }},
+                backgroundColor: '#20c997'
+            }]
+        }
+    });
+</script>
+{% endblock %}

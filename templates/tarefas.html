@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% block title %}Tarefas{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-3">✅ Tarefas</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div>
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }} mt-2" role="alert">
+              {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <div class="text-muted">Total</div>
+                    <div class="h4">{{ total }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <div class="text-muted">Pendentes</div>
+                    <div class="h4">{{ pendentes }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <div class="text-muted">Concluídas</div>
+                    <div class="h4">{{ concluidas }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <div class="text-muted">Atrasadas</div>
+                    <div class="h4 text-danger">{{ atrasadas }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('tarefas', status='todas') }}">Todas</a>
+        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('tarefas', status='pendentes') }}">Pendentes</a>
+        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('tarefas', status='concluidas') }}">Concluídas</a>
+        <a class="btn btn-outline-danger btn-sm" href="{{ url_for('tarefas', status='atrasadas') }}">Atrasadas</a>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="mb-3">Nova tarefa</h5>
+            <form method="POST">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Título</label>
+                        <input type="text" name="titulo" class="form-control" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Cliente</label>
+                        <select name="cliente_id" class="form-select">
+                            <option value="">—</option>
+                            {% for c in clientes %}
+                                <option value="{{ c.id }}">{{ c.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Mesa de Negócio</label>
+                        <select name="mesa_id" class="form-select">
+                            <option value="">—</option>
+                            {% for m in mesas %}
+                                <option value="{{ m.id }}">#{{ m.id }} - {{ m.topico }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Prioridade</label>
+                        <select name="prioridade" class="form-select">
+                            <option value="Baixa">Baixa</option>
+                            <option value="Normal" selected>Normal</option>
+                            <option value="Alta">Alta</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Vencimento (data)</label>
+                        <input type="date" name="data_vencimento" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Vencimento (hora)</label>
+                        <input type="time" name="hora_vencimento" class="form-control">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Lembrete</label>
+                        <input type="datetime-local" name="lembrete_em" class="form-control">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Descrição</label>
+                        <textarea name="descricao" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+                <button class="btn btn-success mt-3" type="submit">Salvar tarefa</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <h5 class="mb-3">Lista de tarefas</h5>
+            {% if tarefas %}
+            <div class="table-responsive">
+                <table class="table table-striped align-middle">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Título</th>
+                            <th>Cliente</th>
+                            <th>Mesa</th>
+                            <th>Vencimento</th>
+                            <th>Prioridade</th>
+                            <th>Status</th>
+                            <th>Lembrete</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for t in tarefas %}
+                        <tr>
+                            <td>{{ t.titulo }}</td>
+                            <td>{{ t.cliente.nome if t.cliente else '—' }}</td>
+                            <td>{% if t.mesa %}#{{ t.mesa.id }} - {{ t.mesa.topico }}{% else %}—{% endif %}</td>
+                            <td>
+                                {% if t.data_vencimento %}
+                                    {{ t.data_vencimento.strftime('%d/%m/%Y') }}
+                                    {% if t.hora_vencimento %}{{ t.hora_vencimento.strftime('%H:%M') }}{% endif %}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td>{{ t.prioridade }}</td>
+                            <td>
+                                {% if t.status == 'Concluída' %}
+                                    <span class="badge bg-success">Concluída</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">Pendente</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if t.lembrete_em %}
+                                    {{ t.lembrete_em.strftime('%d/%m/%Y %H:%M') }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td>
+                                <form action="{{ url_for('atualizar_status_tarefa', id=t.id) }}" method="POST" style="display:inline;">
+                                    {% if t.status == 'Concluída' %}
+                                        <input type="hidden" name="status" value="Pendente">
+                                        <button class="btn btn-sm btn-outline-secondary">Reabrir</button>
+                                    {% else %}
+                                        <input type="hidden" name="status" value="Concluída">
+                                        <button class="btn btn-sm btn-success">Concluir</button>
+                                    {% endif %}
+                                </form>
+                                <form action="{{ url_for('excluir_tarefa', id=t.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Excluir esta tarefa?');">
+                                    <button class="btn btn-sm btn-danger">Excluir</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+                <p class="text-muted">Nenhuma tarefa cadastrada.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

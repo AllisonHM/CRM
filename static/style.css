@@ -7,11 +7,12 @@
 
 :root {
   /* Cores Principais */
-  --primary-dark: #4a235a;        /* Roxo Escuro Principal */
-  --primary-medium: #6b3fa0;      /* Roxo Médio */
-  --primary-light: #8b5fbf;       /* Roxo Claro */
+  --primary-dark: #4A235A;        /* Roxo Escuro Vitriun */
+  --primary-medium: #7D3C98;      /* Roxo Médio Vitriun */
+  --primary-light: #9B59B6;       /* Roxo Claro Vitriun */
   
   /* Cores Secundárias */
+  --accent-teal: #00D1B2;         /* Teal Vitriun */
   --accent-yellow: #ffc107;       /* Amarelo Vibrante */
   --accent-gold: #ffb300;         /* Ouro (variação do amarelo) */
   --accent-light-yellow: #ffe082; /* Amarelo Claro */
@@ -30,7 +31,8 @@
   --info-blue: #3498db;            /* Azul Informação */
   
   /* Cores para Interações */
-  --hover-dark: #3a1a4a;           /* Hover Roxo Mais Escuro */
+  --hover-dark: #3A1A4A;           /* Hover Roxo Mais Escuro */
+  --hover-teal: #00B89F;           /* Hover Teal */
   --hover-yellow: #ffb300;         /* Hover Amarelo Ouro */
   
   /* Sombras */
@@ -39,9 +41,9 @@
   --shadow-lg: 0 8px 24px rgba(74, 35, 90, 0.2);
   
   /* Gradientes */
-  --gradient-primary: linear-gradient(135deg, #4a235a 0%, #6b3fa0 100%);
-  --gradient-accent: linear-gradient(135deg, #ffc107 0%, #ffb300 100%);
-  --gradient-overlay: linear-gradient(135deg, rgba(74, 35, 90, 0.95) 0%, rgba(107, 63, 160, 0.95) 100%);
+  --gradient-primary: linear-gradient(135deg, #4A235A 0%, #7D3C98 100%);
+  --gradient-accent: linear-gradient(135deg, #00D1B2 0%, #00E6C3 100%);
+  --gradient-overlay: linear-gradient(135deg, rgba(74, 35, 90, 0.95) 0%, rgba(125, 60, 152, 0.95) 100%);
 }
 
 /* =============================================
@@ -358,7 +360,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .dropdown-item:hover {
-  background: rgba(74, 35, 90, 0.1);
+  background: rgba(0, 209, 178, 0.1);
   color: var(--primary-dark);
   padding-left: 1.75rem;
 }
@@ -522,7 +524,7 @@ hr {
 }
 
 .table-crm tbody tr {
-  border-bottom: 1px solid rgba(74, 35, 90, 0.05);
+  border-bottom: 1px solid rgba(0, 209, 178, 0.05);
   transition: all 0.3s ease;
 }
 
@@ -702,7 +704,7 @@ hr {
 .modal-crm .modal-footer {
   border-top: 1px solid var(--light-gray);
   padding: 1.5rem;
-  background: rgba(74, 35, 90, 0.02);
+  background: rgba(0, 209, 178, 0.02);
 }
 
 /* Alert com Ícone */

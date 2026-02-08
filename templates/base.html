@@ -63,7 +63,7 @@
 
 <div id="popupNotificacao" class="popup-notificacao">
     <span class="popup-close" onclick="fecharPopup()">✕</span>
-    <h3 style="color: var(--accent-yellow); margin-bottom: 0.5rem;">⏰ Evento Próximo</h3>
+    <h3 id="popupTitulo" style="color: var(--accent-yellow); margin-bottom: 0.5rem;">⏰ Evento Próximo</h3>
     <p id="popupTexto" style="margin: 0;"></p>
 </div>
 
@@ -83,12 +83,30 @@
         window.socket = null;
     }
 
+    const currentUserId = {% if current_user.is_authenticated %}{{ current_user.get_usuario_principal_id() }}{% else %}null{% endif %};
+
     if (window.socket) {
         window.socket.on('notificacao_evento', function(data) {
+            document.getElementById("popupTitulo").innerText = "⏰ Evento Próximo";
             document.getElementById("popupTexto").innerHTML =
                 `<strong>${data.titulo}</strong><br>
                  Cliente: ${data.cliente}<br>
                  Horário: ${data.hora}<br>
+                 ${data.descricao || ""}`;
+
+            document.getElementById("popupNotificacao").style.display = "block";
+        });
+
+        window.socket.on('notificacao_tarefa', function(data) {
+            if (currentUserId && data.usuario_crm_id && parseInt(data.usuario_crm_id) !== currentUserId) {
+                return;
+            }
+            document.getElementById("popupTitulo").innerText = "✅ Lembrete de Tarefa";
+            document.getElementById("popupTexto").innerHTML =
+                `<strong>${data.titulo}</strong><br>
+                 Cliente: ${data.cliente || "—"}<br>
+                 Horário: ${data.hora || ""}<br>
+                 Prioridade: ${data.prioridade || "Normal"}<br>
                  ${data.descricao || ""}`;
 
             document.getElementById("popupNotificacao").style.display = "block";
@@ -105,7 +123,9 @@
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-dark mb-4" style="background: var(--gradient-primary);">
         <div class="container-fluid">
-            <a class="navbar-brand" href="{{ url_for('menu') }}">🎯 CRM - Vendas</a>
+            <a class="navbar-brand d-flex align-items-center" href="{{ url_for('menu') }}">
+                <span style="font-size: 1.5rem; font-weight: 600;">Vitriun CRM</span>
+            </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -113,33 +133,41 @@
                 <ul class="navbar-nav ms-auto">
                     {% if current_user.is_authenticated %}
                         {% if current_user.tem_permissao('clientes') %}
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('cadastro') }}">👥 Cadastro</a></li>
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('relacionamento') }}">🤝 Relacionamento</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('cadastro') }}">Cadastro</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('relacionamento') }}">Relacionamento</a></li>
                         {% endif %}
                         
                         {% if current_user.tem_permissao('mesas') %}
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('mesas_negocio') }}">📊 Negócio</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('mesas_negocio') }}">Negócio</a></li>
                         {% endif %}
                         
                         {% if current_user.tem_permissao('ocorrencias') %}
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('ocorrencias') }}">⚠️ Ocorrências</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('ocorrencias') }}">Ocorrências</a></li>
                         {% endif %}
                         
                         {% if current_user.tem_permissao('whatsapp') %}
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('whatsapp_index') }}">💬 WhatsApp</a></li>
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('canais') }}">📱 Canais</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('whatsapp_index') }}">WhatsApp</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('canais') }}">Canais</a></li>
                         {% endif %}
                         
                         {% if current_user.tem_permissao('planner') %}
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('planner') }}">📅 Planner</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('planner') }}">Planner</a></li>
+                        {% endif %}
+
+                        {% if current_user.tem_permissao('tarefas') %}
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('tarefas') }}">Tarefas</a></li>
                         {% endif %}
                         
                         {% if current_user.tem_permissao('produtos') %}
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('produtos') }}">📦 Produtos</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('produtos') }}">Produtos</a></li>
                         {% endif %}
                         
                         {% if current_user.tem_permissao('nps') %}
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('nps') }}">⭐ NPS</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('nps') }}">NPS</a></li>
+                        {% endif %}
+
+                        {% if current_user.tem_permissao('relatorios') %}
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('relatorios') }}">Relatórios</a></li>
                         {% endif %}
                         
                         <!-- Menu Admin -->

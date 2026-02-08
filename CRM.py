@@ -6,9 +6,11 @@ from functools import wraps
 import requests
 import logging
 import json
+import csv
+import io
 from flask_migrate import Migrate
 from database_rls import db, tenant_db, init_db
-from models import Cliente, MesaNegocio, Ocorrencia, WhatsAppMensagem, ChatbotRegra, Produto, Movimentacao, PlannerEvento, UsuarioCRM, ConfiguracaoUsuario, Parametrizacao
+from models import Cliente, MesaNegocio, Ocorrencia, WhatsAppMensagem, ChatbotRegra, Produto, Movimentacao, PlannerEvento, UsuarioCRM, ConfiguracaoUsuario, Parametrizacao, Tarefa
 from sqlalchemy import or_, and_
 
 # Configurar logging
@@ -127,6 +129,39 @@ def verificar_eventos_proximos():
             time.sleep(60)  # roda a cada 60 segundos
 
 threading.Thread(target=verificar_eventos_proximos, daemon=True).start()
+
+def verificar_tarefas_proximas():
+    with app.app_context():
+        while True:
+            agora = datetime.now()
+
+            tarefas = Tarefa.query.filter(
+                Tarefa.lembrete_em.isnot(None),
+                Tarefa.lembrete_em <= agora,
+                Tarefa.lembrete_enviado.is_(False),
+                Tarefa.status != "Concluída"
+            ).all()
+
+            for tarefa in tarefas:
+                cliente_nome = tarefa.cliente.nome if tarefa.cliente else "—"
+                payload = {
+                    "id": tarefa.id,
+                    "titulo": tarefa.titulo,
+                    "descricao": tarefa.descricao or "",
+                    "cliente": cliente_nome,
+                    "hora": tarefa.lembrete_em.strftime('%H:%M') if tarefa.lembrete_em else "",
+                    "prioridade": tarefa.prioridade,
+                    "usuario_crm_id": tarefa.usuario_crm_id
+                }
+                socketio.emit('notificacao_tarefa', payload, broadcast=True)
+                tarefa.lembrete_enviado = True
+
+            if tarefas:
+                db.session.commit()
+
+            time.sleep(60)
+
+threading.Thread(target=verificar_tarefas_proximas, daemon=True).start()
 
 
 # ------------------- ROTAS DE AUTENTICAÇÃO -------------------
@@ -312,7 +347,7 @@ def add_usuario():
         api_token = request.form.get('api_token')
         
         # Módulos disponíveis
-        modulos = ['clientes', 'mesas', 'ocorrencias', 'produtos', 'whatsapp', 'chatbot', 'planner', 'nps', 'relatorios']
+        modulos = ['clientes', 'mesas', 'ocorrencias', 'produtos', 'whatsapp', 'chatbot', 'planner', 'tarefas', 'nps', 'relatorios']
         permissoes = {modulo: modulo in request.form.getlist('permissoes') for modulo in modulos}
         
         # Verificar se email já existe
@@ -348,6 +383,7 @@ def add_usuario():
         {'id': 'whatsapp', 'nome': 'WhatsApp', 'icone': '💬'},
         {'id': 'chatbot', 'nome': 'Chatbot', 'icone': '🤖'},
         {'id': 'planner', 'nome': 'Planner', 'icone': '📅'},
+        {'id': 'tarefas', 'nome': 'Tarefas', 'icone': '✅'},
         {'id': 'nps', 'nome': 'NPS', 'icone': '⭐'},
         {'id': 'relatorios', 'nome': 'Relatórios', 'icone': '📊'}
     ]
@@ -378,7 +414,7 @@ def editar_usuario(id):
             usuario.set_password(nova_senha)
         
         # Atualizar permissões
-        modulos = ['clientes', 'mesas', 'ocorrencias', 'produtos', 'whatsapp', 'chatbot', 'planner', 'nps', 'relatorios']
+        modulos = ['clientes', 'mesas', 'ocorrencias', 'produtos', 'whatsapp', 'chatbot', 'planner', 'tarefas', 'nps', 'relatorios']
         permissoes = {modulo: modulo in request.form.getlist('permissoes') for modulo in modulos}
         usuario.permissoes = permissoes
         
@@ -395,6 +431,7 @@ def editar_usuario(id):
         {'id': 'whatsapp', 'nome': 'WhatsApp', 'icone': '💬'},
         {'id': 'chatbot', 'nome': 'Chatbot', 'icone': '🤖'},
         {'id': 'planner', 'nome': 'Planner', 'icone': '📅'},
+        {'id': 'tarefas', 'nome': 'Tarefas', 'icone': '✅'},
         {'id': 'nps', 'nome': 'NPS', 'icone': '⭐'},
         {'id': 'relatorios', 'nome': 'Relatórios', 'icone': '📊'}
     ]
@@ -473,7 +510,7 @@ def add_colaborador():
         senha = request.form.get('senha')
         
         # Permissões
-        modulos = ['clientes', 'mesas', 'ocorrencias', 'produtos', 'whatsapp', 'chatbot', 'planner', 'nps', 'relatorios']
+        modulos = ['clientes', 'mesas', 'ocorrencias', 'produtos', 'whatsapp', 'chatbot', 'planner', 'tarefas', 'nps', 'relatorios']
         permissoes = {modulo: modulo in request.form.getlist('permissoes') for modulo in modulos}
         
         # Verificar se email já existe
@@ -519,6 +556,7 @@ def add_colaborador():
         {'id': 'whatsapp', 'nome': 'WhatsApp', 'icone': '💬'},
         {'id': 'chatbot', 'nome': 'Chatbot', 'icone': '🤖'},
         {'id': 'planner', 'nome': 'Planner', 'icone': '📅'},
+        {'id': 'tarefas', 'nome': 'Tarefas', 'icone': '✅'},
         {'id': 'nps', 'nome': 'NPS', 'icone': '⭐'},
         {'id': 'relatorios', 'nome': 'Relatórios', 'icone': '📊'}
     ]
@@ -557,7 +595,7 @@ def editar_colaborador(id):
             colaborador.set_password(nova_senha)
         
         # Atualizar permissões
-        modulos = ['clientes', 'mesas', 'ocorrencias', 'produtos', 'whatsapp', 'chatbot', 'planner', 'nps', 'relatorios']
+        modulos = ['clientes', 'mesas', 'ocorrencias', 'produtos', 'whatsapp', 'chatbot', 'planner', 'tarefas', 'nps', 'relatorios']
         permissoes = {modulo: modulo in request.form.getlist('permissoes') for modulo in modulos}
         colaborador.permissoes = permissoes
         
@@ -574,6 +612,7 @@ def editar_colaborador(id):
         {'id': 'whatsapp', 'nome': 'WhatsApp', 'icone': '💬'},
         {'id': 'chatbot', 'nome': 'Chatbot', 'icone': '🤖'},
         {'id': 'planner', 'nome': 'Planner', 'icone': '📅'},
+        {'id': 'tarefas', 'nome': 'Tarefas', 'icone': '✅'},
         {'id': 'nps', 'nome': 'NPS', 'icone': '⭐'},
         {'id': 'relatorios', 'nome': 'Relatórios', 'icone': '📊'}
     ]
@@ -1107,7 +1146,8 @@ def add_mesa(id):
             valor_total=float(request.form["valor_total"]),
             descricao=request.form.get("descricao"),
             data_registro=datetime.today().date(),
-            hora_registro=datetime.now().time()
+            hora_registro=datetime.now().time(),
+            data_fechamento=datetime.today().date() if situacao in ["Ganho", "Perdido"] else None
         )
         db.session.add(mesa)
         db.session.flush()  # Para obter o ID da mesa antes do commit
@@ -1283,6 +1323,177 @@ def cadastro():
     return render_template("cadastro.html", clientes=clientes)
 
 
+@app.route("/clientes/importar", methods=["GET", "POST"])
+@login_required
+@permission_required('clientes')
+def importar_clientes():
+    user_id = current_user.get_usuario_principal_id()
+    erros = []
+
+    if request.method == "POST":
+        arquivo = request.files.get("arquivo")
+        modo = request.form.get("modo", "pular")  # pular ou atualizar
+
+        if not arquivo or not arquivo.filename:
+            flash("Selecione um arquivo CSV para importar.", "warning")
+            return redirect(url_for("importar_clientes"))
+
+        conteudo = arquivo.read()
+        try:
+            texto = conteudo.decode("utf-8-sig")
+        except Exception:
+            texto = conteudo.decode("latin-1", errors="ignore")
+
+        amostra = texto[:2048]
+        delimitador = ";" if amostra.count(";") > amostra.count(",") else ","
+
+        reader = csv.DictReader(io.StringIO(texto), delimiter=delimitador)
+        if not reader.fieldnames:
+            flash("Arquivo CSV sem cabeçalho.", "danger")
+            return redirect(url_for("importar_clientes"))
+
+        def normalizar_header(h):
+            import re
+            h = (h or "").strip().lower()
+            h = re.sub(r"\s+", "_", h)
+            h = re.sub(r"[^a-z0-9_]+", "", h)
+            return h
+
+        # Mapeamento de colunas aceitas
+        mapa = {
+            "nome": "nome",
+            "email": "email",
+            "telefone": "telefone",
+            "celular": "telefone",
+            "tipo_pessoa": "tipo_pessoa",
+            "tipopessoa": "tipo_pessoa",
+            "data_nascimento": "data_nascimento",
+            "datanascimento": "data_nascimento",
+            "data_abertura": "data_abertura",
+            "dataabertura": "data_abertura",
+            "renda": "renda",
+            "faturamento": "faturamento",
+            "segmento_trabalho": "segmento_trabalho",
+            "segmentotrabalho": "segmento_trabalho",
+            "segmento": "segmento",
+            "qtd_funcionarios": "qtd_funcionarios",
+            "qtdfuncionarios": "qtd_funcionarios",
+            "endereco": "endereco",
+            "observacoes": "observacoes"
+        }
+
+        # Carregar clientes existentes para deduplicação
+        clientes_existentes = Cliente.query.filter_by(usuario_crm_id=user_id).all()
+        mapa_email = { (c.email or "").strip().lower(): c for c in clientes_existentes if c.email }
+        mapa_telefone = { normalize_phone(c.telefone): c for c in clientes_existentes if c.telefone }
+
+        inseridos = 0
+        atualizados = 0
+        duplicados = 0
+        ignorados = 0
+
+        for idx, row in enumerate(reader, start=2):
+            dados = {}
+            for chave, valor in row.items():
+                destino = mapa.get(normalizar_header(chave))
+                if destino:
+                    dados[destino] = (valor or "").strip()
+
+            nome = dados.get("nome")
+            telefone_bruto = dados.get("telefone")
+            telefone = normalize_phone(telefone_bruto)
+            email = (dados.get("email") or "").strip().lower()
+
+            if not nome or not telefone:
+                ignorados += 1
+                erros.append(f"Linha {idx}: nome ou telefone ausente")
+                continue
+
+            cliente_existente = None
+            if email and email in mapa_email:
+                cliente_existente = mapa_email[email]
+            elif telefone and telefone in mapa_telefone:
+                cliente_existente = mapa_telefone[telefone]
+
+            def aplicar_dados(cliente):
+                cliente.nome = nome
+                cliente.telefone = telefone_bruto or cliente.telefone
+                if email:
+                    cliente.email = email
+                if dados.get("tipo_pessoa"):
+                    cliente.tipo_pessoa = dados.get("tipo_pessoa")
+
+                if dados.get("data_nascimento"):
+                    try:
+                        cliente.data_nascimento = datetime.strptime(dados.get("data_nascimento"), "%Y-%m-%d").date()
+                    except Exception:
+                        pass
+                if dados.get("data_abertura"):
+                    try:
+                        cliente.data_abertura = datetime.strptime(dados.get("data_abertura"), "%Y-%m-%d").date()
+                    except Exception:
+                        pass
+
+                if dados.get("renda"):
+                    try:
+                        cliente.renda = float(dados.get("renda"))
+                    except Exception:
+                        pass
+                if dados.get("faturamento"):
+                    try:
+                        cliente.faturamento = float(dados.get("faturamento"))
+                    except Exception:
+                        pass
+
+                cliente.segmento_trabalho = dados.get("segmento_trabalho") or cliente.segmento_trabalho
+                cliente.segmento = dados.get("segmento") or cliente.segmento
+                cliente.endereco = dados.get("endereco") or cliente.endereco
+                if dados.get("qtd_funcionarios"):
+                    try:
+                        cliente.qtd_funcionarios = int(dados.get("qtd_funcionarios"))
+                    except Exception:
+                        pass
+                if dados.get("observacoes"):
+                    if cliente.observacoes:
+                        cliente.observacoes = f"{cliente.observacoes}\n{dados.get('observacoes')}"
+                    else:
+                        cliente.observacoes = dados.get("observacoes")
+
+            if cliente_existente:
+                if modo == "atualizar":
+                    aplicar_dados(cliente_existente)
+                    atualizados += 1
+                else:
+                    duplicados += 1
+                continue
+
+            novo = Cliente(
+                usuario_crm_id=user_id,
+                nome=nome,
+                telefone=telefone_bruto,
+                email=email or None,
+                tipo_pessoa=dados.get("tipo_pessoa") or "Cliente"
+            )
+            aplicar_dados(novo)
+            db.session.add(novo)
+            inseridos += 1
+
+            if email:
+                mapa_email[email] = novo
+            if telefone:
+                mapa_telefone[telefone] = novo
+
+        db.session.commit()
+
+        flash(
+            f"Importação concluída. Inseridos: {inseridos}, Atualizados: {atualizados}, "
+            f"Duplicados: {duplicados}, Ignorados: {ignorados}.",
+            "success"
+        )
+
+    return render_template("importar_clientes.html", erros=erros)
+
+
 @app.route("/cliente/<int:id>/excluir", methods=["POST"])
 @login_required
 @permission_required('clientes')
@@ -1331,6 +1542,10 @@ def atualizar_mesa(id):
 
     situacao_antiga = mesa.situacao
     mesa.situacao = nova_situacao
+    if nova_situacao in ["Ganho", "Perdido"]:
+        mesa.data_fechamento = datetime.today().date()
+    elif nova_situacao == "Em negociação":
+        mesa.data_fechamento = None
     db.session.commit()
     
     # Se a mesa foi marcada como "Ganho", enviar pesquisa de NPS
@@ -2218,8 +2433,8 @@ def planner():
 
     # Horários
     horarios = []
-    hora_atual = datetime.strptime("08:00", "%H:%M")
-    hora_limite = datetime.strptime("20:00", "%H:%M")
+    hora_atual = datetime.strptime("00:00", "%H:%M")
+    hora_limite = datetime.strptime("23:30", "%H:%M")
 
     while hora_atual <= hora_limite:
         horarios.append(hora_atual.time())
@@ -2284,6 +2499,238 @@ def excluir_evento(id):
     db.session.commit()
 
     return redirect(url_for("planner"))
+
+
+# --- TAREFAS
+@app.route("/tarefas", methods=["GET", "POST"])
+@login_required
+@permission_required('tarefas')
+def tarefas():
+    user_id = current_user.get_usuario_principal_id()
+
+    if request.method == "POST":
+        titulo = request.form.get("titulo")
+        descricao = request.form.get("descricao")
+        prioridade = request.form.get("prioridade") or "Normal"
+        cliente_id = request.form.get("cliente_id") or None
+        mesa_id = request.form.get("mesa_id") or None
+
+        data_vencimento = request.form.get("data_vencimento")
+        hora_vencimento = request.form.get("hora_vencimento")
+        lembrete_em = request.form.get("lembrete_em")
+
+        tarefa = Tarefa(
+            usuario_crm_id=user_id,
+            titulo=titulo,
+            descricao=descricao,
+            prioridade=prioridade,
+            status="Pendente"
+        )
+
+        if cliente_id:
+            cliente = Cliente.query.filter_by(id=int(cliente_id), usuario_crm_id=user_id).first()
+            if cliente:
+                tarefa.cliente_id = cliente.id
+        if mesa_id:
+            mesa = MesaNegocio.query.filter_by(id=int(mesa_id), usuario_crm_id=user_id).first()
+            if mesa:
+                tarefa.mesa_negocio_id = mesa.id
+                if not tarefa.cliente_id:
+                    tarefa.cliente_id = mesa.cliente_id
+
+        if data_vencimento:
+            try:
+                tarefa.data_vencimento = datetime.strptime(data_vencimento, "%Y-%m-%d").date()
+            except Exception:
+                pass
+        if hora_vencimento:
+            try:
+                tarefa.hora_vencimento = datetime.strptime(hora_vencimento, "%H:%M").time()
+            except Exception:
+                pass
+        if lembrete_em:
+            try:
+                tarefa.lembrete_em = datetime.strptime(lembrete_em, "%Y-%m-%dT%H:%M")
+            except Exception:
+                pass
+
+        db.session.add(tarefa)
+        db.session.commit()
+        flash("Tarefa criada com sucesso!", "success")
+        return redirect(url_for("tarefas"))
+
+    filtro_status = request.args.get("status", "todas")
+
+    tarefas_query = Tarefa.query.filter_by(usuario_crm_id=user_id).order_by(Tarefa.criado_em.desc())
+    todas_tarefas = tarefas_query.all()
+    tarefas_lista = list(todas_tarefas)
+
+    hoje = datetime.today().date()
+    agora = datetime.now().time()
+
+    def is_atrasada(t):
+        if t.status == "Concluída":
+            return False
+        if t.data_vencimento and t.data_vencimento < hoje:
+            return True
+        if t.data_vencimento == hoje and t.hora_vencimento and t.hora_vencimento < agora:
+            return True
+        return False
+
+    if filtro_status == "pendentes":
+        tarefas_lista = [t for t in tarefas_lista if t.status != "Concluída"]
+    elif filtro_status == "concluidas":
+        tarefas_lista = [t for t in tarefas_lista if t.status == "Concluída"]
+    elif filtro_status == "atrasadas":
+        tarefas_lista = [t for t in tarefas_lista if is_atrasada(t)]
+
+    total = len(todas_tarefas)
+    pendentes = len([t for t in todas_tarefas if t.status != "Concluída"])
+    concluidas = len([t for t in todas_tarefas if t.status == "Concluída"])
+    atrasadas = len([t for t in todas_tarefas if is_atrasada(t)])
+
+    # Dados para selects
+    clientes = Cliente.query.filter_by(usuario_crm_id=user_id).order_by(Cliente.nome).all()
+    mesas = MesaNegocio.query.filter_by(usuario_crm_id=user_id).order_by(MesaNegocio.id.desc()).all()
+
+    return render_template(
+        "tarefas.html",
+        tarefas=tarefas_lista,
+        total=total,
+        pendentes=pendentes,
+        concluidas=concluidas,
+        atrasadas=atrasadas,
+        filtro_status=filtro_status,
+        clientes=clientes,
+        mesas=mesas
+    )
+
+
+@app.route("/tarefas/<int:id>/status", methods=["POST"])
+@login_required
+@permission_required('tarefas')
+def atualizar_status_tarefa(id):
+    tarefa = Tarefa.query.get_or_404(id)
+    status = request.form.get("status")
+    if status == "Concluída":
+        tarefa.status = "Concluída"
+        tarefa.concluido_em = datetime.utcnow()
+    else:
+        tarefa.status = "Pendente"
+        tarefa.concluido_em = None
+    db.session.commit()
+    return redirect(url_for("tarefas"))
+
+
+@app.route("/tarefas/<int:id>/excluir", methods=["POST"])
+@login_required
+@permission_required('tarefas')
+def excluir_tarefa(id):
+    tarefa = Tarefa.query.get_or_404(id)
+    db.session.delete(tarefa)
+    db.session.commit()
+    flash("Tarefa excluída com sucesso!", "success")
+    return redirect(url_for("tarefas"))
+
+
+# --- RELATÓRIOS
+@app.route("/relatorios")
+@login_required
+@permission_required('relatorios')
+def relatorios():
+    user_id = get_usuario_filter()
+
+    if user_id:
+        base_filter_cliente = Cliente.usuario_crm_id == user_id
+        base_filter_mesa = MesaNegocio.usuario_crm_id == user_id
+        base_filter_ocorrencia = Ocorrencia.usuario_crm_id == user_id
+    else:
+        base_filter_cliente = True
+        base_filter_mesa = True
+        base_filter_ocorrencia = True
+
+    mesas = MesaNegocio.query.filter(base_filter_mesa).all()
+    total_mesas = len(mesas)
+    mesas_ganhas = len([m for m in mesas if m.situacao == "Ganho"])
+    mesas_perdidas = len([m for m in mesas if m.situacao == "Perdido"])
+    mesas_andamento = len([m for m in mesas if m.situacao == "Em negociação"])
+    conversao = (mesas_ganhas / total_mesas * 100) if total_mesas else 0
+
+    # Tempo de ciclo (dias) entre registro e fechamento
+    ciclos = [
+        (m.data_fechamento - m.data_registro).days
+        for m in mesas
+        if m.data_fechamento and m.data_registro
+    ]
+    tempo_ciclo_medio = round(sum(ciclos) / len(ciclos), 2) if ciclos else 0
+
+    # NPS por mês (últimos 6 meses)
+    hoje = datetime.today().date()
+    meses_labels = []
+    nps_medias = []
+    nps_quantidades = []
+
+    for i in range(5, -1, -1):
+        ref = hoje.replace(day=1) - timedelta(days=30 * i)
+        ano = ref.year
+        mes = ref.month
+        inicio = datetime(ano, mes, 1)
+        if mes == 12:
+            fim = datetime(ano + 1, 1, 1)
+        else:
+            fim = datetime(ano, mes + 1, 1)
+
+        clientes_mes = Cliente.query.filter(
+            base_filter_cliente,
+            Cliente.nps_data.isnot(None),
+            Cliente.nps_data >= inicio,
+            Cliente.nps_data < fim
+        ).all()
+        notas = [c.nps_nota for c in clientes_mes if c.nps_nota is not None]
+        media = round(sum(notas) / len(notas), 2) if notas else 0
+
+        meses_labels.append(inicio.strftime("%m/%Y"))
+        nps_medias.append(media)
+        nps_quantidades.append(len(notas))
+
+    # Vendas por mês (últimos 6 meses)
+    vendas_labels = meses_labels
+    vendas_valores = []
+    for i in range(5, -1, -1):
+        ref = hoje.replace(day=1) - timedelta(days=30 * i)
+        ano = ref.year
+        mes = ref.month
+        inicio = datetime(ano, mes, 1)
+        if mes == 12:
+            fim = datetime(ano + 1, 1, 1)
+        else:
+            fim = datetime(ano, mes + 1, 1)
+
+        total_mes = sum(
+            m.valor_total or 0
+            for m in mesas
+            if m.situacao == "Ganho" and m.data_registro and inicio.date() <= m.data_registro < fim.date()
+        )
+        vendas_valores.append(round(total_mes, 2))
+
+    # Ocorrências por status
+    ocorrencias_total = Ocorrencia.query.filter(base_filter_ocorrencia).count()
+
+    return render_template(
+        "relatorios.html",
+        total_mesas=total_mesas,
+        mesas_ganhas=mesas_ganhas,
+        mesas_perdidas=mesas_perdidas,
+        mesas_andamento=mesas_andamento,
+        conversao=round(conversao, 2),
+        tempo_ciclo_medio=tempo_ciclo_medio,
+        meses_labels=meses_labels,
+        nps_medias=nps_medias,
+        nps_quantidades=nps_quantidades,
+        vendas_labels=vendas_labels,
+        vendas_valores=vendas_valores,
+        ocorrencias_total=ocorrencias_total
+    )
 
 @app.route("/tickets")
 def list_tickets():

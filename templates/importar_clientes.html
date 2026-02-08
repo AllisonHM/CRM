@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Importar Clientes{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-3">📥 Importar Clientes (CSV)</h1>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div>
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }} mt-2" role="alert">
+              {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="POST" enctype="multipart/form-data">
+                <div class="mb-3">
+                    <label class="form-label">Arquivo CSV</label>
+                    <input type="file" name="arquivo" class="form-control" accept=".csv" required>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Tratamento de duplicados</label>
+                    <select name="modo" class="form-select">
+                        <option value="pular" selected>Pular duplicados</option>
+                        <option value="atualizar">Atualizar duplicados</option>
+                    </select>
+                </div>
+
+                <button class="btn btn-success" type="submit">Importar</button>
+                <a class="btn btn-secondary" href="{{ url_for('cadastro') }}">Voltar</a>
+            </form>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5>Colunas aceitas</h5>
+            <p class="text-muted mb-2">Obrigatórias: <strong>nome</strong>, <strong>telefone</strong>. As demais são opcionais.</p>
+            <div class="small">
+                nome, email, telefone, tipo_pessoa, data_nascimento, data_abertura, renda, faturamento, segmento_trabalho,
+                segmento, qtd_funcionarios, endereco, observacoes
+            </div>
+            <div class="mt-2">
+                <code>Exemplo:</code>
+                <pre class="mb-0">nome,telefone,email,tipo_pessoa
+Maria,+5547999999999,maria@email.com,Física</pre>
+            </div>
+        </div>
+    </div>
+
+    {% if erros %}
+    <div class="card">
+        <div class="card-body">
+            <h5>Erros e linhas ignoradas</h5>
+            <ul class="mb-0">
+                {% for erro in erros[:20] %}
+                    <li>{{ erro }}</li>
+                {% endfor %}
+            </ul>
+            {% if erros|length > 20 %}
+                <p class="mt-2 text-muted">Mostrando apenas os primeiros 20 erros.</p>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

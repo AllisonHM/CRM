@@ -109,6 +109,7 @@ class MesaNegocio(db.Model):
     descricao = db.Column(db.Text, nullable=True)
     data_registro = db.Column(db.Date, nullable=False)
     hora_registro = db.Column(db.Time, nullable=False)
+    data_fechamento = db.Column(db.Date, nullable=True)
 
 class Ocorrencia(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -178,6 +179,31 @@ class PlannerEvento(db.Model):
     hora = db.Column(db.Time, nullable=False)
     data_hora = db.Column(db.DateTime, nullable=False)  # <-- NOVO CAMPO
     descricao = db.Column(db.Text, nullable=True)
+
+
+class Tarefa(db.Model):
+    __tablename__ = "tarefa"
+
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_crm_id = db.Column(db.Integer, db.ForeignKey('usuario_crm.id'), nullable=True)
+    cliente_id = db.Column(db.Integer, db.ForeignKey('cliente.id'), nullable=True)
+    mesa_negocio_id = db.Column(db.Integer, db.ForeignKey('mesa_negocio.id'), nullable=True)
+
+    titulo = db.Column(db.String(200), nullable=False)
+    descricao = db.Column(db.Text, nullable=True)
+    prioridade = db.Column(db.String(20), nullable=False, default="Normal")  # Baixa, Normal, Alta
+    status = db.Column(db.String(20), nullable=False, default="Pendente")  # Pendente, Concluída
+
+    data_vencimento = db.Column(db.Date, nullable=True)
+    hora_vencimento = db.Column(db.Time, nullable=True)
+    lembrete_em = db.Column(db.DateTime, nullable=True)
+    lembrete_enviado = db.Column(db.Boolean, default=False)
+
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow)
+    concluido_em = db.Column(db.DateTime, nullable=True)
+
+    cliente = db.relationship('Cliente', backref='tarefas')
+    mesa = db.relationship('MesaNegocio', backref='tarefas')
 
 
 class ConfiguracaoUsuario(db.Model):

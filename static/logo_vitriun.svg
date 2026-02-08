@@ -1,0 +1,22 @@
+<svg width="40" height="40" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <!-- Face frontal esquerda (magenta original) -->
+    <path d="M 30 15 L 50 70 L 50 45 L 42 20 Z" fill="#F8F8F8"/>
+    
+    <!-- Face central fundo (roxo escuro original) -->
+    <path d="M 30 15 L 50 70 L 70 15 Z" fill="#E0E0E0"/>
+    
+    <!-- Face frontal direita (cyan original) -->
+    <path d="M 50 45 L 50 70 L 70 15 L 58 20 Z" fill="#FFFFFF"/>
+    
+    <!-- Camada de sobreposição esquerda -->
+    <path d="M 35 20 L 50 60 L 50 40 L 40 25 Z" fill="#FAFAFA"/>
+    
+    <!-- Camada de sobreposição direita -->  
+    <path d="M 50 40 L 50 60 L 65 20 L 55 25 Z" fill="#FCFCFC"/>
+    
+    <!-- Detalhe de profundidade esquerdo -->
+    <path d="M 40 25 L 50 55 L 50 35 L 43 27 Z" fill="#FFFFFF" opacity="0.95"/>
+    
+    <!-- Detalhe de profundidade direito -->
+    <path d="M 50 35 L 50 55 L 60 25 L 53 27 Z" fill="#FEFEFE" opacity="0.9"/>
+</svg>
