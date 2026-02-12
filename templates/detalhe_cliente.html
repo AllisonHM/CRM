@@ -62,34 +62,34 @@
 </style>
 
 <h1 class="section-title">
-    👤 {{ cliente.nome }}
+    {{ cliente.nome }}
     {% if cliente.nps_nota is not none %}
         <span class="nps-badge">
             {% if cliente.nps_nota >= 9 %}
                 <span class="nps-circle promotor">{{ cliente.nps_nota }}</span>
-                <span class="nps-label promotor">🌟 Promotor</span>
+                <span class="nps-label promotor">Promotor</span>
             {% elif cliente.nps_nota >= 7 %}
                 <span class="nps-circle neutro">{{ cliente.nps_nota }}</span>
-                <span class="nps-label neutro">😊 Neutro</span>
+                <span class="nps-label neutro">Neutro</span>
             {% else %}
                 <span class="nps-circle detrator">{{ cliente.nps_nota }}</span>
-                <span class="nps-label detrator">😔 Detrator</span>
+                <span class="nps-label detrator">Detrator</span>
             {% endif %}
         </span>
     {% endif %}
 </h1>
 
 <div class="mb-4 d-flex gap-2">
-  <a href="{{ url_for('planner') }}" class="btn btn-primary btn-rounded">📅 Planner</a>
-  <a href="{{ url_for('detalhe_cliente_novo', id=cliente.id) }}" class="btn btn-warning btn-rounded">✨ Detalhes Completos</a>
-  <a href="{{ url_for('add_mesa', id=cliente.id) }}" class="btn btn-primary btn-rounded">➕ Nova Mesa</a>
-  <a href="{{ url_for('add_ocorrencia', id=cliente.id) }}" class="btn btn-primary btn-rounded">➕ Nova Ocorrência</a>
+  <a href="{{ url_for('planner') }}" class="btn btn-primary btn-rounded">Planner</a>
+  <a href="{{ url_for('detalhe_cliente_novo', id=cliente.id) }}" class="btn btn-warning btn-rounded">Detalhes Completos</a>
+  <a href="{{ url_for('add_mesa', id=cliente.id) }}" class="btn btn-primary btn-rounded">Nova Mesa</a>
+  <a href="{{ url_for('add_ocorrencia', id=cliente.id) }}" class="btn btn-primary btn-rounded">Nova Ocorrência</a>
 </div>
 
 <div class="row">
   <div class="col-md-6">
     <div class="card card-accent hover-lift">
-      <div class="card-header">📋 Informações do Cliente</div>
+      <div class="card-header">Informações do Cliente</div>
       <div class="card-body">
         <p><strong>Email:</strong> {{ cliente.email }}</p>
         <p><strong>Telefone:</strong> {{ cliente.telefone }}</p>
@@ -99,7 +99,7 @@
 
   <div class="col-md-6">
     <div class="card card-accent hover-lift">
-      <div class="card-header">📊 Resumo</div>
+      <div class="card-header">Resumo</div>
       <div class="card-body">
         <p><strong>Total de Mesas:</strong> <span class="badge badge-primary">{{ cliente.mesas|length }}</span></p>
         <p><strong>Total de Ocorrências:</strong> <span class="badge badge-danger">{{ cliente.ocorrencias|length }}</span></p>
@@ -111,7 +111,7 @@
 <div class="row mt-4">
   <div class="col-md-6">
     <div class="card card-accent">
-      <div class="card-header">💼 Negócio</div>
+      <div class="card-header">Negócio</div>
       <div class="card-body">
         {% if cliente.mesas %}
         <div class="table-responsive">
@@ -140,7 +140,7 @@
 
   <div class="col-md-6">
     <div class="card card-accent">
-      <div class="card-header">⚠️ Ocorrências</div>
+      <div class="card-header">Ocorrências</div>
       <div class="card-body">
         {% if cliente.ocorrencias %}
         <div class="table-responsive">

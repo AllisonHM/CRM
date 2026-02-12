@@ -3,13 +3,13 @@
 
 {% block content %}
 
-<h1 class="section-title">📊 Dashboard do CRM</h1>
+<h1 class="section-title">Dashboard do CRM</h1>
 
 <div class="row">
   <!-- Card: Produtos -->
   <div class="col-md-6 col-lg mb-3">
     <div class="stat-card hover-lift">
-      <div class="stat-icon">📦</div>
+      <div class="stat-icon"></div>
       <div class="stat-value">{{ qtd_produtos }}</div>
       <div class="stat-label">Produtos Cadastrados</div>
     </div>
@@ -18,7 +18,7 @@
   <!-- Card: Agendas Hoje -->
   <div class="col-md-6 col-lg mb-3">
     <div class="stat-card hover-lift">
-      <div class="stat-icon">📅</div>
+      <div class="stat-icon"></div>
       <div class="stat-value">{{ qtd_agendas_hoje }}</div>
       <div class="stat-label">Agendas Hoje</div>
     </div>
@@ -27,7 +27,7 @@
   <!-- Card: Agendas Semana -->
   <div class="col-md-6 col-lg mb-3">
     <div class="stat-card hover-lift">
-      <div class="stat-icon">📆</div>
+      <div class="stat-icon"></div>
       <div class="stat-value">{{ qtd_agendas_semana }}</div>
       <div class="stat-label">Agendas Semana</div>
     </div>
@@ -36,7 +36,7 @@
   <!-- Card: Agendas Mês -->
   <div class="col-md-6 col-lg mb-3">
     <div class="stat-card hover-lift">
-      <div class="stat-icon">📋</div>
+      <div class="stat-icon"></div>
       <div class="stat-value">{{ qtd_agendas_mes }}</div>
       <div class="stat-label">Agendas Mês</div>
     </div>
@@ -45,7 +45,7 @@
   <!-- Card: Mensagens Não Respondidas -->
   <div class="col-md-6 col-lg mb-3">
     <div class="stat-card hover-lift">
-      <div class="stat-icon">💬</div>
+      <div class="stat-icon"></div>
       <div class="stat-value">{{ qtd_mensagens_pendentes | default(0) }}</div>
       <div class="stat-label">Mensagens Pendentes</div>
     </div>
@@ -56,7 +56,7 @@
   <!-- Gráfico: Clientes (Pessoas Física vs Jurídica) -->
   <div class="col-md-6 mb-4">
     <div class="card card-accent">
-      <div class="card-header">👥 Clientes por Tipo</div>
+      <div class="card-header">Clientes por Tipo</div>
       <div class="card-body">
         <canvas id="chartClientes" height="80"></canvas>
       </div>
@@ -66,7 +66,7 @@
   <!-- Gráfico: Negócio -->
   <div class="col-md-6 mb-4">
     <div class="card card-accent">
-      <div class="card-header">💼 Negócio</div>
+      <div class="card-header">Negócio</div>
       <div class="card-body">
         <canvas id="chartMesas" height="80"></canvas>
       </div>
@@ -76,7 +76,7 @@
   <!-- Gráfico: Ocorrências -->
   <div class="col-md-6 mb-4">
     <div class="card card-accent">
-      <div class="card-header">⚠️ Ocorrências por Status</div>
+      <div class="card-header">Ocorrências por Status</div>
       <div class="card-body">
         <canvas id="chartOcorrencias" height="80"></canvas>
       </div>
@@ -86,7 +86,7 @@
   <!-- Gráfico: Funil de Vendas -->
   <div class="col-md-6 mb-4">
     <div class="card card-accent">
-      <div class="card-header">💰 Funil de Vendas (Status x Valor)</div>
+      <div class="card-header">Funil de Vendas (Status x Valor)</div>
       <div class="card-body">
         <canvas id="chartFunil" height="80"></canvas>
       </div>
@@ -97,13 +97,13 @@
 <!-- Cards de Vendas por Período -->
 <div class="row mt-4">
   <div class="col-md-12 mb-3">
-    <h3 class="section-title">💸 Vendas por Período</h3>
+    <h3 class="section-title">Vendas por Período</h3>
   </div>
   
   <!-- Card: Vendas do Dia -->
   <div class="col-md-4 mb-4">
     <div class="card card-accent">
-      <div class="card-header">📅 Vendas do Dia</div>
+      <div class="card-header">Vendas do Dia</div>
       <div class="card-body">
         <canvas id="chartVendasDia" height="100"></canvas>
       </div>
@@ -113,7 +113,7 @@
   <!-- Card: Vendas da Semana -->
   <div class="col-md-4 mb-4">
     <div class="card card-accent">
-      <div class="card-header">📊 Vendas da Semana</div>
+      <div class="card-header">Vendas da Semana</div>
       <div class="card-body">
         <canvas id="chartVendasSemana" height="100"></canvas>
       </div>
@@ -123,7 +123,7 @@
   <!-- Card: Vendas do Mês -->
   <div class="col-md-4 mb-4">
     <div class="card card-accent">
-      <div class="card-header">📈 Vendas do Mês</div>
+      <div class="card-header">Vendas do Mês</div>
       <div class="card-body">
         <canvas id="chartVendasMes" height="100"></canvas>
       </div>

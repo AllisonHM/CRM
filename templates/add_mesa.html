@@ -4,13 +4,13 @@
 {% block content %}
 
 <div class="mb-4">
-  <a href="{{ url_for('detalhe_cliente', id=cliente.id) }}" class="btn btn-outline-secondary btn-rounded">⬅ Voltar</a>
+  <a href="{{ url_for('detalhe_cliente', id=cliente.id) }}" class="btn btn-outline-secondary btn-rounded">Voltar</a>
 </div>
 
-<h1 class="section-title">📋 Nova Mesa de Negócio</h1>
+<h1 class="section-title">Nova Mesa de Negócio</h1>
 
 <div class="card card-accent hover-lift">
-  <div class="card-header">📝 Dados da Mesa</div>
+  <div class="card-header">Dados da Mesa</div>
   <div class="card-body">
     <form method="POST">
 
@@ -26,7 +26,7 @@
             type="text" 
             id="produto-search" 
             class="form-control" 
-            placeholder="🔍 Buscar produtos..."
+            placeholder="Buscar produtos..."
             autocomplete="off"
           >
           <div id="produto-dropdown" style="
@@ -72,7 +72,7 @@
         <input type="number" id="valor" step="0.01" name="valor_total" class="form-control" required>
       </div>
 
-      <button type="submit" class="btn btn-primary btn-rounded">💾 Salvar</button>
+      <button type="submit" class="btn btn-primary btn-rounded">Salvar</button>
     </form>
   </div>
 </div>
@@ -165,7 +165,7 @@ produtoSearch.addEventListener('input', function() {
             <div class="produto-item" onclick="selecionarProduto(${p.id}, '${p.nome.replace(/'/g, "\\'")}', '${(p.descricao || '').replace(/'/g, "\\'")}', ${p.quantidade})">
               <div class="produto-nome">${p.nome}</div>
               ${p.descricao ? `<div class="produto-descricao">${p.descricao}</div>` : ''}
-              <div class="produto-quantidade">📦 Estoque: ${p.quantidade}</div>
+              <div class="produto-quantidade">Estoque: ${p.quantidade}</div>
             </div>
           `).join('');
         }
@@ -245,7 +245,7 @@ function renderProdutosSelecionados() {
           onchange="atualizarQuantidade(${p.id}, this.value)"
           onclick="event.stopPropagation()"
         >
-        <span class="remove-btn" onclick="removerProduto(${p.id})">✕</span>
+        <span class="remove-btn" onclick="removerProduto(${p.id})">×</span>
       </span>
     `).join('');
     

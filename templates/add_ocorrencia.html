@@ -4,13 +4,13 @@
 {% block content %}
 
 <div class="mb-4">
-  <a href="{{ url_for('detalhe_cliente', id=cliente.id) }}" class="btn btn-outline-secondary btn-rounded">⬅ Voltar</a>
+  <a href="{{ url_for('detalhe_cliente', id=cliente.id) }}" class="btn btn-outline-secondary btn-rounded">Voltar</a>
 </div>
 
-<h1 class="section-title">⚠️ Nova Ocorrência - {{ cliente.nome }}</h1>
+<h1 class="section-title">Nova Ocorrência - {{ cliente.nome }}</h1>
 
 <div class="card card-accent hover-lift">
-  <div class="card-header">📝 Dados da Ocorrência</div>
+  <div class="card-header">Dados da Ocorrência</div>
   <div class="card-body">
     <form method="POST">
       <div class="form-group-crm">
@@ -33,7 +33,7 @@
         <textarea id="descricao" name="descricao" class="form-control" rows="4" required></textarea>
       </div>
 
-      <button type="submit" class="btn btn-primary btn-rounded">💾 Salvar</button>
+      <button type="submit" class="btn btn-primary btn-rounded">Salvar</button>
     </form>
   </div>
 </div>

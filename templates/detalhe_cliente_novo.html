@@ -375,32 +375,32 @@
             </p>
             <div style="margin-top: 12px;">
                 {% if 'Física' in cliente.tipo_pessoa or 'PF' in cliente.tipo_pessoa %}
-                    <span class="badge-tipo badge-pf">👤 Pessoa Física (PF)</span>
+                    <span class="badge-tipo badge-pf">Pessoa Física (PF)</span>
                 {% elif 'Jurídica' in cliente.tipo_pessoa or 'PJ' in cliente.tipo_pessoa %}
-                    <span class="badge-tipo badge-pj">🏢 Pessoa Jurídica (PJ)</span>
+                    <span class="badge-tipo badge-pj">Pessoa Jurídica (PJ)</span>
                 {% else %}
-                    <span class="badge-tipo badge-pf">📋 {{ cliente.tipo_pessoa }}</span>
+                    <span class="badge-tipo badge-pf">{{ cliente.tipo_pessoa }}</span>
                 {% endif %}
             </div>
         </div>
         <div style="display: flex; gap: 10px;">
-            <a href="{{ url_for('editar_cliente', id=cliente.id) }}" class="btn-editar">✏️ Editar</a>
-            <a href="{{ url_for('relacionamento') }}" class="btn-voltar">← Voltar</a>
+            <a href="{{ url_for('editar_cliente', id=cliente.id) }}" class="btn-editar">Editar</a>
+            <a href="{{ url_for('relacionamento') }}" class="btn-voltar">Voltar</a>
         </div>
     </div>
 
     <!-- ABAS PARA PULAR ENTRE SEÇÕES -->
     <div class="tabs-selector">
-        <button class="tab-btn ativo" onclick="scrollToSection('info-geral')">ℹ️ Geral</button>
-        <button class="tab-btn" onclick="scrollToSection('info-contato')">📞 Contato</button>
-        <button class="tab-btn" onclick="scrollToSection('info-endereco')">🏠 Endereço</button>
-        <button class="tab-btn" onclick="scrollToSection('observacoes')">📝 Observações</button>
+        <button class="tab-btn ativo" onclick="scrollToSection('info-geral')">Geral</button>
+        <button class="tab-btn" onclick="scrollToSection('info-contato')">Contato</button>
+        <button class="tab-btn" onclick="scrollToSection('info-endereco')">Endereço</button>
+        <button class="tab-btn" onclick="scrollToSection('observacoes')">Observações</button>
         {% if 'Física' in cliente.tipo_pessoa or 'PF' in cliente.tipo_pessoa %}
-            <button class="tab-btn" onclick="scrollToSection('dados-pessoais')">🧍 Dados Pessoais</button>
-            <button class="tab-btn" onclick="scrollToSection('perfil-comercial')">💼 Perfil e Comercial</button>
+            <button class="tab-btn" onclick="scrollToSection('dados-pessoais')">Dados Pessoais</button>
+            <button class="tab-btn" onclick="scrollToSection('perfil-comercial')">Perfil e Comercial</button>
         {% else %}
-            <button class="tab-btn" onclick="scrollToSection('dados-empresa')">🏛️ Empresa</button>
-            <button class="tab-btn" onclick="scrollToSection('perfil-comercial')">📊 Perfil</button>
+            <button class="tab-btn" onclick="scrollToSection('dados-empresa')">Empresa</button>
+            <button class="tab-btn" onclick="scrollToSection('perfil-comercial')">Perfil</button>
         {% endif %}
     </div>
 
@@ -409,7 +409,7 @@
     <!-- ============================================ -->
     <div id="info-geral" class="section">
         <div class="section-title">
-            <span>ℹ️</span>
+            <span></span>
             Informações Gerais
         </div>
 
@@ -436,7 +436,7 @@
     <!-- ============================================ -->
     <div id="info-contato" class="section">
         <div class="section-title">
-            <span>📞</span>
+            <span></span>
             Contato
         </div>
 
@@ -458,7 +458,7 @@
     <!-- ============================================ -->
     <div id="info-endereco" class="section">
         <div class="section-title">
-            <span>🏠</span>
+            <span></span>
             Endereço
         </div>
 
@@ -475,14 +475,14 @@
     <!-- ============================================ -->
     <div id="observacoes" class="section">
         <div class="section-title">
-            <span>📝</span>
+            <span></span>
             Observações Gerais
         </div>
 
         <div class="campo" style="width: 100%;">
             <label style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                 <span>Anotações e Observações</span>
-                <button type="button" class="btn-editar" style="padding: 6px 12px; font-size: 0.85rem;" onclick="toggleEditarObservacoes()">✏️ Editar</button>
+                <button type="button" class="btn-editar" style="padding: 6px 12px; font-size: 0.85rem;" onclick="toggleEditarObservacoes()">Editar</button>
             </label>
             
             <div id="observacoes-view" style="padding: 15px; background: white; border-radius: 8px; border: 1px solid #e0e0e0; min-height: 100px; white-space: pre-wrap;">
@@ -492,8 +492,8 @@
             <form id="observacoes-form" method="POST" action="{{ url_for('atualizar_observacoes', id=cliente.id) }}" style="display: none;">
                 <textarea name="observacoes" rows="8" style="width: 100%; padding: 15px; border-radius: 8px; border: 1px solid #d0d0d0; font-family: inherit; font-size: 0.95rem; resize: vertical;">{{ cliente.observacoes if cliente.observacoes else '' }}</textarea>
                 <div style="display: flex; gap: 10px; margin-top: 10px;">
-                    <button type="submit" class="btn-editar" style="padding: 8px 16px;">💾 Salvar</button>
-                    <button type="button" class="btn-voltar" style="padding: 8px 16px;" onclick="toggleEditarObservacoes()">✖️ Cancelar</button>
+                    <button type="submit" class="btn-editar" style="padding: 8px 16px;">Salvar</button>
+                    <button type="button" class="btn-voltar" style="padding: 8px 16px;" onclick="toggleEditarObservacoes()">Cancelar</button>
                 </div>
             </form>
         </div>
@@ -505,7 +505,7 @@
     {% if 'Física' in cliente.tipo_pessoa or 'PF' in cliente.tipo_pessoa %}
     <div id="dados-pessoais" class="section">
         <div class="section-title">
-            <span>🧍</span>
+            <span></span>
             Dados Pessoais
         </div>
 
@@ -546,7 +546,7 @@
     {% if 'Física' in cliente.tipo_pessoa or 'PF' in cliente.tipo_pessoa %}
     <div id="perfil-comercial" class="section">
         <div class="section-title">
-            <span>💼</span>
+            <span></span>
             Perfil e Comercial
         </div>
 
@@ -566,7 +566,7 @@
                 <label>Nível de Engajamento</label>
                 <p>
                     <span style="padding: 6px 12px; background: #e0f2f1; border-radius: 4px; color: #00796b; font-weight: 600;">
-                        🟡 Médio
+                        Médio
                     </span>
                 </p>
             </div>
@@ -584,7 +584,7 @@
     {% if 'Jurídica' in cliente.tipo_pessoa or 'PJ' in cliente.tipo_pessoa %}
     <div id="dados-empresa" class="section">
         <div class="section-title">
-            <span>🏛️</span>
+            <span></span>
             Dados da Empresa
         </div>
 

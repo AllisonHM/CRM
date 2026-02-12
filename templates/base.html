@@ -10,7 +10,7 @@
 
 <style>
     :root {
-        --menu-offset: 60px; /* 🔧 ajuste aqui o quanto vai para a direita */
+        --menu-offset: 60px; /* ajuste aqui o quanto vai para a direita */
     }
 
     body {
@@ -62,8 +62,8 @@
 </style>
 
 <div id="popupNotificacao" class="popup-notificacao">
-    <span class="popup-close" onclick="fecharPopup()">✕</span>
-    <h3 id="popupTitulo" style="color: var(--accent-yellow); margin-bottom: 0.5rem;">⏰ Evento Próximo</h3>
+    <span class="popup-close" onclick="fecharPopup()">×</span>
+    <h3 id="popupTitulo" style="color: var(--accent-yellow); margin-bottom: 0.5rem;">Evento Próximo</h3>
     <p id="popupTexto" style="margin: 0;"></p>
 </div>
 
@@ -87,7 +87,7 @@
 
     if (window.socket) {
         window.socket.on('notificacao_evento', function(data) {
-            document.getElementById("popupTitulo").innerText = "⏰ Evento Próximo";
+            document.getElementById("popupTitulo").innerText = "Evento Próximo";
             document.getElementById("popupTexto").innerHTML =
                 `<strong>${data.titulo}</strong><br>
                  Cliente: ${data.cliente}<br>
@@ -101,7 +101,7 @@
             if (currentUserId && data.usuario_crm_id && parseInt(data.usuario_crm_id) !== currentUserId) {
                 return;
             }
-            document.getElementById("popupTitulo").innerText = "✅ Lembrete de Tarefa";
+            document.getElementById("popupTitulo").innerText = "Lembrete de Tarefa";
             document.getElementById("popupTexto").innerHTML =
                 `<strong>${data.titulo}</strong><br>
                  Cliente: ${data.cliente || "—"}<br>
@@ -174,16 +174,16 @@
                         {% if current_user.tipo_usuario == 'super_admin' %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                                🔧 Admin
+                                Admin
                             </a>
                             <ul class="dropdown-menu">
-                                <li><a class="dropdown-item" href="{{ url_for('listar_usuarios') }}">👥 Gerenciar Clientes</a></li>
-                                <li><a class="dropdown-item" href="{{ url_for('listar_colaboradores') }}">👨‍💼 Gerenciar Colaboradores</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('listar_usuarios') }}">Gerenciar Clientes</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('listar_colaboradores') }}">Gerenciar Colaboradores</a></li>
                             </ul>
                         </li>
                         {% elif current_user.tipo_usuario == 'admin' %}
                         <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('listar_colaboradores') }}">👨‍💼 Meus Colaboradores</a>
+                            <a class="nav-link" href="{{ url_for('listar_colaboradores') }}">Meus Colaboradores</a>
                         </li>
                         {% endif %}
                         
@@ -192,17 +192,17 @@
                         <!-- Usuário Logado -->
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                                👤 {{ current_user.nome }}
+                                {{ current_user.nome }}
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end">
                                 <li><span class="dropdown-item-text"><small>{{ current_user.email }}</small></span></li>
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="{{ url_for('configuracoes') }}">⚙️ Configurações</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('configuracoes') }}">Configurações</a></li>
                                 {% if current_user.tipo_usuario in ['super_admin', 'admin'] %}
-                                <li><a class="dropdown-item" href="{{ url_for('parametrizacoes') }}">🔧 Parametrizações</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('parametrizacoes') }}">Parametrizações</a></li>
                                 {% endif %}
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="{{ url_for('logout') }}">🚪 Sair</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('logout') }}">Sair</a></li>
                             </ul>
                         </li>
                     {% endif %}

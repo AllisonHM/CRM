@@ -43,7 +43,7 @@
     <h1 class="mb-4">Cadastro de Cliente</h1>
 
     <div class="mb-3">
-        <a href="{{ url_for('importar_clientes') }}" class="btn btn-outline-primary">📥 Importar clientes (CSV)</a>
+        <a href="{{ url_for('importar_clientes') }}" class="btn btn-outline-primary">Importar clientes (CSV)</a>
     </div>
 
     <!-- Formulário de Cadastro -->
@@ -91,7 +91,7 @@
             type="text"
             id="buscaCliente"
             class="form-control"
-            placeholder="🔍 Buscar cliente por nome ou telefone..."
+            placeholder="Buscar cliente por nome ou telefone..."
             onkeyup="filtrarClientes()"
         >
     </div>
@@ -119,8 +119,8 @@
                     <td>{{ cliente.telefone }}</td>
                     <td>{{ cliente.tipo_pessoa }}</td>
                     <td>
-                        <form action="{{ url_for('excluir_cliente', id=cliente.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('⚠️ ATENÇÃO!\n\nVocê está prestes a excluir o cliente:\n\n« {{ cliente.nome }} »\n\nTodos os dados vinculados (negócios e ocorrências) também serão DELETADOS!\n\nTem certeza que deseja continuar?');">
-                            <button type="submit" class="btn btn-danger btn-sm">🗑️ Excluir</button>
+                        <form action="{{ url_for('excluir_cliente', id=cliente.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('ATENÇÃO!\n\nVocê está prestes a excluir o cliente:\n\n« {{ cliente.nome }} »\n\nTodos os dados vinculados (negócios e ocorrências) também serão DELETADOS!\n\nTem certeza que deseja continuar?');">
+                            <button type="submit" class="btn btn-danger btn-sm">Excluir</button>
                         </form>
                     </td>
                 </tr>

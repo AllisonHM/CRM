@@ -3,10 +3,10 @@
 {% block content %}
 
 <div class="mb-4">
-  <h1 class="section-title">👥 Clientes</h1>
+  <h1 class="section-title">Clientes</h1>
   <div class="d-flex gap-2">
-    <a href="{{ url_for('add_cliente') }}" class="btn btn-primary btn-rounded">➕ Adicionar Cliente</a>
-    <a href="{{ url_for('exportar_csv') }}" class="btn btn-warning btn-rounded">📥 Exportar CSV</a>
+    <a href="{{ url_for('add_cliente') }}" class="btn btn-primary btn-rounded">Adicionar Cliente</a>
+    <a href="{{ url_for('exportar_csv') }}" class="btn btn-warning btn-rounded">Exportar CSV</a>
   </div>
 </div>
 
@@ -34,7 +34,7 @@
         <td><span class="badge badge-warning">{{ c.total_negocios_andamento }}</span></td>
         <td><span class="badge badge-danger">{{ c.total_ocorrencias }}</span></td>
         <td>
-          <a href="{{ url_for('detalhe_cliente', cliente_id=c.id) }}" class="btn btn-sm btn-outline-primary">📋 Ver</a>
+          <a href="{{ url_for('detalhe_cliente', cliente_id=c.id) }}" class="btn btn-sm btn-outline-primary">Ver</a>
         </td>
       </tr>
       {% endfor %}

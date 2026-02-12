@@ -109,8 +109,8 @@
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
-  <h1 class="section-title">🗄️ Gerenciar Bancos de Dados</h1>
-  <button class="btn-export" onclick="migrarTodos()">🔄 Migrar Todos</button>
+  <h1 class="section-title">Gerenciar Bancos de Dados</h1>
+  <button class="btn-export" onclick="migrarTodos()">Migrar Todos</button>
 </div>
 
 <!-- Estatísticas -->
@@ -139,7 +139,7 @@
       <div class="col-md-4">
         <h5 style="margin-bottom: 5px;">
           <span class="status-badge {% if banco.ativo %}status-ativo{% else %}status-inativo{% endif %}">
-            {% if banco.ativo %}● Ativo{% else %}○ Inativo{% endif %}
+            {% if banco.ativo %}Ativo{% else %}Inativo{% endif %}
           </span>
         </h5>
         <h4 style="margin: 10px 0;">{{ banco.cliente_nome }}</h4>
@@ -158,14 +158,14 @@
       
       <div class="col-md-4 text-end">
         <button class="action-btn btn-migrar" onclick="migrarBanco({{ banco.cliente_id }})">
-          🔄 Migrar
+          Migrar
         </button>
         <button class="action-btn btn-backup" onclick="backupBanco({{ banco.cliente_id }})">
-          💾 Backup
+          Backup
         </button>
         {% if not banco.ativo %}
         <button class="action-btn btn-danger-custom" onclick="excluirBanco({{ banco.cliente_id }}, '{{ banco.cliente_nome }}')">
-          🗑️ Excluir
+          Excluir
         </button>
         {% endif %}
       </div>
@@ -175,7 +175,7 @@
   
   {% if not bancos %}
   <div class="alert alert-info">
-    <strong>ℹ️ Nenhum banco de cliente criado ainda.</strong><br>
+    <strong>Nenhum banco de cliente criado ainda.</strong><br>
     Quando você criar novos clientes (admins), os bancos aparecerão aqui.
   </div>
   {% endif %}
@@ -189,13 +189,13 @@ function migrarBanco(clienteId) {
     .then(res => res.json())
     .then(data => {
       if (data.success) {
-        alert('✅ ' + data.mensagem);
+        alert(data.mensagem);
       } else {
-        alert('❌ Erro: ' + data.erro);
+        alert('Erro: ' + data.erro);
       }
     })
     .catch(err => {
-      alert('❌ Erro na requisição: ' + err);
+      alert('Erro na requisição: ' + err);
     });
 }
 
@@ -206,19 +206,19 @@ function backupBanco(clienteId) {
     .then(res => res.json())
     .then(data => {
       if (data.success) {
-        alert('✅ Backup criado: ' + data.arquivo);
+        alert('Backup criado: ' + data.arquivo);
       } else {
-        alert('❌ Erro: ' + data.erro);
+        alert('Erro: ' + data.erro);
       }
     })
     .catch(err => {
-      alert('❌ Erro na requisição: ' + err);
+      alert('Erro na requisição: ' + err);
     });
 }
 
 function excluirBanco(clienteId, nomeCliente) {
   const confirmacao = prompt(
-    `⚠️ ATENÇÃO!\n\n` +
+    `ATENÇÃO!\n\n` +
     `Você está prestes a EXCLUIR PERMANENTEMENTE o banco de dados de:\n\n` +
     `« ${nomeCliente} »\n\n` +
     `Esta ação é IRREVERSÍVEL e todos os dados serão PERDIDOS!\n\n` +
@@ -234,35 +234,35 @@ function excluirBanco(clienteId, nomeCliente) {
     .then(res => res.json())
     .then(data => {
       if (data.success) {
-        alert('✅ ' + data.mensagem);
+        alert(data.mensagem);
         // Remove card da tela
         document.getElementById(`banco-${clienteId}`).remove();
       } else {
-        alert('❌ Erro: ' + data.erro);
+        alert('Erro: ' + data.erro);
       }
     })
     .catch(err => {
-      alert('❌ Erro na requisição: ' + err);
+      alert('Erro na requisição: ' + err);
     });
 }
 
 function migrarTodos() {
   if (!confirm('Executar migrações em TODOS os bancos de clientes?\n\nIsso pode levar alguns minutos.')) return;
   
-  alert('🔄 Iniciando migração em todos os bancos...\n\nIsso pode demorar. Aguarde...');
+  alert('Iniciando migração em todos os bancos...\n\nIsso pode demorar. Aguarde...');
   
   fetch('/admin/migrar_todos', { method: 'POST' })
     .then(res => res.json())
     .then(data => {
       if (data.success) {
-        alert('✅ Migração concluída!\n\n' + data.detalhes);
+        alert('Migração concluída!\n\n' + data.detalhes);
         location.reload();
       } else {
-        alert('❌ Erro: ' + data.erro);
+        alert('Erro: ' + data.erro);
       }
     })
     .catch(err => {
-      alert('❌ Erro na requisição: ' + err);
+      alert('Erro na requisição: ' + err);
     });
 }
 </script>

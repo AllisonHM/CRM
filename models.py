@@ -29,6 +29,10 @@ class UsuarioCRM(UserMixin, db.Model):
     ativo = db.Column(db.Boolean, default=True)
     data_cadastro = db.Column(db.DateTime, default=datetime.utcnow)
     
+    # Recuperação de senha
+    reset_token = db.Column(db.String(255), nullable=True)
+    reset_token_expira = db.Column(db.DateTime, nullable=True)
+    
     # Relacionamentos
     clientes = db.relationship('Cliente', backref='usuario_crm', lazy=True, foreign_keys='Cliente.usuario_crm_id')
     colaboradores = db.relationship('UsuarioCRM', backref=db.backref('usuario_pai', remote_side=[id]), lazy=True)
@@ -140,9 +144,12 @@ class ChatbotRegra(db.Model):
 # Modelo Produto
 class Produto(db.Model):
     __tablename__ = "produto"
+    __table_args__ = (
+        db.UniqueConstraint('usuario_crm_id', 'nome', name='uq_produto_usuario_nome'),
+    )
     id = db.Column(db.Integer, primary_key=True)
     usuario_crm_id = db.Column(db.Integer, db.ForeignKey('usuario_crm.id'), nullable=True)
-    nome = db.Column(db.String(200), nullable=False, unique=True)
+    nome = db.Column(db.String(200), nullable=False)
     descricao = db.Column(db.Text, nullable=False)
     quantidade = db.Column(db.Integer, nullable=False, default=0)
     ultima_movimentacao_data = db.Column(db.DateTime, nullable=True)
@@ -211,7 +218,7 @@ class ConfiguracaoUsuario(db.Model):
     __tablename__ = 'configuracao_usuario'
     
     id = db.Column(db.Integer, primary_key=True)
-    usuario_crm_id = db.Column(db.Integer, db.ForeignKey('usuario_crm.id'), nullable=False, unique=True)
+    usuario_crm_id = db.Column(db.Integer, db.ForeignKey('usuario_crm.id', ondelete='CASCADE'), nullable=False, unique=True)
     
     # Preferências de interface
     tema = db.Column(db.String(20), default='claro')  # claro, escuro
@@ -224,7 +231,7 @@ class ConfiguracaoUsuario(db.Model):
     data_atualizacao = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relacionamento
-    usuario = db.relationship('UsuarioCRM', backref=db.backref('configuracao', uselist=False))
+    usuario = db.relationship('UsuarioCRM', backref=db.backref('configuracao', uselist=False, cascade='all, delete-orphan'))
 
 
 class Parametrizacao(db.Model):
@@ -232,7 +239,7 @@ class Parametrizacao(db.Model):
     __tablename__ = 'parametrizacao'
     
     id = db.Column(db.Integer, primary_key=True)
-    usuario_crm_id = db.Column(db.Integer, db.ForeignKey('usuario_crm.id'), nullable=False)
+    usuario_crm_id = db.Column(db.Integer, db.ForeignKey('usuario_crm.id', ondelete='CASCADE'), nullable=False)
     
     # Mensagens automáticas
     mensagem_boas_vindas = db.Column(db.Text, default='Olá! Bem-vindo ao nosso atendimento. Como posso ajudá-lo?')
@@ -248,4 +255,4 @@ class Parametrizacao(db.Model):
     data_atualizacao = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relacionamento
-    usuario = db.relationship('UsuarioCRM', backref='parametrizacoes')
+    usuario = db.relationship('UsuarioCRM', backref=db.backref('parametrizacoes', cascade='all, delete-orphan'))

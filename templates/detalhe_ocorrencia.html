@@ -4,15 +4,15 @@
 {% block content %}
 
 <div class="mb-4">
-  <a href="{{ url_for('detalhe_cliente', id=ocorrencia.cliente.id) }}" class="btn btn-outline-secondary btn-rounded">⬅ Voltar</a>
+  <a href="{{ url_for('detalhe_cliente', id=ocorrencia.cliente.id) }}" class="btn btn-outline-secondary btn-rounded">Voltar</a>
 </div>
 
-<h1 class="section-title">⚠️ Detalhes da Ocorrência</h1>
+<h1 class="section-title">Detalhes da Ocorrência</h1>
 
 <div class="row">
   <div class="col-md-8">
     <div class="card card-accent hover-lift">
-      <div class="card-header">📋 Informações da Ocorrência</div>
+      <div class="card-header">Informações da Ocorrência</div>
       <div class="card-body">
         <p><strong>ID:</strong> {{ ocorrencia.id }}</p>
         <p><strong>Cliente:</strong> {{ ocorrencia.cliente.nome }}</p>
@@ -22,11 +22,11 @@
         <p><strong>Hora de Registro:</strong> {{ ocorrencia.hora_registro.strftime('%H:%M') }}</p>
         <p><strong>Status:</strong> 
           {% if ocorrencia.status == 'Ativo' %}
-            <span class="badge badge-warning">🟡 Ativo</span>
+            <span class="badge badge-warning">Ativo</span>
           {% elif ocorrencia.status == 'Resolvido' %}
-            <span class="badge badge-success">🟢 Resolvido</span>
+            <span class="badge badge-success">Resolvido</span>
           {% elif ocorrencia.status == 'Cancelado' %}
-            <span class="badge badge-danger">🔴 Cancelado</span>
+            <span class="badge badge-danger">Cancelado</span>
           {% else %}
             <span class="badge badge-primary">{{ ocorrencia.status }}</span>
           {% endif %}
@@ -35,7 +35,7 @@
     </div>
 
     <div class="card card-accent hover-lift mt-4">
-      <div class="card-header">🔄 Alterar Status</div>
+      <div class="card-header">Alterar Status</div>
       <div class="card-body">
         <form method="POST" action="{{ url_for('atualizar_ocorrencia', id=ocorrencia.id) }}">
           <div class="form-group-crm">
@@ -46,7 +46,7 @@
               <option value="Cancelado" {% if ocorrencia.status == "Cancelado" %}selected{% endif %}>Cancelado</option>
             </select>
           </div>
-          <button type="submit" class="btn btn-primary btn-rounded">✔ Salvar Status</button>
+          <button type="submit" class="btn btn-primary btn-rounded">Salvar Status</button>
         </form>
       </div>
     </div>

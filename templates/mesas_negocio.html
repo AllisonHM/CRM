@@ -45,6 +45,10 @@
     border-radius: 4px;
   }
 
+  .col-data {
+    min-width: 150px;
+  }
+
   .btn-export {
     padding: 10px 18px;
     background: var(--accent-yellow);
@@ -64,8 +68,8 @@
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
-  <h1 class="section-title">📊 Negócio</h1>
-  <button class="btn-export" onclick="exportarCSV()">📥 Exportar CSV</button>
+  <h1 class="section-title">Negócio</h1>
+  <button class="btn-export" onclick="exportarCSV()">Exportar CSV</button>
 </div>
 
 <div class="table-scroll">
@@ -75,10 +79,9 @@
                 <th>Cliente</th>
                 <th>Tópico</th>
                 <th>Produtos</th>
-                <th>Descrição</th>
                 <th>Situação</th>
                 <th>Valor</th>
-                <th>Data</th>
+                <th class="col-data">Data</th>
                 <th>Hora</th>
                 <th>Ações</th>
             </tr>
@@ -86,7 +89,6 @@
                 <th><input type="text" id="filterCliente" placeholder="Filtrar..."></th>
                 <th><input type="text" id="filterTopico" placeholder="Filtrar..."></th>
                 <th><input type="text" id="filterProdutos" placeholder="Filtrar..."></th>
-                <th><input type="text" id="filterDescricao" placeholder="Filtrar..."></th>
                 <th>
                   <select id="filterSituacao">
                     <option value="">Todos</option>
@@ -97,7 +99,7 @@
                   </select>
                 </th>
                 <th><input type="text" id="filterValor" placeholder="Filtrar..."></th>
-                <th><input type="text" id="filterData" placeholder="Filtrar..."></th>
+                <th class="col-data"><input type="text" id="filterData" placeholder="Filtrar..."></th>
                 <th><input type="text" id="filterHora" placeholder="Filtrar..."></th>
                 <th></th>
             </tr>
@@ -109,26 +111,25 @@
                 <td>{{ m.cliente.nome }}</td>
                 <td>{{ m.topico }}</td>
                 <td>{{ m.produtos }}</td>
-                <td>{{ m.descricao }}</td>
                 <td>
                   {% if m.situacao == "Em negociação" %}
-                    <span class="badge badge-warning">🟡 Em negociação</span>
+                    <span class="badge badge-warning">Em negociação</span>
                   {% elif m.situacao == "Ganho" %}
-                    <span class="badge badge-success">🟢 Ganho</span>
+                    <span class="badge badge-success">Ganho</span>
                   {% elif m.situacao == "Perdido" %}
-                    <span class="badge badge-danger">🔴 Perdido</span>
+                    <span class="badge badge-danger">Perdido</span>
                   {% else %}
                     <span class="badge badge-primary">{{ m.situacao }}</span>
                   {% endif %}
                 </td>
                 <td>R$ {{ m.valor_total }}</td>
-                <td>{{ m.data_registro }}</td>
-                <td>{{ m.hora_registro }}</td>
+                <td class="col-data">{{ m.data_registro }}</td>
+                <td>{{ m.hora_registro.strftime('%H:%M:%S') if m.hora_registro else '' }}</td>
                 <td>
                     {% if m.situacao == "Em negociação" %}
-                    <a class="btn btn-sm btn-primary" href="{{ url_for('detalhe_mesa', id=m.id) }}">📋 Ver</a>
+                    <a class="btn btn-sm btn-primary" href="{{ url_for('detalhe_mesa', id=m.id) }}">Ver</a>
                     {% else %}
-                    <span class="badge badge-success">✓ Fechado</span>
+                    <span class="badge badge-success">Fechado</span>
                     {% endif %}
                 </td>
             </tr>
@@ -142,7 +143,6 @@
   document.getElementById('filterCliente').addEventListener('keyup', filtrarTabela);
   document.getElementById('filterTopico').addEventListener('keyup', filtrarTabela);
   document.getElementById('filterProdutos').addEventListener('keyup', filtrarTabela);
-  document.getElementById('filterDescricao').addEventListener('keyup', filtrarTabela);
   document.getElementById('filterSituacao').addEventListener('change', filtrarTabela);
   document.getElementById('filterValor').addEventListener('keyup', filtrarTabela);
   document.getElementById('filterData').addEventListener('keyup', filtrarTabela);
@@ -155,7 +155,6 @@
     const filterCliente = document.getElementById('filterCliente').value.toLowerCase();
     const filterTopico = document.getElementById('filterTopico').value.toLowerCase();
     const filterProdutos = document.getElementById('filterProdutos').value.toLowerCase();
-    const filterDescricao = document.getElementById('filterDescricao').value.toLowerCase();
     const filterSituacao = document.getElementById('filterSituacao').value;
     const filterValor = document.getElementById('filterValor').value.toLowerCase();
     const filterData = document.getElementById('filterData').value.toLowerCase();
@@ -166,22 +165,20 @@
       const cliente = colunas[0].textContent.toLowerCase();
       const topico = colunas[1].textContent.toLowerCase();
       const produtos = colunas[2].textContent.toLowerCase();
-      const descricao = colunas[3].textContent.toLowerCase();
-      const situacao = colunas[4].textContent;
-      const valor = colunas[5].textContent.toLowerCase();
-      const data = colunas[6].textContent.toLowerCase();
-      const hora = colunas[7].textContent.toLowerCase();
+      const situacao = colunas[3].textContent;
+      const valor = colunas[4].textContent.toLowerCase();
+      const data = colunas[5].textContent.toLowerCase();
+      const hora = colunas[6].textContent.toLowerCase();
 
       const matchCliente = cliente.includes(filterCliente);
       const matchTopico = topico.includes(filterTopico);
       const matchProdutos = produtos.includes(filterProdutos);
-      const matchDescricao = descricao.includes(filterDescricao);
       const matchSituacao = filterSituacao === '' || situacao.includes(filterSituacao);
       const matchValor = valor.includes(filterValor);
       const matchData = data.includes(filterData);
       const matchHora = hora.includes(filterHora);
 
-      if (matchCliente && matchTopico && matchProdutos && matchDescricao && matchSituacao && matchValor && matchData && matchHora) {
+      if (matchCliente && matchTopico && matchProdutos && matchSituacao && matchValor && matchData && matchHora) {
         linha.style.display = '';
       } else {
         linha.style.display = 'none';
@@ -205,7 +202,7 @@
     });
 
     // Adiciona cabeçalho
-    const headers = Array.from(tabela.querySelectorAll('thead th:not(.filter-row th)')).slice(0, 8).map(h => `"${h.textContent.trim()}"`).join(',');
+    const headers = Array.from(tabela.querySelectorAll('thead th:not(.filter-row th)')).slice(0, 7).map(h => `"${h.textContent.trim()}"`).join(',');
     csv = headers + '\n' + csv;
 
     // Cria download

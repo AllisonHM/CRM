@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, session, g
 from flask_socketio import SocketIO, join_room
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from flask_mail import Mail, Message
 from datetime import datetime, timedelta
 from functools import wraps
 import requests
@@ -8,6 +9,7 @@ import logging
 import json
 import csv
 import io
+import secrets
 from flask_migrate import Migrate
 from database_rls import db, tenant_db, init_db
 from models import Cliente, MesaNegocio, Ocorrencia, WhatsAppMensagem, ChatbotRegra, Produto, Movimentacao, PlannerEvento, UsuarioCRM, ConfiguracaoUsuario, Parametrizacao, Tarefa
@@ -28,9 +30,21 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg2://postgres:Amovoce1
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ECHO'] = False  # True para debug SQL
 
+# ------------------- CONFIGURAÇÕES DE EMAIL -------------------
+# IMPORTANTE: Configure suas credenciais de email aqui
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'  # ou seu servidor SMTP
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = 'seu_email@gmail.com'  # Altere aqui
+app.config['MAIL_PASSWORD'] = 'sua_senha_app'  # Use senha de app do Gmail
+app.config['MAIL_DEFAULT_SENDER'] = 'seu_email@gmail.com'  # Altere aqui
+
 # Inicializa DB com suporte a RLS
 db.init_app(app)
 tenant_db.init_app(app)
+
+# ------------------- FLASK-MAIL -------------------
+mail = Mail(app)
 
 # ------------------- FLASK-LOGIN -------------------
 login_manager = LoginManager()
@@ -198,6 +212,186 @@ def logout():
     logout_user()
     flash('Você saiu do sistema.', 'info')
     return redirect(url_for('login'))
+
+# ------------------- RECUPERAÇÃO DE SENHA -------------------
+def verificar_configuracao_email():
+    """Verifica se o email está configurado corretamente"""
+    username = app.config.get('MAIL_USERNAME', '')
+    password = app.config.get('MAIL_PASSWORD', '')
+    
+    # Verifica se ainda está com os valores padrão
+    if username in ['seu_email@gmail.com', '', None] or password in ['sua_senha_app', '', None]:
+        return False, "Configurações de email não foram definidas. Configure MAIL_USERNAME e MAIL_PASSWORD no CRM.py"
+    
+    return True, None
+
+def enviar_email_recuperacao(usuario, token):
+    """Envia email com link de recuperação de senha"""
+    try:
+        # Verifica configuração antes de tentar enviar
+        config_ok, erro_msg = verificar_configuracao_email()
+        if not config_ok:
+            logger.error(f"Configuração de email inválida: {erro_msg}")
+            return False, erro_msg
+        
+        # Gera o link de recuperação
+        link_recuperacao = url_for('resetar_senha', token=token, _external=True)
+        
+        logger.info(f"Tentando enviar email de recuperação para: {usuario.email}")
+        
+        # Cria a mensagem
+        msg = Message(
+            subject='Recuperação de Senha - CRM',
+            recipients=[usuario.email]
+        )
+        
+        # Corpo do email em HTML
+        msg.html = f"""
+        <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <h2 style="color: #4a90e2;">Recuperação de Senha</h2>
+                    <p>Olá, <strong>{usuario.nome}</strong>!</p>
+                    <p>Recebemos uma solicitação de recuperação de senha para sua conta.</p>
+                    <p>Clique no botão abaixo para redefinir sua senha:</p>
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="{link_recuperacao}" 
+                           style="background-color: #4a90e2; color: white; padding: 12px 30px; 
+                                  text-decoration: none; border-radius: 5px; display: inline-block;">
+                            Redefinir Senha
+                        </a>
+                    </div>
+                    <p>Ou copie e cole o link abaixo no seu navegador:</p>
+                    <p style="background-color: #f5f5f5; padding: 10px; border-radius: 5px; word-break: break-all;">
+                        {link_recuperacao}
+                    </p>
+                    <p><strong>Este link expirará em 1 hora.</strong></p>
+                    <p>Se você não solicitou a recuperação de senha, ignore este email.</p>
+                    <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
+                    <p style="color: #999; font-size: 12px;">
+                        Vitriun CRM - Não responda este email
+                    </p>
+                </div>
+            </body>
+        </html>
+        """
+        
+        mail.send(msg)
+        logger.info(f"Email de recuperação enviado com sucesso para: {usuario.email}")
+        return True, None
+    except Exception as e:
+        erro_detalhado = str(e)
+        logger.error(f"Erro ao enviar email de recuperação: {erro_detalhado}")
+        logger.error(f"Tipo do erro: {type(e).__name__}")
+        
+        # Mensagem mais específica baseada no tipo de erro
+        if 'Authentication' in erro_detalhado or 'Username and Password' in erro_detalhado:
+            return False, "Credenciais de email inválidas. Verifique MAIL_USERNAME e MAIL_PASSWORD."
+        elif 'getaddrinfo' in erro_detalhado or 'Name or service not known' in erro_detalhado:
+            return False, "Não foi possível conectar ao servidor de email. Verifique MAIL_SERVER."
+        elif 'Connection refused' in erro_detalhado:
+            return False, "Conexão recusada. Verifique MAIL_PORT e configurações de firewall."
+        else:
+            return False, f"Erro ao enviar email: {erro_detalhado[:100]}"
+
+@app.route('/esqueci-senha', methods=['GET', 'POST'])
+def esqueci_senha():
+    """Página para solicitar recuperação de senha"""
+    if current_user.is_authenticated:
+        return redirect(url_for('menu'))
+    
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip()
+        
+        if not email:
+            flash('Por favor, informe seu email.', 'warning')
+            return redirect(url_for('esqueci_senha'))
+        
+        usuario = UsuarioCRM.query.filter_by(email=email).first()
+        
+        # Sempre retorna a mesma mensagem para não revelar se o email existe
+        if usuario:
+            # Gera token único
+            token = secrets.token_urlsafe(32)
+            
+            # Define token e expiração (1 hora)
+            usuario.reset_token = token
+            usuario.reset_token_expira = datetime.utcnow() + timedelta(hours=1)
+            
+            try:
+                db.session.commit()
+                
+                # Envia email
+                sucesso, erro_msg = enviar_email_recuperacao(usuario, token)
+                if sucesso:
+                    flash('Se o email informado estiver cadastrado, você receberá instruções para recuperar sua senha.', 'info')
+                else:
+                    # Se for erro de configuração, mostra mensagem específica
+                    if 'não foram definidas' in erro_msg or 'Credenciais' in erro_msg or 'conectar' in erro_msg:
+                        flash(f'⚠️ Sistema de email não configurado. Contate o administrador.', 'warning')
+                        logger.error(f"ATENÇÃO: Configure o email no arquivo CRM.py! Detalhes: {erro_msg}")
+                    else:
+                        flash('Erro ao enviar email. Tente novamente mais tarde.', 'danger')
+                        logger.error(f"Erro no envio: {erro_msg}")
+            except Exception as e:
+                db.session.rollback()
+                logger.error(f"Erro ao salvar token de recuperação: {e}")
+                flash('Erro ao processar solicitação. Tente novamente.', 'danger')
+        else:
+            # Mesma mensagem para não revelar se o email existe
+            flash('Se o email informado estiver cadastrado, você receberá instruções para recuperar sua senha.', 'info')
+        
+        return redirect(url_for('login'))
+    
+    return render_template('esqueci_senha.html')
+
+@app.route('/resetar-senha/<token>', methods=['GET', 'POST'])
+def resetar_senha(token):
+    """Página para redefinir senha com token"""
+    if current_user.is_authenticated:
+        return redirect(url_for('menu'))
+    
+    # Busca usuário com o token
+    usuario = UsuarioCRM.query.filter_by(reset_token=token).first()
+    
+    # Verifica se o token é válido e não expirou
+    if not usuario or not usuario.reset_token_expira or usuario.reset_token_expira < datetime.utcnow():
+        flash('Link de recuperação inválido ou expirado. Solicite um novo link.', 'danger')
+        return redirect(url_for('esqueci_senha'))
+    
+    if request.method == 'POST':
+        nova_senha = request.form.get('senha', '')
+        confirma_senha = request.form.get('confirma_senha', '')
+        
+        # Validações
+        if not nova_senha or not confirma_senha:
+            flash('Por favor, preencha todos os campos.', 'warning')
+            return redirect(url_for('resetar_senha', token=token))
+        
+        if len(nova_senha) < 6:
+            flash('A senha deve ter no mínimo 6 caracteres.', 'warning')
+            return redirect(url_for('resetar_senha', token=token))
+        
+        if nova_senha != confirma_senha:
+            flash('As senhas não coincidem.', 'warning')
+            return redirect(url_for('resetar_senha', token=token))
+        
+        # Atualiza a senha
+        usuario.set_password(nova_senha)
+        usuario.reset_token = None
+        usuario.reset_token_expira = None
+        
+        try:
+            db.session.commit()
+            flash('Senha redefinida com sucesso! Você já pode fazer login.', 'success')
+            return redirect(url_for('login'))
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao redefinir senha: {e}")
+            flash('Erro ao redefinir senha. Tente novamente.', 'danger')
+    
+    return render_template('resetar_senha.html', token=token)
+
 
 
 # ------------------- CONFIGURAÇÕES DO USUÁRIO -------------------
@@ -453,10 +647,15 @@ def deletar_usuario(id):
         return redirect(url_for('listar_usuarios'))
     
     nome = usuario.nome
-    db.session.delete(usuario)
-    db.session.commit()
     
-    flash(f'Usuário {nome} deletado com sucesso!', 'success')
+    try:
+        db.session.delete(usuario)
+        db.session.commit()
+        flash(f'Usuário {nome} deletado com sucesso!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao deletar usuário: {str(e)}', 'danger')
+    
     return redirect(url_for('listar_usuarios'))
 
 
@@ -2293,32 +2492,46 @@ def api_listar_produtos():
 @app.route("/api/produtos/add", methods=["POST"])
 @login_required
 def api_add_produto():
-    dados = request.get_json() or {}
-    nome = (dados.get("nome") or "").strip()
-    descricao = (dados.get("descricao") or "").strip()
-    if not nome:
-        return jsonify({"status": "erro", "detalhe": "Nome é obrigatório"}), 400
-    if not descricao:
-        return jsonify({"status": "erro", "detalhe": "Descrição é obrigatória"}), 400
+    try:
+        dados = request.get_json() or {}
+        nome = (dados.get("nome") or "").strip()
+        descricao = (dados.get("descricao") or "").strip()
+        
+        if not nome:
+            return jsonify({"status": "erro", "detalhe": "Nome é obrigatório"}), 400
+        if not descricao:
+            return jsonify({"status": "erro", "detalhe": "Descrição é obrigatória"}), 400
 
-    # evita duplicados
-    user_id = get_usuario_filter()
-    if user_id:
-        if Produto.query.filter_by(usuario_crm_id=user_id, nome=nome).first():
-            return jsonify({"status": "erro", "detalhe": "Produto com esse nome já existe"}), 400
-    else:
-        if Produto.query.filter_by(nome=nome).first():
-            return jsonify({"status": "erro", "detalhe": "Produto com esse nome já existe"}), 400
+        # Obtém o ID do usuário principal (admin ou super_admin)
+        usuario_principal_id = current_user.get_usuario_principal_id()
+        
+        # Verifica se já existe produto com esse nome para este usuário
+        produto_existente = Produto.query.filter_by(
+            usuario_crm_id=usuario_principal_id, 
+            nome=nome
+        ).first()
+        
+        if produto_existente:
+            return jsonify({"status": "erro", "detalhe": "Você já possui um produto com esse nome"}), 400
 
-    p = Produto(
-        usuario_crm_id=current_user.get_usuario_principal_id(),
-        nome=nome, 
-        descricao=descricao, 
-        quantidade=0
-    )
-    db.session.add(p)
-    db.session.commit()
-    return jsonify({"status": "sucesso", "produto": {"id": p.id, "nome": p.nome}}), 201
+        # Cria o novo produto
+        p = Produto(
+            usuario_crm_id=usuario_principal_id,
+            nome=nome, 
+            descricao=descricao, 
+            quantidade=0
+        )
+        db.session.add(p)
+        db.session.commit()
+        
+        return jsonify({"status": "sucesso", "produto": {"id": p.id, "nome": p.nome}}), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Erro ao cadastrar produto: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"status": "erro", "detalhe": f"Erro ao salvar produto: {str(e)}"}), 500
 
 # Realizar movimentação (entrada/saída)
 @app.route("/api/produtos/<int:produto_id>/movimentar", methods=["POST"])

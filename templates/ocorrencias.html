@@ -64,8 +64,8 @@
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
-  <h1 class="section-title">⚠️ Ocorrências</h1>
-  <button class="btn-export" onclick="exportarCSV()">📥 Exportar CSV</button>
+  <h1 class="section-title">Ocorrências</h1>
+  <button class="btn-export" onclick="exportarCSV()">Exportar CSV</button>
 </div>
 
 <div class="table-scroll">
@@ -107,11 +107,11 @@
 
                 <td>
                     {% if o.status == 'Ativo' %}
-                        <span class="badge badge-warning">🟡 Ativo</span>
+                        <span class="badge badge-warning">Ativo</span>
                     {% elif o.status == 'Resolvido' %}
-                        <span class="badge badge-success">🟢 Resolvido</span>
+                        <span class="badge badge-success">Resolvido</span>
                     {% elif o.status == 'Cancelado' %}
-                        <span class="badge badge-danger">🔴 Cancelado</span>
+                        <span class="badge badge-danger">Cancelado</span>
                     {% else %}
                         <span class="badge badge-primary">{{ o.status }}</span>
                     {% endif %}

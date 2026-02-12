@@ -157,21 +157,21 @@
 
 <div class="editar-container">
     <div class="editar-header">
-        <h1>✏️ Editar Cliente: {{ cliente.nome }}</h1>
+        <h1>Editar Cliente: {{ cliente.nome }}</h1>
         <div class="btn-group">
-            <button type="submit" form="formEditar" class="btn btn-salvar">💾 Salvar Alterações</button>
-            <a href="{{ url_for('detalhe_cliente_novo', id=cliente.id) }}" class="btn btn-cancelar">❌ Cancelar</a>
+            <button type="submit" form="formEditar" class="btn btn-salvar">Salvar Alterações</button>
+            <a href="{{ url_for('detalhe_cliente_novo', id=cliente.id) }}" class="btn btn-cancelar">Cancelar</a>
         </div>
     </div>
 
     <div class="aviso">
-        <strong>ℹ️ Dica:</strong> Preencha apenas os campos que deseja alterar. Os campos deixados em branco manterão seus valores anteriores.
+        <strong>Dica:</strong> Preencha apenas os campos que deseja alterar. Os campos deixados em branco manterão seus valores anteriores.
     </div>
 
     <form id="formEditar" method="POST">
         <!-- INFORMAÇÕES GERAIS -->
         <div class="secao">
-            <h2>ℹ️ Informações Gerais</h2>
+            <h2>Informações Gerais</h2>
             <div class="campos-grid">
                 <div class="campo">
                     <label>Nome Completo / Razão Social</label>
@@ -203,7 +203,7 @@
         <!-- PESSOA FÍSICA -->
         {% if 'Física' in cliente.tipo_pessoa or 'PF' in cliente.tipo_pessoa %}
         <div class="secao">
-            <h2>🧍 Dados Pessoais</h2>
+            <h2>Dados Pessoais</h2>
             <div class="campos-grid">
                 <div class="campo">
                     <label>Data de Nascimento</label>
@@ -228,7 +228,7 @@
         <!-- PESSOA JURÍDICA -->
         {% if 'Jurídica' in cliente.tipo_pessoa or 'PJ' in cliente.tipo_pessoa %}
         <div class="secao">
-            <h2>🏛️ Dados da Empresa</h2>
+            <h2>Dados da Empresa</h2>
             <div class="campos-grid">
                 <div class="campo">
                     <label>Data de Abertura</label>
@@ -253,7 +253,7 @@
     </form>
 
     <div style="margin-top: 30px; padding: 20px; background: #fff3e0; border-left: 3px solid #ff9800; border-radius: 8px;">
-        <strong>⚠️ Importante:</strong> As alterações serão salvas imediatamente. Verifique se todas as informações estão corretas antes de salvar.
+        <strong>Importante:</strong> As alterações serão salvas imediatamente. Verifique se todas as informações estão corretas antes de salvar.
     </div>
 </div>
 

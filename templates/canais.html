@@ -666,7 +666,7 @@ function initializeSocketIO() {
     socket = window.io();
     
     socket.on('connect', () => {
-      console.log('✅ Socket conectado');
+      console.log(' Socket conectado');
     });
     
     socket.on('nova_mensagem', (data) => {
@@ -674,7 +674,7 @@ function initializeSocketIO() {
     });
     
     socket.on('disconnect', () => {
-      console.log('❌ Socket desconectado');
+      console.log(' Socket desconectado');
     });
   }
 }
@@ -705,7 +705,7 @@ async function loadConversations() {
       
       // Se já vimos este número, pular (evita duplicação)
       if (seenNumbers.has(numeroNorm)) {
-        console.warn(`⚠️ Número duplicado ignorado: ${numeroNorm}`);
+        console.warn(`Número duplicado ignorado: ${numeroNorm}`);
         return;
       }
       seenNumbers.add(numeroNorm);
@@ -727,7 +727,7 @@ async function loadConversations() {
     renderConversationList(container, currentActive);
     document.getElementById('total-conversas').textContent = conversations.size;
     
-    console.log(`✅ ${conversations.size} conversas únicas carregadas`);
+    console.log(`${conversations.size} conversas únicas carregadas`);
     
   } catch (error) {
     console.error('Erro ao carregar conversas:', error);

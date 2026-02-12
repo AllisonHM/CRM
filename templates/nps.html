@@ -5,7 +5,7 @@
 {% block content %}
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="fw-bold">📊 Net Promoter Score (NPS)</h2>
+        <h2 class="fw-bold">Net Promoter Score (NPS)</h2>
         <a href="{{ url_for('menu') }}" class="btn btn-secondary btn-rounded">
             <i class="fas fa-arrow-left"></i> Voltar ao Menu
         </a>
@@ -108,11 +108,11 @@
                             <td class="fw-bold">{{ cliente.nps_nota }}</td>
                             <td>
                                 {% if cliente.nps_nota >= 9 %}
-                                    <span class="badge bg-success">🌟 Promotor</span>
+                                    <span class="badge bg-success">Promotor</span>
                                 {% elif cliente.nps_nota >= 7 %}
-                                    <span class="badge bg-warning text-dark">😊 Neutro</span>
+                                    <span class="badge bg-warning text-dark">Neutro</span>
                                 {% else %}
-                                    <span class="badge bg-danger">😔 Detrator</span>
+                                    <span class="badge bg-danger">Detrator</span>
                                 {% endif %}
                             </td>
                             <td>{{ cliente.nps_data.strftime('%d/%m/%Y %H:%M') if cliente.nps_data else '-' }}</td>
