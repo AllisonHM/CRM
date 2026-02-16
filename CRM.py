@@ -9,6 +9,7 @@ import logging
 import json
 import csv
 import io
+import os
 import secrets
 from flask_migrate import Migrate
 from database_rls import db, tenant_db, init_db
@@ -875,7 +876,8 @@ Por favor, responda apenas com um número de 0 a 10."""
             numero=numero_norm,
             remetente="Você",
             mensagem=mensagem,
-            recebido_em=datetime.utcnow()
+            recebido_em=datetime.utcnow(),
+            usuario_crm_id=cliente.usuario_crm_id
         )
         db.session.add(msg)
         db.session.commit()
@@ -938,7 +940,8 @@ def processar_resposta_nps(cliente, texto):
                 numero=numero_norm,
                 remetente="Você",
                 mensagem=msg_agradecimento,
-                recebido_em=datetime.utcnow()
+                recebido_em=datetime.utcnow(),
+                usuario_crm_id=cliente.usuario_crm_id
             )
             db.session.add(msg)
             db.session.commit()
@@ -1821,141 +1824,189 @@ def whatsapp_enviar():
     else:
         return render_template("mensagem_status.html", status="erro", voltar_url=url_for("whatsapp_index"))
 
-@app.route("/canais/webhook", methods=["POST"])
-@app.route("/webhook/messages", methods=["POST"])
-def receber_mensagem_webhook():
+@app.route("/webhook/test", methods=["POST", "GET"])
+def webhook_test():
+    """Endpoint de teste para debug do webhook"""
+    if request.method == "GET":
+        return jsonify({"status": "Webhook test endpoint ativo", "timestamp": datetime.now().isoformat()})
+    
     data = request.get_json(silent=True) or {}
+    print("🧪 WEBHOOK TEST - Payload recebido:")
+    print(json.dumps(data, indent=2, ensure_ascii=False))
+    
+    return jsonify({
+        "status": "received",
+        "payload": data,
+        "timestamp": datetime.now().isoformat()
+    }), 200
 
-    print("📩 Webhook recebido (raw):", data)
+@app.route("/canais/webhook", methods=["POST", "OPTIONS"])
+@app.route("/webhook/messages", methods=["POST", "OPTIONS"])
+def receber_mensagem_webhook():
+    # Suporte CORS para OPTIONS (preflight)
+    if request.method == "OPTIONS":
+        response = jsonify({"status": "ok"})
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type")
+        response.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
+        return response, 200
+    
+    data = request.get_json(silent=True) or {}
+    
+    print("\n" + "="*60)
+    print("📩 WEBHOOK RECEBIDO")
+    print("="*60)
+    print(f"Timestamp: {datetime.now().isoformat()}")
+    print(f"Payload completo:")
+    print(json.dumps(data, indent=2, ensure_ascii=False))
+    print("="*60 + "\n")
 
-    # tenta extrair telefone a partir de várias chaves comuns
+    # ========== ETAPA 1: EXTRAIR TELEFONE ==========
     phone = None
-    # chaves diretas
-    for k in ("phone", "from", "from_number", "sender", "contact", "wa_id", "number"):
+    # Busca direta por chaves comuns
+    for k in ("phone", "from", "from_number", "sender", "contact", "wa_id", "number", "chatId", "author"):
         v = data.get(k)
-        if v:
+        if v and isinstance(v, str):
             phone = v
+            print(f"✅ Telefone encontrado (chave: {k}): {phone}")
             break
 
-    # se ainda não encontrou, procura recursivamente por campos que pareçam telefone
-    def find_phone(obj):
-        if isinstance(obj, dict):
-            for kk, vv in obj.items():
-                if kk.lower() in ("phone", "from", "number", "wa_id", "id", "contact") and vv:
-                    return vv
-                res = find_phone(vv)
-                if res:
-                    return res
-        elif isinstance(obj, list):
-            for item in obj:
-                res = find_phone(item)
-                if res:
-                    return res
-        return None
-
+    # Busca recursiva se não encontrou
     if not phone:
-        phone = find_phone(data)
+        def find_phone(obj, path=""):
+            if isinstance(obj, dict):
+                for kk, vv in obj.items():
+                    current_path = f"{path}.{kk}" if path else kk
+                    if kk.lower() in ("phone", "from", "number", "wa_id", "chatid", "author") and isinstance(vv, str) and len(str(vv).replace("+", "").replace(" ", "")) >= 10:
+                        return vv, current_path
+                    res = find_phone(vv, current_path)
+                    if res[0]:
+                        return res
+            elif isinstance(obj, list):
+                for idx, item in enumerate(obj):
+                    res = find_phone(item, f"{path}[{idx}]")
+                    if res[0]:
+                        return res
+            return None, None
 
-    # tenta extrair texto em formatos comuns (apenas campos explícitos)
+        phone, found_path = find_phone(data)
+        if phone:
+            print(f"✅ Telefone encontrado recursivamente ({found_path}): {phone}")
+
+    # ========== ETAPA 2: EXTRAIR TEXTO ==========
     text = None
-    explicit_text = None
+    
+    # Busca em campos diretos comuns do Z-API
     txt = data.get("text")
     if isinstance(txt, dict):
-        explicit_text = txt.get("message") or txt.get("body") or txt.get("text")
+        text = txt.get("message") or txt.get("body") or txt.get("text")
     elif isinstance(txt, str):
-        explicit_text = txt
-    explicit_text = explicit_text or data.get("message") or data.get("body") or data.get("text_message")
+        text = txt
+    
+    if not text:
+        text = data.get("message") or data.get("body") or data.get("text_message") or data.get("content")
+    
+    if text:
+        print(f"✅ Texto encontrado (direto): {text[:50]}...")
+    
+    # Busca recursiva se não encontrou
+    if not text:
+        def find_text(obj, path=""):
+            if isinstance(obj, dict):
+                for kk, vv in obj.items():
+                    current_path = f"{path}.{kk}" if path else kk
+                    if kk.lower() in ("message", "body", "text", "caption", "content") and isinstance(vv, str) and len(vv) > 0:
+                        # Evita pegar IDs ou valores técnicos
+                        if "id" not in kk.lower() and "token" not in kk.lower() and "key" not in kk.lower():
+                            return vv, current_path
+                    res = find_text(vv, current_path)
+                    if res[0]:
+                        return res
+            elif isinstance(obj, list):
+                for idx, item in enumerate(obj):
+                    res = find_text(item, f"{path}[{idx}]")
+                    if res[0]:
+                        return res
+            return None, None
 
-    # filtra callbacks que não são mensagens (presença/status) quando possível
+        text, found_path = find_text(data)
+        if text:
+            print(f"✅ Texto encontrado recursivamente ({found_path}): {text[:50]}...")
+
+    # ========== ETAPA 3: VALIDAÇÕES ==========
+    
+    # Ignorar callbacks de status/presença APENAS se for explicitamente apenas isso
     tipo = data.get("type", "").lower()
-    non_message_types = ("presencechatcallback", "messagestatuscallback", "deliverycallback", "messagestatuscallback")
+    event = data.get("event", "").lower()
+    
+    # Lista de tipos que devemos ignorar APENAS se não tiverem mensagem
+    status_only_types = ("presence", "ack", "messagestatuscallback", "deliverycallback")
+    
+    is_status_only = any(t in tipo or t in event for t in status_only_types) and not text
+    
+    if is_status_only:
+        print(f"ℹ️ Webhook ignorado: callback de status/presença (tipo: {tipo or event})")
+        return {"status": "ignored", "reason": "status_callback"}, 200
 
-    # se for um tipo claramente não-mensagem e não houver texto explícito (campo text/message/body), ignorar
-    if tipo in non_message_types and not explicit_text:
-        print(f"Webhook ignorado (tipo {data.get('type')} sem texto explícito)")
-        return {"status": "ignored"}, 200
+    # Validar telefone e texto
+    if not phone:
+        print(f"⚠️ Webhook ignorado: telefone não encontrado")
+        return {"status": "ignored", "reason": "no_phone"}, 200
+    
+    if not text:
+        print(f"⚠️ Webhook ignorado: texto não encontrado")
+        return {"status": "ignored", "reason": "no_text"}, 200
 
-    # agora tenta encontrar texto recursivamente, MAS apenas buscando campos nominais (message/body/text/caption)
-    def find_text(obj):
-        if isinstance(obj, dict):
-            for kk, vv in obj.items():
-                if kk.lower() in ("message", "body", "text", "caption") and isinstance(vv, str):
-                    return vv
-                res = find_text(vv)
-                if res:
-                    return res
-        elif isinstance(obj, list):
-            for item in obj:
-                res = find_text(item)
-                if res:
-                    return res
-        return None
+    # Evita salvar valores técnicos capturados como 'text'
+    if isinstance(text, str) and (text == data.get("instanceId") or len(text) > 5000):
+        print(f"⚠️ Webhook ignorado: texto inválido ou muito longo")
+        return {"status": "ignored", "reason": "invalid_text"}, 200
 
-    # prefer explicit_text quando existir, senão use find_text
-    text = explicit_text or find_text(data)
-
-    # filtra callbacks que não são mensagens (presença/status) quando possível
-    tipo = data.get("type", "").lower()
-    non_message_types = ("presencechatcallback", "messagestatuscallback", "deliverycallback", "messageStatusCallback")
-
-    # se for um tipo claramente não-mensagem e não houver texto extraído, ignorar
-    if tipo in non_message_types and not text:
-        print(f"Webhook ignorado (tipo {data.get('type')} sem texto)")
-        return {"status": "ignored"}, 200
-
-    if not phone or not text:
-        print("Webhook ignorado: phone/text não encontrados")
-        return {"status": "ignored"}, 200
-
-    # evita salvar valores como instanceId que foram capturados como 'text'
-    if isinstance(text, str) and text == data.get("instanceId"):
-        print("Webhook ignorado: texto igual a instanceId")
-        return {"status": "ignored"}, 200
-
-    # NORMALIZAR número usando a mesma função em todo o sistema
+    # ========== ETAPA 4: NORMALIZAR E SALVAR ==========
     numero = normalize_phone(phone)
+    print(f"📞 Número normalizado: {numero}")
 
-    # salvar no banco (WhatsAppMensagem) com número NORMALIZADO
+    # Descobrir a qual usuário CRM essa mensagem pertence
+    usuario_crm_id = None
+    cliente_temp = find_cliente_by_phone(numero)
+    if cliente_temp and cliente_temp.usuario_crm_id:
+        usuario_crm_id = cliente_temp.usuario_crm_id
+        print(f"✅ Mensagem associada ao usuário CRM ID: {usuario_crm_id}")
+    else:
+        print(f"⚠️ Cliente não encontrado ou sem usuário associado - mensagem será visível para todos")
+
+    # Salvar no banco
     msg = WhatsAppMensagem(
         numero=numero,
         remetente="Cliente",
         mensagem=text,
-        recebido_em=datetime.utcnow()
+        recebido_em=datetime.utcnow(),
+        usuario_crm_id=usuario_crm_id
     )
     db.session.add(msg)
     db.session.commit()
+    print(f"💾 Mensagem salva no banco (ID: {msg.id})")
 
-    # Verificar se é resposta de NPS
-    print(f"\n🔍 === WEBHOOK: VERIFICANDO NPS ===")
-    print(f"📞 Número recebido: {phone}")
-    print(f"📞 Número normalizado: {numero}")
-    
-    # Usar função inteligente para buscar cliente
+    # ========== ETAPA 5: VERIFICAR NPS ==========
     cliente = find_cliente_by_phone(numero)
     
     if cliente:
         print(f"✅ Cliente encontrado: {cliente.nome} (Tel: {cliente.telefone})")
-        print(f"⏳ Aguardando NPS? {cliente.aguardando_nps}")
         
-        if cliente.aguardando_nps:
-            print(f"📊 Processando resposta de NPS...")
-            resultado = processar_resposta_nps(cliente, text)
-            if resultado:
-                print(f"✅ Resposta NPS processada com sucesso!")
-            else:
-                print(f"⚠️ Texto não era uma resposta válida de NPS")
-        else:
-            print(f"ℹ️ Cliente não está aguardando NPS")
+        if hasattr(cliente, 'aguardando_nps') and cliente.aguardando_nps:
+            print(f"📊 Cliente aguardando NPS - processando resposta...")
+            try:
+                resultado = processar_resposta_nps(cliente, text)
+                if resultado:
+                    print(f"✅ Resposta NPS processada com sucesso!")
+                else:
+                    print(f"⚠️ Texto não era uma resposta válida de NPS")
+            except Exception as e:
+                print(f"❌ Erro ao processar NPS: {e}")
     else:
-        print(f"❌ Cliente não encontrado para o número {numero}")
-        # Listar alguns clientes para debug
-        alguns_clientes = Cliente.query.limit(5).all()
-        print(f"📋 Primeiros clientes no banco:")
-        for c in alguns_clientes:
-            print(f"  - {c.nome}: {c.telefone}")
+        print(f"ℹ️ Cliente não encontrado para o número {numero}")
 
-    # emitir para a sala correta
-    # Buscar nome do cliente para enviar no payload
+    # ========== ETAPA 6: EMITIR VIA WEBSOCKET ==========
     cliente_found = find_cliente_by_phone(numero)
     nome_cliente = cliente_found.nome if cliente_found else numero
     
@@ -1965,17 +2016,24 @@ def receber_mensagem_webhook():
         "nome": nome_cliente,
         "remetente": "Cliente",
         "mensagem": text,
-        "hora": datetime.now().strftime("%H:%M")
+        "hora": datetime.now().strftime("%H:%M"),
+        "timestamp": msg.recebido_em.isoformat(),
+        "status": "recebida"
     }
 
-    # Emitir apenas para a sala do número normalizado (evita duplicação)
     try:
         socketio.emit("nova_mensagem", payload, room=numero)
-        print(f"✅ Mensagem emitida para sala: {numero}")
+        socketio.emit("nova_mensagem", payload, broadcast=True)
+        print(f"✅ Mensagem emitida via WebSocket para sala: {numero}")
+        print(f"✅ Mensagem emitida via broadcast para todos")
     except Exception as e:
         print(f"❌ Erro ao emitir mensagem: {e}")
 
-    return {"status": "ok"}, 200
+    print("="*60)
+    print("✅ WEBHOOK PROCESSADO COM SUCESSO")
+    print("="*60 + "\n")
+
+    return {"status": "ok", "message_id": msg.id}, 200
 
 @socketio.on('join')
 def join_room_event(data):
@@ -2046,6 +2104,216 @@ def enviar_mensagem_canais():
         return jsonify({"status": "Sucesso"})
 
     return jsonify({"status": "Erro"})
+
+# ==================== NOVOS ENDPOINTS CANAIS AVANÇADOS ====================
+
+@socketio.on('indicador_digitando')
+def handle_indicador_digitando(data):
+    """Emite indicador de digitando para outros usuários"""
+    numero = data.get('numero')
+    digitando = data.get('digitando', False)
+    
+    if numero:
+        numero_norm = normalize_phone(numero)
+        socketio.emit('usuario_digitando', {
+            'numero': numero_norm,
+            'digitando': digitando
+        }, room=numero_norm, skip_sid=request.sid)
+
+@app.route("/canais/mensagem/<int:msg_id>/status", methods=["PUT"])
+@login_required
+def atualizar_status_mensagem(msg_id):
+    """Atualiza status de mensagem (enviada/entregue/lida)"""
+    data = request.get_json()
+    status = data.get('status')  # enviada, entregue, lida
+    
+    msg = WhatsAppMensagem.query.get(msg_id)
+    if not msg:
+        return jsonify({"erro": "Mensagem não encontrada"}), 404
+    
+    # Adicionar campo status se não existir (será necessário migração do banco)
+    if hasattr(msg, 'status'):
+        msg.status = status
+        db.session.commit()
+    
+    return jsonify({"status": "ok", "message_id": msg_id})
+
+@app.route("/canais/conversa/<string:numero>/marcar_lida", methods=["POST"])
+@login_required
+def marcar_conversa_lida(numero):
+    """Marca todas as mensagens de uma conversa como lida"""
+    numero_norm = normalize_phone(numero)
+    
+    # Marcar todas as mensagens não lidas como lidas
+    WhatsAppMensagem.query.filter_by(
+        numero=numero_norm,
+        remetente="Cliente"
+    ).update({"lida": True})
+    
+    db.session.commit()
+    
+    # Emitir evento para atualizar badge
+    socketio.emit('conversa_lida', {'numero': numero_norm}, broadcast=True)
+    
+    return jsonify({"status": "ok"})
+
+@app.route("/canais/conversa/<string:numero>/fixar", methods=["POST"])
+@login_required
+def fixar_conversa(numero):
+    """Fixa uma conversa no topo"""
+    data = request.get_json()
+    fixada = data.get('fixada', True)
+    numero_norm = normalize_phone(numero)
+    
+    # Buscar ou criar configuração da conversa
+    # (Necessitará criar model ConversaConfig se não existir)
+    
+    return jsonify({"status": "ok", "fixada": fixada})
+
+@app.route("/canais/conversa/<string:numero>/arquivar", methods=["POST"])
+@login_required
+def arquivar_conversa(numero):
+    """Arquiva uma conversa"""
+    data = request.get_json()
+    arquivada = data.get('arquivada', True)
+    numero_norm = normalize_phone(numero)
+    
+    # Buscar ou criar configuração da conversa
+    # (Necessitará criar model ConversaConfig se não existir)
+    
+    return jsonify({" status": "ok", "arquivada": arquivada})
+
+@app.route("/canais/mensagem/<int:msg_id>/excluir", methods=["DELETE"])
+@login_required
+def excluir_mensagem(msg_id):
+    """Exclui uma mensagem"""
+    msg = WhatsAppMensagem.query.get(msg_id)
+    if not msg:
+        return jsonify({"erro": "Mensagem não encontrada"}), 404
+    
+    numero = msg.numero
+    
+    # Deletar do banco
+    db.session.delete(msg)
+    db.session.commit()
+    
+    # Notificar via WebSocket
+    socketio.emit('mensagem_excluida', {
+        'id': msg_id,
+        'numero': numero
+    }, room=numero)
+    
+    return jsonify({"status": "ok"})
+
+@app.route("/canais/upload", methods=["POST"])
+@login_required
+def upload_arquivo_canais():
+    """Upload de arquivo (imagem, documento, áudio)"""
+    if 'file' not in request.files:
+        return jsonify({"erro": "Nenhum arquivo enviado"}), 400
+    
+    file = request.files['file']
+    numero = request.form.get('numero')
+    
+    if file.filename == '':
+        return jsonify({"erro": "Nome de arquivo inválido"}), 400
+    
+    if not numero:
+        return jsonify({"erro": "Número não fornecido"}), 400
+    
+    # Criar diretório se não existir
+    upload_folder = os.path.join(app.root_path, 'static', 'uploads', 'canais')
+    os.makedirs(upload_folder, exist_ok=True)
+    
+    # Gerar nome único para o arquivo
+    import uuid
+    file_ext = os.path.splitext(file.filename)[1]
+    unique_filename = f"{uuid.uuid4()}{file_ext}"
+    file_path = os.path.join(upload_folder, unique_filename)
+    
+    # Salvar arquivo
+    file.save(file_path)
+    
+    # URL relativa para acessar o arquivo
+    file_url = f"/static/uploads/canais/{unique_filename}"
+    
+    # Determinar tipo de arquivo
+    file_type = 'document'
+    if file_ext.lower() in ['.jpg', '.jpeg', '.png', '.gif', '.webp']:
+        file_type = 'image'
+    elif file_ext.lower() in ['.mp3', '.wav', '.ogg', '.m4a']:
+        file_type = 'audio'
+    elif file_ext.lower() in ['.mp4', '.webm', '.mov']:
+        file_type = 'video'
+    
+    numero_norm = normalize_phone(numero)
+    
+    # Salvar referência no banco
+    msg = WhatsAppMensagem(
+        numero=numero_norm,
+        remetente="Você",
+        mensagem=f"[{file_type.upper()}] {file.filename}",
+        recebido_em=datetime.utcnow(),
+        usuario_crm_id=current_user.get_usuario_principal_id()
+    )
+    
+    # Se tiver campo para tipo de mídia, adicione aqui
+    if hasattr(msg, 'tipo_midia'):
+        msg.tipo_midia = file_type
+        msg.arquivo_url = file_url
+    
+    db.session.add(msg)
+    db.session.commit()
+    
+    # Emitir via WebSocket
+    cliente_found = find_cliente_by_phone(numero_norm)
+    nome_cliente = cliente_found.nome if cliente_found else numero_norm
+    
+    payload = {
+        "id": msg.id,
+        "numero": numero_norm,
+        "nome": nome_cliente,
+        "remetente": "Você",
+        "mensagem": msg.mensagem,
+        "tipo_midia": file_type,
+        "arquivo_url": file_url,
+        "hora": datetime.now().strftime("%H:%M")
+    }
+    
+    socketio.emit("nova_mensagem", payload, room=numero_norm)
+    
+    return jsonify({
+        "status": "ok",
+        "file_url": file_url,
+        "file_type": file_type,
+        "message_id": msg.id
+    })
+
+@app.route("/canais/conversas/nao_lidas", methods=["GET"])
+@login_required
+def contar_nao_lidas():
+    """Retorna contagem de mensagens não lidas por conversa"""
+    usuario_principal_id = current_user.get_usuario_principal_id()
+    
+    # Contar mensagens não lidas por número
+    from sqlalchemy import func
+    resultado = db.session.query(
+        WhatsAppMensagem.numero,
+        func.count(WhatsAppMensagem.id).label('count')
+    ).filter(
+        WhatsAppMensagem.remetente == "Cliente",
+        WhatsAppMensagem.usuario_crm_id == usuario_principal_id
+    )
+    
+    # Se tiver campo 'lida', adicionar filtro
+    if hasattr(WhatsAppMensagem, 'lida'):
+        resultado = resultado.filter(WhatsAppMensagem.lida == False)
+    
+    resultado = resultado.group_by(WhatsAppMensagem.numero).all()
+    
+    nao_lidas = {numero: count for numero, count in resultado}
+    
+    return jsonify(nao_lidas)
 
 
 # --- CHATBOT
@@ -2148,6 +2416,7 @@ def normalize_phone(phone):
 def find_cliente_by_phone(numero_normalizado):
     """
     Busca cliente por telefone com lógica inteligente que considera variações:
+    - Prioriza clientes com usuario_crm_id definido
     - Tenta match exato
     - Tenta comparar últimos 9 dígitos (número sem DDD)
     - Tenta comparar últimos 11 dígitos (DDD + número)
@@ -2161,45 +2430,51 @@ def find_cliente_by_phone(numero_normalizado):
     # Obter todos os clientes
     clientes = Cliente.query.all()
     
-    for c in clientes:
-        tel_norm = normalize_phone(c.telefone)
-        
-        # Match exato
-        if tel_norm == numero_normalizado:
-            return c
-        
-        # Tenta comparar últimos 9 dígitos (número puro sem DDD)
-        if len(tel_norm) >= 9 and len(numero_normalizado) >= 9:
-            if tel_norm[-9:] == numero_normalizado[-9:]:
+    # Separar clientes com e sem usuario_crm_id
+    clientes_com_usuario = [c for c in clientes if c.usuario_crm_id]
+    clientes_sem_usuario = [c for c in clientes if not c.usuario_crm_id]
+    
+    # Buscar primeiro nos clientes com usuario_crm_id, depois nos sem
+    for lista_clientes in [clientes_com_usuario, clientes_sem_usuario]:
+        for c in lista_clientes:
+            tel_norm = normalize_phone(c.telefone)
+            
+            # Match exato
+            if tel_norm == numero_normalizado:
                 return c
-        
-        # Tenta comparar últimos 11 dígitos (DDD + número)
-        if len(tel_norm) >= 11 and len(numero_normalizado) >= 11:
-            if tel_norm[-11:] == numero_normalizado[-11:]:
-                return c
-        
-        # Remove código de país (55) e compara
-        tel_sem_55 = tel_norm[2:] if tel_norm.startswith('55') else tel_norm
-        num_sem_55 = numero_normalizado[2:] if numero_normalizado.startswith('55') else numero_normalizado
-        
-        if tel_sem_55 and num_sem_55 and tel_sem_55 == num_sem_55:
-            return c
-        
-        # Remove 9 extra no início (se houver)
-        tel_sem_9 = tel_norm[1:] if tel_norm.startswith('9') and len(tel_norm) > 10 else tel_norm
-        num_sem_9 = numero_normalizado[1:] if numero_normalizado.startswith('9') and len(numero_normalizado) > 10 else numero_normalizado
-        
-        if tel_sem_9 and num_sem_9 and tel_sem_9 == num_sem_9:
-            return c
-        
-        # Tenta match com 1 dígito a menos (número está incompleto)
-        # Ex: 554799471874 (12 dígitos) vs 5547999471874 (13 dígitos)
-        if len(tel_norm) == len(numero_normalizado) + 1:
-            # Tenta remover cada dígito do tel_norm e comparar
-            for i in range(len(tel_norm)):
-                tel_sem_um = tel_norm[:i] + tel_norm[i+1:]
-                if tel_sem_um == numero_normalizado:
+            
+            # Tenta comparar últimos 9 dígitos (número puro sem DDD)
+            if len(tel_norm) >= 9 and len(numero_normalizado) >= 9:
+                if tel_norm[-9:] == numero_normalizado[-9:]:
                     return c
+            
+            # Tenta comparar últimos 11 dígitos (DDD + número)
+            if len(tel_norm) >= 11 and len(numero_normalizado) >= 11:
+                if tel_norm[-11:] == numero_normalizado[-11:]:
+                    return c
+            
+            # Remove código de país (55) e compara
+            tel_sem_55 = tel_norm[2:] if tel_norm.startswith('55') else tel_norm
+            num_sem_55 = numero_normalizado[2:] if numero_normalizado.startswith('55') else numero_normalizado
+            
+            if tel_sem_55 and num_sem_55 and tel_sem_55 == num_sem_55:
+                return c
+            
+            # Remove 9 extra no início (se houver)
+            tel_sem_9 = tel_norm[1:] if tel_norm.startswith('9') and len(tel_norm) > 10 else tel_norm
+            num_sem_9 = numero_normalizado[1:] if numero_normalizado.startswith('9') and len(numero_normalizado) > 10 else numero_normalizado
+            
+            if tel_sem_9 and num_sem_9 and tel_sem_9 == num_sem_9:
+                return c
+            
+            # Tenta match com 1 dígito a menos (número está incompleto)
+            # Ex: 554799471874 (12 dígitos) vs 5547999471874 (13 dígitos)
+            if len(tel_norm) == len(numero_normalizado) + 1:
+                # Tenta remover cada dígito do tel_norm e comparar
+                for i in range(len(tel_norm)):
+                    tel_sem_um = tel_norm[:i] + tel_norm[i+1:]
+                    if tel_sem_um == numero_normalizado:
+                        return c
         
         # Tenta match com 1 dígito a mais (número tem dígito extra)
         if len(numero_normalizado) == len(tel_norm) + 1:
