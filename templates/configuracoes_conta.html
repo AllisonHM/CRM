@@ -40,64 +40,15 @@
             </div>
         </div>
 
-        <!-- Card: Preferências -->
+        <!-- Card: Informações da Conta -->
         <div class="col-md-6 mb-4">
-            <div class="card card-accent">
-                <div class="card-header">
-                    <h5 class="mb-0">Preferências de Interface</h5>
-                </div>
-                <div class="card-body">
-                    <form method="POST" action="{{ url_for('configuracoes') }}">
-                        <input type="hidden" name="acao" value="salvar_preferencias">
-                        
-                        <div class="mb-3">
-                            <label for="tema" class="form-label">Tema</label>
-                            <select class="form-select" id="tema" name="tema">
-                                <option value="claro" {% if config.tema == 'claro' %}selected{% endif %}>Claro</option>
-                                <option value="escuro" {% if config.tema == 'escuro' %}selected{% endif %}>Escuro</option>
-                            </select>
-                            <small class="text-muted">Em breve: modo escuro completo</small>
-                        </div>
-                        
-                        <hr>
-                        
-                        <h6 class="mb-3">Notificações</h6>
-                        
-                        <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" id="notificacoes_email" name="notificacoes_email" 
-                                   {% if config.notificacoes_email %}checked{% endif %}>
-                            <label class="form-check-label" for="notificacoes_email">
-                                Notificações por Email
-                            </label>
-                        </div>
-                        
-                        <div class="form-check mb-3">
-                            <input class="form-check-input" type="checkbox" id="notificacoes_sistema" name="notificacoes_sistema"
-                                   {% if config.notificacoes_sistema %}checked{% endif %}>
-                            <label class="form-check-label" for="notificacoes_sistema">
-                                Notificações do Sistema
-                            </label>
-                        </div>
-                        
-                        <button type="submit" class="btn btn-success">
-                            <i class="bi bi-save"></i> Salvar Preferências
-                        </button>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Card: Informações da Conta -->
-    <div class="row">
-        <div class="col-12 mb-4">
             <div class="card card-accent">
                 <div class="card-header">
                     <h5 class="mb-0">Informações da Conta</h5>
                 </div>
                 <div class="card-body">
                     <div class="row">
-                        <div class="col-md-6">
+                        <div class="col-12 mb-3">
                             <p><strong>Nome:</strong> {{ current_user.nome }}</p>
                             <p><strong>Email:</strong> {{ current_user.email }}</p>
                             <p><strong>Tipo de Usuário:</strong> 
@@ -110,7 +61,7 @@
                                 {% endif %}
                             </p>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-12">
                             <p><strong>Cadastro:</strong> {{ current_user.data_cadastro.strftime('%d/%m/%Y %H:%M') if current_user.data_cadastro else 'N/A' }}</p>
                             <p><strong>Status:</strong> 
                                 {% if current_user.ativo %}

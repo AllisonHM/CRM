@@ -435,16 +435,6 @@ def configuracoes():
             db.session.commit()
             flash('Senha alterada com sucesso!', 'success')
             return redirect(url_for('configuracoes'))
-        
-        elif acao == 'salvar_preferencias':
-            # Atualizar preferências
-            config.tema = request.form.get('tema', 'claro')
-            config.notificacoes_email = 'notificacoes_email' in request.form
-            config.notificacoes_sistema = 'notificacoes_sistema' in request.form
-            
-            db.session.commit()
-            flash('Preferências salvas com sucesso!', 'success')
-            return redirect(url_for('configuracoes'))
     
     return render_template('configuracoes_conta.html', config=config)
 
@@ -542,7 +532,7 @@ def add_usuario():
         api_token = request.form.get('api_token')
         
         # Módulos disponíveis
-        modulos = ['clientes', 'mesas', 'ocorrencias', 'produtos', 'whatsapp', 'chatbot', 'planner', 'tarefas', 'nps', 'relatorios']
+        modulos = ['clientes', 'mesas', 'ocorrencias', 'produtos', 'whatsapp', 'chatbot', 'planner', 'tarefas', 'nps']
         permissoes = {modulo: modulo in request.form.getlist('permissoes') for modulo in modulos}
         
         # Verificar se email já existe
@@ -579,8 +569,8 @@ def add_usuario():
         {'id': 'chatbot', 'nome': 'Chatbot', 'icone': '🤖'},
         {'id': 'planner', 'nome': 'Planner', 'icone': '📅'},
         {'id': 'tarefas', 'nome': 'Tarefas', 'icone': '✅'},
-        {'id': 'nps', 'nome': 'NPS', 'icone': '⭐'},
-        {'id': 'relatorios', 'nome': 'Relatórios', 'icone': '📊'}
+        {'id': 'nps', 'nome': 'NPS', 'icone': '⭐'}
+        # {'id': 'relatorios', 'nome': 'Relatórios', 'icone': '📊'}  # DESATIVADO
     ]
     
     return render_template('add_usuario.html', modulos=modulos_disponiveis)
@@ -609,7 +599,7 @@ def editar_usuario(id):
             usuario.set_password(nova_senha)
         
         # Atualizar permissões
-        modulos = ['clientes', 'mesas', 'ocorrencias', 'produtos', 'whatsapp', 'chatbot', 'planner', 'tarefas', 'nps', 'relatorios']
+        modulos = ['clientes', 'mesas', 'ocorrencias', 'produtos', 'whatsapp', 'chatbot', 'planner', 'tarefas', 'nps']
         permissoes = {modulo: modulo in request.form.getlist('permissoes') for modulo in modulos}
         usuario.permissoes = permissoes
         
@@ -627,8 +617,8 @@ def editar_usuario(id):
         {'id': 'chatbot', 'nome': 'Chatbot', 'icone': '🤖'},
         {'id': 'planner', 'nome': 'Planner', 'icone': '📅'},
         {'id': 'tarefas', 'nome': 'Tarefas', 'icone': '✅'},
-        {'id': 'nps', 'nome': 'NPS', 'icone': '⭐'},
-        {'id': 'relatorios', 'nome': 'Relatórios', 'icone': '📊'}
+        {'id': 'nps', 'nome': 'NPS', 'icone': '⭐'}
+        # {'id': 'relatorios', 'nome': 'Relatórios', 'icone': '📊'}  # DESATIVADO
     ]
     
     return render_template('editar_usuario.html', usuario=usuario, modulos=modulos_disponiveis)
@@ -710,7 +700,7 @@ def add_colaborador():
         senha = request.form.get('senha')
         
         # Permissões
-        modulos = ['clientes', 'mesas', 'ocorrencias', 'produtos', 'whatsapp', 'chatbot', 'planner', 'tarefas', 'nps', 'relatorios']
+        modulos = ['clientes', 'mesas', 'ocorrencias', 'produtos', 'whatsapp', 'chatbot', 'planner', 'tarefas', 'nps']
         permissoes = {modulo: modulo in request.form.getlist('permissoes') for modulo in modulos}
         
         # Verificar se email já existe
@@ -757,8 +747,8 @@ def add_colaborador():
         {'id': 'chatbot', 'nome': 'Chatbot', 'icone': '🤖'},
         {'id': 'planner', 'nome': 'Planner', 'icone': '📅'},
         {'id': 'tarefas', 'nome': 'Tarefas', 'icone': '✅'},
-        {'id': 'nps', 'nome': 'NPS', 'icone': '⭐'},
-        {'id': 'relatorios', 'nome': 'Relatórios', 'icone': '📊'}
+        {'id': 'nps', 'nome': 'NPS', 'icone': '⭐'}
+        # {'id': 'relatorios', 'nome': 'Relatórios', 'icone': '📊'}  # DESATIVADO
     ]
     
     # Buscar todos os clientes (admin) para selecionar (apenas para super_admin)
@@ -795,7 +785,7 @@ def editar_colaborador(id):
             colaborador.set_password(nova_senha)
         
         # Atualizar permissões
-        modulos = ['clientes', 'mesas', 'ocorrencias', 'produtos', 'whatsapp', 'chatbot', 'planner', 'tarefas', 'nps', 'relatorios']
+        modulos = ['clientes', 'mesas', 'ocorrencias', 'produtos', 'whatsapp', 'chatbot', 'planner', 'tarefas', 'nps']
         permissoes = {modulo: modulo in request.form.getlist('permissoes') for modulo in modulos}
         colaborador.permissoes = permissoes
         
@@ -813,8 +803,8 @@ def editar_colaborador(id):
         {'id': 'chatbot', 'nome': 'Chatbot', 'icone': '🤖'},
         {'id': 'planner', 'nome': 'Planner', 'icone': '📅'},
         {'id': 'tarefas', 'nome': 'Tarefas', 'icone': '✅'},
-        {'id': 'nps', 'nome': 'NPS', 'icone': '⭐'},
-        {'id': 'relatorios', 'nome': 'Relatórios', 'icone': '📊'}
+        {'id': 'nps', 'nome': 'NPS', 'icone': '⭐'}
+        # {'id': 'relatorios', 'nome': 'Relatórios', 'icone': '📊'}  # DESATIVADO
     ]
     
     return render_template('editar_colaborador.html', colaborador=colaborador, modulos=modulos_disponiveis)
@@ -3121,11 +3111,11 @@ def excluir_tarefa(id):
     return redirect(url_for("tarefas"))
 
 
-# --- RELATÓRIOS
-@app.route("/relatorios")
-@login_required
-@permission_required('relatorios')
-def relatorios():
+# --- RELATÓRIOS (DESATIVADO)
+# @app.route("/relatorios")
+# @login_required
+# @permission_required('relatorios')
+def relatorios_desativado():
     user_id = get_usuario_filter()
 
     if user_id:

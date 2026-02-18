@@ -166,9 +166,11 @@
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('nps') }}">NPS</a></li>
                         {% endif %}
 
+                        {# RELATÓRIOS DESATIVADO
                         {% if current_user.tem_permissao('relatorios') %}
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('relatorios') }}">Relatórios</a></li>
                         {% endif %}
+                        #}
                         
                         <!-- Menu Admin -->
                         {% if current_user.tipo_usuario == 'super_admin' %}
