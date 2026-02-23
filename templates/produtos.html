@@ -47,9 +47,12 @@
 <div class="container mt-4">
   <div class="d-flex justify-content-between align-items-center mb-3">
     <h1>Controle de Produtos</h1>
-    <div>
-      <input id="searchInput" class="form-control" placeholder="Buscar produto por nome" style="width: 300px; display:inline-block;">
-      <button id="btnSearch" class="btn btn-secondary ms-2">Buscar</button>
+    <div class="d-flex gap-2">
+      <input id="searchInput" class="form-control" placeholder="Buscar produto por nome" style="width: 300px;">
+      <button id="btnSearch" class="btn btn-secondary">Buscar</button>
+      <a href="{{ url_for('fornecedores') }}" class="btn btn-success">
+        <i class="bi bi-truck"></i> Fornecedores
+      </a>
     </div>
   </div>
 

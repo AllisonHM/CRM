@@ -13,7 +13,7 @@ import os
 import secrets
 from flask_migrate import Migrate
 from database_rls import db, tenant_db, init_db
-from models import Cliente, MesaNegocio, Ocorrencia, WhatsAppMensagem, ChatbotRegra, Produto, Movimentacao, PlannerEvento, UsuarioCRM, ConfiguracaoUsuario, Parametrizacao, Tarefa
+from models import Cliente, MesaNegocio, Ocorrencia, WhatsAppMensagem, ChatbotRegra, Produto, Movimentacao, PlannerEvento, UsuarioCRM, ConfiguracaoUsuario, Parametrizacao, Tarefa, Fornecedor
 from sqlalchemy import or_, and_
 
 # Configurar logging
@@ -2896,6 +2896,236 @@ def historico_movimentacoes(produto_id):
     
     movimentacoes = Movimentacao.query.filter_by(produto_id=produto.id).order_by(Movimentacao.data.desc()).all()
     return render_template("movimentacoes.html", produto=produto, movimentacoes=movimentacoes)
+
+# ==================== ROTAS DE FORNECEDORES ====================
+
+@app.route("/fornecedores")
+@login_required
+@permission_required('produtos')
+def fornecedores():
+    """Lista todos os fornecedores"""
+    user_id = get_usuario_filter()
+    
+    if user_id:
+        fornecedores = Fornecedor.query.filter_by(usuario_crm_id=user_id).order_by(Fornecedor.nome).all()
+    else:
+        fornecedores = Fornecedor.query.order_by(Fornecedor.nome).all()
+    
+    return render_template("fornecedores.html", fornecedores=fornecedores)
+
+@app.route("/api/fornecedores", methods=["GET"])
+@login_required
+@permission_required('produtos')
+def api_listar_fornecedores():
+    """Retorna lista de fornecedores em JSON"""
+    user_id = get_usuario_filter()
+    
+    if user_id:
+        fornecedores = Fornecedor.query.filter_by(usuario_crm_id=user_id).order_by(Fornecedor.nome).all()
+    else:
+        fornecedores = Fornecedor.query.order_by(Fornecedor.nome).all()
+    
+    return jsonify([{
+        'id': f.id,
+        'nome': f.nome,
+        'nome_fantasia': f.nome_fantasia,
+        'cnpj_cpf': f.cnpj_cpf,
+        'email': f.email,
+        'telefone': f.telefone,
+        'celular': f.celular,
+        'cidade': f.cidade,
+        'estado': f.estado,
+        'status': f.status,
+        'avaliacao': f.avaliacao,
+        'produtos_servicos': f.produtos_servicos
+    } for f in fornecedores])
+
+@app.route("/api/fornecedores/add", methods=["POST"])
+@login_required
+@permission_required('produtos')
+def api_add_fornecedor():
+    """Adiciona um novo fornecedor"""
+    try:
+        data = request.get_json()
+        user_id = get_usuario_filter()
+        
+        novo_fornecedor = Fornecedor(
+            usuario_crm_id=user_id,
+            nome=data.get('nome'),
+            nome_fantasia=data.get('nome_fantasia'),
+            cnpj_cpf=data.get('cnpj_cpf'),
+            inscricao_estadual=data.get('inscricao_estadual'),
+            email=data.get('email'),
+            telefone=data.get('telefone'),
+            celular=data.get('celular'),
+            site=data.get('site'),
+            cep=data.get('cep'),
+            logradouro=data.get('logradouro'),
+            numero=data.get('numero'),
+            complemento=data.get('complemento'),
+            bairro=data.get('bairro'),
+            cidade=data.get('cidade'),
+            estado=data.get('estado'),
+            produtos_servicos=data.get('produtos_servicos'),
+            prazo_entrega=data.get('prazo_entrega'),
+            prazo_pagamento=data.get('prazo_pagamento'),
+            banco=data.get('banco'),
+            agencia=data.get('agencia'),
+            conta=data.get('conta'),
+            pix=data.get('pix'),
+            contato_nome=data.get('contato_nome'),
+            contato_cargo=data.get('contato_cargo'),
+            contato_telefone=data.get('contato_telefone'),
+            contato_email=data.get('contato_email'),
+            avaliacao=data.get('avaliacao'),
+            status=data.get('status', 'Ativo'),
+            observacoes=data.get('observacoes')
+        )
+        
+        db.session.add(novo_fornecedor)
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'sucesso',
+            'mensagem': 'Fornecedor cadastrado com sucesso',
+            'id': novo_fornecedor.id
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'erro', 'mensagem': str(e)}), 400
+
+@app.route("/api/fornecedores/<int:fornecedor_id>", methods=["GET"])
+@login_required
+@permission_required('produtos')
+def api_get_fornecedor(fornecedor_id):
+    """Retorna dados de um fornecedor específico"""
+    user_id = get_usuario_filter()
+    
+    if user_id:
+        fornecedor = Fornecedor.query.filter_by(id=fornecedor_id, usuario_crm_id=user_id).first_or_404()
+    else:
+        fornecedor = Fornecedor.query.get_or_404(fornecedor_id)
+    
+    return jsonify({
+        'id': fornecedor.id,
+        'nome': fornecedor.nome,
+        'nome_fantasia': fornecedor.nome_fantasia,
+        'cnpj_cpf': fornecedor.cnpj_cpf,
+        'inscricao_estadual': fornecedor.inscricao_estadual,
+        'email': fornecedor.email,
+        'telefone': fornecedor.telefone,
+        'celular': fornecedor.celular,
+        'site': fornecedor.site,
+        'cep': fornecedor.cep,
+        'logradouro': fornecedor.logradouro,
+        'numero': fornecedor.numero,
+        'complemento': fornecedor.complemento,
+        'bairro': fornecedor.bairro,
+        'cidade': fornecedor.cidade,
+        'estado': fornecedor.estado,
+        'produtos_servicos': fornecedor.produtos_servicos,
+        'prazo_entrega': fornecedor.prazo_entrega,
+        'prazo_pagamento': fornecedor.prazo_pagamento,
+        'banco': fornecedor.banco,
+        'agencia': fornecedor.agencia,
+        'conta': fornecedor.conta,
+        'pix': fornecedor.pix,
+        'contato_nome': fornecedor.contato_nome,
+        'contato_cargo': fornecedor.contato_cargo,
+        'contato_telefone': fornecedor.contato_telefone,
+        'contato_email': fornecedor.contato_email,
+        'avaliacao': fornecedor.avaliacao,
+        'status': fornecedor.status,
+        'observacoes': fornecedor.observacoes,
+        'data_cadastro': fornecedor.data_cadastro.strftime('%d/%m/%Y %H:%M') if fornecedor.data_cadastro else None
+    })
+
+@app.route("/api/fornecedores/<int:fornecedor_id>", methods=["PUT"])
+@login_required
+@permission_required('produtos')
+def api_update_fornecedor(fornecedor_id):
+    """Atualiza dados de um fornecedor"""
+    try:
+        user_id = get_usuario_filter()
+        
+        if user_id:
+            fornecedor = Fornecedor.query.filter_by(id=fornecedor_id, usuario_crm_id=user_id).first_or_404()
+        else:
+            fornecedor = Fornecedor.query.get_or_404(fornecedor_id)
+        
+        data = request.get_json()
+        
+        # Atualiza os campos
+        fornecedor.nome = data.get('nome', fornecedor.nome)
+        fornecedor.nome_fantasia = data.get('nome_fantasia', fornecedor.nome_fantasia)
+        fornecedor.cnpj_cpf = data.get('cnpj_cpf', fornecedor.cnpj_cpf)
+        fornecedor.inscricao_estadual = data.get('inscricao_estadual', fornecedor.inscricao_estadual)
+        fornecedor.email = data.get('email', fornecedor.email)
+        fornecedor.telefone = data.get('telefone', fornecedor.telefone)
+        fornecedor.celular = data.get('celular', fornecedor.celular)
+        fornecedor.site = data.get('site', fornecedor.site)
+        fornecedor.cep = data.get('cep', fornecedor.cep)
+        fornecedor.logradouro = data.get('logradouro', fornecedor.logradouro)
+        fornecedor.numero = data.get('numero', fornecedor.numero)
+        fornecedor.complemento = data.get('complemento', fornecedor.complemento)
+        fornecedor.bairro = data.get('bairro', fornecedor.bairro)
+        fornecedor.cidade = data.get('cidade', fornecedor.cidade)
+        fornecedor.estado = data.get('estado', fornecedor.estado)
+        fornecedor.produtos_servicos = data.get('produtos_servicos', fornecedor.produtos_servicos)
+        fornecedor.prazo_entrega = data.get('prazo_entrega', fornecedor.prazo_entrega)
+        fornecedor.prazo_pagamento = data.get('prazo_pagamento', fornecedor.prazo_pagamento)
+        fornecedor.banco = data.get('banco', fornecedor.banco)
+        fornecedor.agencia = data.get('agencia', fornecedor.agencia)
+        fornecedor.conta = data.get('conta', fornecedor.conta)
+        fornecedor.pix = data.get('pix', fornecedor.pix)
+        fornecedor.contato_nome = data.get('contato_nome', fornecedor.contato_nome)
+        fornecedor.contato_cargo = data.get('contato_cargo', fornecedor.contato_cargo)
+        fornecedor.contato_telefone = data.get('contato_telefone', fornecedor.contato_telefone)
+        fornecedor.contato_email = data.get('contato_email', fornecedor.contato_email)
+        fornecedor.avaliacao = data.get('avaliacao', fornecedor.avaliacao)
+        fornecedor.status = data.get('status', fornecedor.status)
+        fornecedor.observacoes = data.get('observacoes', fornecedor.observacoes)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'sucesso',
+            'mensagem': 'Fornecedor atualizado com sucesso'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'erro', 'mensagem': str(e)}), 400
+
+@app.route("/api/fornecedores/<int:fornecedor_id>", methods=["DELETE"])
+@login_required
+@permission_required('produtos')
+def api_deletar_fornecedor(fornecedor_id):
+    """Exclui um fornecedor"""
+    try:
+        user_id = get_usuario_filter()
+        
+        if user_id:
+            fornecedor = Fornecedor.query.filter_by(id=fornecedor_id, usuario_crm_id=user_id).first_or_404()
+        else:
+            fornecedor = Fornecedor.query.get_or_404(fornecedor_id)
+        
+        nome_fornecedor = fornecedor.nome
+        
+        db.session.delete(fornecedor)
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'sucesso',
+            'mensagem': f'Fornecedor "{nome_fornecedor}" excluído com sucesso'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'erro', 'mensagem': str(e)}), 400
+
+# ==================== FIM ROTAS FORNECEDORES ====================
 
 @app.route("/planner")
 @login_required

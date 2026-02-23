@@ -256,3 +256,61 @@ class Parametrizacao(db.Model):
     
     # Relacionamento
     usuario = db.relationship('UsuarioCRM', backref=db.backref('parametrizacoes', cascade='all, delete-orphan'))
+
+
+class Fornecedor(db.Model):
+    """Modelo para gerenciamento de fornecedores"""
+    __tablename__ = 'fornecedor'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_crm_id = db.Column(db.Integer, db.ForeignKey('usuario_crm.id'), nullable=True)
+    
+    # Dados básicos
+    nome = db.Column(db.String(200), nullable=False)
+    nome_fantasia = db.Column(db.String(200), nullable=True)
+    cnpj_cpf = db.Column(db.String(20), nullable=True)
+    inscricao_estadual = db.Column(db.String(50), nullable=True)
+    
+    # Contato
+    email = db.Column(db.String(200), nullable=True)
+    telefone = db.Column(db.String(50), nullable=True)
+    celular = db.Column(db.String(50), nullable=True)
+    site = db.Column(db.String(200), nullable=True)
+    
+    # Endereço
+    cep = db.Column(db.String(10), nullable=True)
+    logradouro = db.Column(db.String(200), nullable=True)
+    numero = db.Column(db.String(20), nullable=True)
+    complemento = db.Column(db.String(100), nullable=True)
+    bairro = db.Column(db.String(100), nullable=True)
+    cidade = db.Column(db.String(100), nullable=True)
+    estado = db.Column(db.String(2), nullable=True)
+    
+    # Informações comerciais
+    produtos_servicos = db.Column(db.Text, nullable=True)  # Produtos/serviços fornecidos
+    prazo_entrega = db.Column(db.String(100), nullable=True)  # Prazo médio de entrega
+    prazo_pagamento = db.Column(db.String(100), nullable=True)  # Condições de pagamento
+    
+    # Dados bancários
+    banco = db.Column(db.String(100), nullable=True)
+    agencia = db.Column(db.String(20), nullable=True)
+    conta = db.Column(db.String(30), nullable=True)
+    pix = db.Column(db.String(100), nullable=True)
+    
+    # Contato principal
+    contato_nome = db.Column(db.String(100), nullable=True)
+    contato_cargo = db.Column(db.String(100), nullable=True)
+    contato_telefone = db.Column(db.String(50), nullable=True)
+    contato_email = db.Column(db.String(200), nullable=True)
+    
+    # Avaliação e status
+    avaliacao = db.Column(db.Integer, nullable=True)  # 1 a 5 estrelas
+    status = db.Column(db.String(20), default='Ativo')  # Ativo, Inativo, Bloqueado
+    observacoes = db.Column(db.Text, nullable=True)
+    
+    # Metadados
+    data_cadastro = db.Column(db.DateTime, default=datetime.utcnow)
+    ultima_atualizacao = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def __repr__(self):
+        return f"<Fornecedor {self.nome}>"

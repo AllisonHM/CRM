@@ -12,7 +12,8 @@
         padding: 4px;
         text-align: center;
         vertical-align: top;
-        height: 35px;
+        height: 40px;
+        min-height: 40px;
     }
     .planner-table th {
         background-color: #f8f9fa;
@@ -29,8 +30,9 @@
         padding: 2px;
         border-radius: 4px;
         color: #fff;
-        font-size: 10px;
+        font-size: 11px;
         cursor: pointer;
+        margin-bottom: 2px;
     }
     .tipo-agendamento { background: #28a745; }
     .tipo-contato { background: #007bff; }
@@ -84,7 +86,10 @@
                         onclick="abrirModalHorario(this)">
                         
                         {% for ev in eventos %}
-                            {% if ev.data == dia and ev.hora == hora %}
+                            {% if ev.data == dia %}
+                                {% set hora_ev_minutos = ev.hora.hour * 60 + ev.hora.minute %}
+                                {% set hora_cel_minutos = hora.hour * 60 + hora.minute %}
+                                {% if hora_ev_minutos >= hora_cel_minutos and hora_ev_minutos < hora_cel_minutos + 30 %}
                                 <div class="evento tipo-{{ ev.tipo }}"
                                      onclick="abrirModalDetalhes(
                                         '{{ ev.id }}',
@@ -97,6 +102,7 @@
                                      style="position: relative;">
 
                                     <div>
+                                        <strong>{{ ev.hora.strftime('%H:%M') }}</strong><br>
                                         {{ ev.tipo }}<br>
                                         {% if ev.cliente %}{{ ev.cliente }}{% endif %}
                                     </div>
@@ -112,6 +118,7 @@
                                         </button>
                                     </form>
                                 </div>
+                                {% endif %}
                             {% endif %}
                         {% endfor %}
                     </td>
@@ -143,10 +150,10 @@
                 <input class="form-control mb-2" name="cliente">
 
                 <label>Data</label>
-                <input class="form-control mb-2" name="data" id="modalData" required>
+                <input type="date" class="form-control mb-2" name="data" id="modalData" required>
 
-                <label>Hora</label>
-                <input class="form-control mb-2" name="hora" id="modalHora" required>
+                <label>Hora (você pode digitar qualquer horário)</label>
+                <input type="time" class="form-control mb-2" name="hora" id="modalHora" required>
 
                 <label>Descrição</label>
                 <textarea class="form-control mb-2" name="descricao"></textarea>

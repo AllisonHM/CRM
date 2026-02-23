@@ -1,0 +1,777 @@
+{% extends "base.html" %}
+{% block title %}Gerenciamento de Fornecedores{% endblock %}
+
+{% block content %}
+
+<style>
+  .fornecedor-card {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    transition: all 0.3s;
+    background: white;
+  }
+  
+  .fornecedor-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transform: translateY(-2px);
+  }
+  
+  .fornecedor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  
+  .fornecedor-nome {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #2c3e50;
+    margin: 0;
+  }
+  
+  .fornecedor-fantasia {
+    font-size: 0.9rem;
+    color: #7f8c8d;
+    margin: 0;
+  }
+  
+  .fornecedor-status {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+  }
+  
+  .status-ativo {
+    background: #d4edda;
+    color: #155724;
+  }
+  
+  .status-inativo {
+    background: #f8d7da;
+    color: #721c24;
+  }
+  
+  .status-bloqueado {
+    background: #fff3cd;
+    color: #856404;
+  }
+  
+  .fornecedor-info {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+  }
+  
+  .info-item {
+    font-size: 0.9rem;
+  }
+  
+  .info-label {
+    font-weight: 600;
+    color: #495057;
+  }
+  
+  .avaliacao {
+    color: #ffc107;
+  }
+  
+  .search-bar {
+    max-width: 400px;
+  }
+  
+  .modal-section {
+    margin-bottom: 20px;
+  }
+  
+  .modal-section-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 15px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #3498db;
+  }
+  
+  .form-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+  }
+  
+  .btn-actions {
+    display: flex;
+    gap: 8px;
+  }
+</style>
+
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h1><i class="bi bi-truck"></i> Gerenciamento de Fornecedores</h1>
+      <p class="text-muted mb-0">Gerencie seus fornecedores e parceiros comerciais</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('produtos') }}" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Voltar para Produtos
+      </a>
+      <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalFornecedor" onclick="abrirModalNovo()">
+        <i class="bi bi-plus-circle"></i> Novo Fornecedor
+      </button>
+    </div>
+  </div>
+
+  <!-- Filtros e busca -->
+  <div class="card mb-4">
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <input type="text" id="searchInput" class="form-control" placeholder="Buscar por nome, CNPJ, cidade...">
+        </div>
+        <div class="col-md-3">
+          <select id="filterStatus" class="form-select">
+            <option value="">Todos os status</option>
+            <option value="Ativo">Ativo</option>
+            <option value="Inativo">Inativo</option>
+            <option value="Bloqueado">Bloqueado</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <select id="filterAvaliacao" class="form-select">
+            <option value="">Todas avaliações</option>
+            <option value="5">⭐⭐⭐⭐⭐ 5 estrelas</option>
+            <option value="4">⭐⭐⭐⭐ 4 estrelas</option>
+            <option value="3">⭐⭐⭐ 3 estrelas</option>
+            <option value="2">⭐⭐ 2 estrelas</option>
+            <option value="1">⭐ 1 estrela</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Estatísticas -->
+  <div class="row mb-4">
+    <div class="col-md-3">
+      <div class="card text-center">
+        <div class="card-body">
+          <h3 id="totalFornecedores" class="mb-0">0</h3>
+          <p class="text-muted mb-0">Total</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card text-center">
+        <div class="card-body">
+          <h3 id="totalAtivos" class="mb-0 text-success">0</h3>
+          <p class="text-muted mb-0">Ativos</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card text-center">
+        <div class="card-body">
+          <h3 id="totalInativos" class="mb-0 text-danger">0</h3>
+          <p class="text-muted mb-0">Inativos</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card text-center">
+        <div class="card-body">
+          <h3 id="mediaAvaliacao" class="mb-0 text-warning">0</h3>
+          <p class="text-muted mb-0">Média Avaliação</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lista de fornecedores -->
+  <div id="alertsContainer"></div>
+  <div id="fornecedoresList"></div>
+  <div id="emptyState" class="text-center py-5" style="display: none;">
+    <i class="bi bi-inbox" style="font-size: 4rem; color: #ccc;"></i>
+    <p class="text-muted mt-3">Nenhum fornecedor cadastrado ainda.</p>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalFornecedor" onclick="abrirModalNovo()">
+      Cadastrar primeiro fornecedor
+    </button>
+  </div>
+</div>
+
+<!-- Modal Fornecedor -->
+<div class="modal fade" id="modalFornecedor" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalTitle">Novo Fornecedor</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formFornecedor">
+          <input type="hidden" id="fornecedorId">
+          
+          <!-- Dados Básicos -->
+          <div class="modal-section">
+            <div class="modal-section-title">📋 Dados Básicos</div>
+            <div class="form-row">
+              <div>
+                <label class="form-label">Nome / Razão Social *</label>
+                <input type="text" id="nome" class="form-control" required>
+              </div>
+              <div>
+                <label class="form-label">Nome Fantasia</label>
+                <input type="text" id="nomeFantasia" class="form-control">
+              </div>
+              <div>
+                <label class="form-label">CNPJ / CPF</label>
+                <input type="text" id="cnpjCpf" class="form-control">
+              </div>
+              <div>
+                <label class="form-label">Inscrição Estadual</label>
+                <input type="text" id="inscricaoEstadual" class="form-control">
+              </div>
+            </div>
+          </div>
+
+          <!-- Contato -->
+          <div class="modal-section">
+            <div class="modal-section-title">📞 Contato</div>
+            <div class="form-row">
+              <div>
+                <label class="form-label">Email</label>
+                <input type="email" id="email" class="form-control">
+              </div>
+              <div>
+                <label class="form-label">Telefone</label>
+                <input type="text" id="telefone" class="form-control">
+              </div>
+              <div>
+                <label class="form-label">Celular</label>
+                <input type="text" id="celular" class="form-control">
+              </div>
+              <div>
+                <label class="form-label">Site</label>
+                <input type="url" id="site" class="form-control">
+              </div>
+            </div>
+          </div>
+
+          <!-- Endereço -->
+          <div class="modal-section">
+            <div class="modal-section-title">📍 Endereço</div>
+            <div class="form-row">
+              <div>
+                <label class="form-label">CEP</label>
+                <input type="text" id="cep" class="form-control">
+              </div>
+              <div style="grid-column: span 2;">
+                <label class="form-label">Logradouro</label>
+                <input type="text" id="logradouro" class="form-control">
+              </div>
+              <div>
+                <label class="form-label">Número</label>
+                <input type="text" id="numero" class="form-control">
+              </div>
+            </div>
+            <div class="form-row mt-3">
+              <div>
+                <label class="form-label">Complemento</label>
+                <input type="text" id="complemento" class="form-control">
+              </div>
+              <div>
+                <label class="form-label">Bairro</label>
+                <input type="text" id="bairro" class="form-control">
+              </div>
+              <div>
+                <label class="form-label">Cidade</label>
+                <input type="text" id="cidade" class="form-control">
+              </div>
+              <div>
+                <label class="form-label">Estado</label>
+                <select id="estado" class="form-select">
+                  <option value="">Selecione</option>
+                  <option value="AC">AC</option>
+                  <option value="AL">AL</option>
+                  <option value="AP">AP</option>
+                  <option value="AM">AM</option>
+                  <option value="BA">BA</option>
+                  <option value="CE">CE</option>
+                  <option value="DF">DF</option>
+                  <option value="ES">ES</option>
+                  <option value="GO">GO</option>
+                  <option value="MA">MA</option>
+                  <option value="MT">MT</option>
+                  <option value="MS">MS</option>
+                  <option value="MG">MG</option>
+                  <option value="PA">PA</option>
+                  <option value="PB">PB</option>
+                  <option value="PR">PR</option>
+                  <option value="PE">PE</option>
+                  <option value="PI">PI</option>
+                  <option value="RJ">RJ</option>
+                  <option value="RN">RN</option>
+                  <option value="RS">RS</option>
+                  <option value="RO">RO</option>
+                  <option value="RR">RR</option>
+                  <option value="SC">SC</option>
+                  <option value="SP">SP</option>
+                  <option value="SE">SE</option>
+                  <option value="TO">TO</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Informações Comerciais -->
+          <div class="modal-section">
+            <div class="modal-section-title">💼 Informações Comerciais</div>
+            <div class="form-row">
+              <div style="grid-column: span 2;">
+                <label class="form-label">Produtos / Serviços Fornecidos</label>
+                <textarea id="produtosServicos" class="form-control" rows="2"></textarea>
+              </div>
+              <div>
+                <label class="form-label">Prazo de Entrega</label>
+                <input type="text" id="prazoEntrega" class="form-control" placeholder="Ex: 5 dias úteis">
+              </div>
+              <div>
+                <label class="form-label">Prazo de Pagamento</label>
+                <input type="text" id="prazoPagamento" class="form-control" placeholder="Ex: 30 dias">
+              </div>
+            </div>
+          </div>
+
+          <!-- Dados Bancários -->
+          <div class="modal-section">
+            <div class="modal-section-title">🏦 Dados Bancários</div>
+            <div class="form-row">
+              <div>
+                <label class="form-label">Banco</label>
+                <input type="text" id="banco" class="form-control">
+              </div>
+              <div>
+                <label class="form-label">Agência</label>
+                <input type="text" id="agencia" class="form-control">
+              </div>
+              <div>
+                <label class="form-label">Conta</label>
+                <input type="text" id="conta" class="form-control">
+              </div>
+              <div>
+                <label class="form-label">Chave PIX</label>
+                <input type="text" id="pix" class="form-control">
+              </div>
+            </div>
+          </div>
+
+          <!-- Contato Principal -->
+          <div class="modal-section">
+            <div class="modal-section-title">👤 Contato Principal</div>
+            <div class="form-row">
+              <div>
+                <label class="form-label">Nome</label>
+                <input type="text" id="contatoNome" class="form-control">
+              </div>
+              <div>
+                <label class="form-label">Cargo</label>
+                <input type="text" id="contatoCargo" class="form-control">
+              </div>
+              <div>
+                <label class="form-label">Telefone</label>
+                <input type="text" id="contatoTelefone" class="form-control">
+              </div>
+              <div>
+                <label class="form-label">Email</label>
+                <input type="email" id="contatoEmail" class="form-control">
+              </div>
+            </div>
+          </div>
+
+          <!-- Avaliação e Status -->
+          <div class="modal-section">
+            <div class="modal-section-title">⭐ Avaliação e Status</div>
+            <div class="form-row">
+              <div>
+                <label class="form-label">Avaliação</label>
+                <select id="avaliacao" class="form-select">
+                  <option value="">Sem avaliação</option>
+                  <option value="5">⭐⭐⭐⭐⭐ Excelente</option>
+                  <option value="4">⭐⭐⭐⭐ Muito Bom</option>
+                  <option value="3">⭐⭐⭐ Bom</option>
+                  <option value="2">⭐⭐ Regular</option>
+                  <option value="1">⭐ Ruim</option>
+                </select>
+              </div>
+              <div>
+                <label class="form-label">Status</label>
+                <select id="status" class="form-select">
+                  <option value="Ativo">Ativo</option>
+                  <option value="Inativo">Inativo</option>
+                  <option value="Bloqueado">Bloqueado</option>
+                </select>
+              </div>
+              <div style="grid-column: span 2;">
+                <label class="form-label">Observações</label>
+                <textarea id="observacoes" class="form-control" rows="2"></textarea>
+              </div>
+            </div>
+          </div>
+
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="salvarFornecedor()">
+          <i class="bi bi-check-circle"></i> Salvar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Visualização -->
+<div class="modal fade" id="modalVisualizacao" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="viewNome"></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="viewContent">
+        <!-- Conteúdo preenchido dinamicamente -->
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let fornecedores = [];
+let fornecedoresOriginais = [];
+
+// Carregar fornecedores ao iniciar
+document.addEventListener('DOMContentLoaded', function() {
+  carregarFornecedores();
+  
+  // Event listeners para filtros
+  document.getElementById('searchInput').addEventListener('input', filtrarFornecedores);
+  document.getElementById('filterStatus').addEventListener('change', filtrarFornecedores);
+  document.getElementById('filterAvaliacao').addEventListener('change', filtrarFornecedores);
+});
+
+async function carregarFornecedores() {
+  try {
+    const response = await fetch('/api/fornecedores');
+    fornecedoresOriginais = await response.json();
+    fornecedores = [...fornecedoresOriginais];
+    renderizarFornecedores();
+    atualizarEstatisticas();
+  } catch (error) {
+    mostrarAlerta('Erro ao carregar fornecedores', 'danger');
+  }
+}
+
+function renderizarFornecedores() {
+  const container = document.getElementById('fornecedoresList');
+  const emptyState = document.getElementById('emptyState');
+  
+  if (fornecedores.length === 0) {
+    container.innerHTML = '';
+    emptyState.style.display = 'block';
+    return;
+  }
+  
+  emptyState.style.display = 'none';
+  
+  container.innerHTML = fornecedores.map(f => `
+    <div class="fornecedor-card">
+      <div class="fornecedor-header">
+        <div>
+          <h3 class="fornecedor-nome">${f.nome}</h3>
+          ${f.nome_fantasia ? `<p class="fornecedor-fantasia">${f.nome_fantasia}</p>` : ''}
+        </div>
+        <div class="d-flex align-items-center gap-3">
+          <span class="fornecedor-status status-${f.status.toLowerCase()}">${f.status}</span>
+          <div class="btn-actions">
+            <button class="btn btn-sm btn-info" onclick="visualizarFornecedor(${f.id})">
+              <i class="bi bi-eye"></i>
+            </button>
+            <button class="btn btn-sm btn-primary" onclick="editarFornecedor(${f.id})">
+              <i class="bi bi-pencil"></i>
+            </button>
+            <button class="btn btn-sm btn-danger" onclick="excluirFornecedor(${f.id}, '${f.nome}')">
+              <i class="bi bi-trash"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="fornecedor-info">
+        ${f.cnpj_cpf ? `<div class="info-item"><span class="info-label">CNPJ/CPF:</span> ${f.cnpj_cpf}</div>` : ''}
+        ${f.telefone ? `<div class="info-item"><span class="info-label">Telefone:</span> ${f.telefone}</div>` : ''}
+        ${f.email ? `<div class="info-item"><span class="info-label">Email:</span> ${f.email}</div>` : ''}
+        ${f.cidade && f.estado ? `<div class="info-item"><span class="info-label">Localização:</span> ${f.cidade} - ${f.estado}</div>` : ''}
+        ${f.avaliacao ? `<div class="info-item"><span class="info-label">Avaliação:</span> <span class="avaliacao">${'⭐'.repeat(f.avaliacao)}</span></div>` : ''}
+        ${f.produtos_servicos ? `<div class="info-item" style="grid-column: span 2;"><span class="info-label">Produtos/Serviços:</span> ${f.produtos_servicos}</div>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function filtrarFornecedores() {
+  const busca = document.getElementById('searchInput').value.toLowerCase();
+  const statusFiltro = document.getElementById('filterStatus').value;
+  const avaliacaoFiltro = document.getElementById('filterAvaliacao').value;
+  
+  fornecedores = fornecedoresOriginais.filter(f => {
+    const matchBusca = !busca || 
+      f.nome.toLowerCase().includes(busca) ||
+      (f.nome_fantasia && f.nome_fantasia.toLowerCase().includes(busca)) ||
+      (f.cnpj_cpf && f.cnpj_cpf.includes(busca)) ||
+      (f.cidade && f.cidade.toLowerCase().includes(busca));
+    
+    const matchStatus = !statusFiltro || f.status === statusFiltro;
+    const matchAvaliacao = !avaliacaoFiltro || f.avaliacao == avaliacaoFiltro;
+    
+    return matchBusca && matchStatus && matchAvaliacao;
+  });
+  
+  renderizarFornecedores();
+  atualizarEstatisticas();
+}
+
+function atualizarEstatisticas() {
+  document.getElementById('totalFornecedores').textContent = fornecedores.length;
+  document.getElementById('totalAtivos').textContent = fornecedores.filter(f => f.status === 'Ativo').length;
+  document.getElementById('totalInativos').textContent = fornecedores.filter(f => f.status === 'Inativo').length;
+  
+  const avaliacoes = fornecedores.filter(f => f.avaliacao).map(f => f.avaliacao);
+  const media = avaliacoes.length > 0 ? (avaliacoes.reduce((a, b) => a + b, 0) / avaliacoes.length).toFixed(1) : '0';
+  document.getElementById('mediaAvaliacao').textContent = media === '0' ? '-' : media + ' ⭐';
+}
+
+function abrirModalNovo() {
+  document.getElementById('modalTitle').textContent = 'Novo Fornecedor';
+  document.getElementById('formFornecedor').reset();
+  document.getElementById('fornecedorId').value = '';
+  document.getElementById('status').value = 'Ativo';
+}
+
+async function editarFornecedor(id) {
+  try {
+    const response = await fetch(`/api/fornecedores/${id}`);
+    const f = await response.json();
+    
+    document.getElementById('modalTitle').textContent = 'Editar Fornecedor';
+    document.getElementById('fornecedorId').value = f.id;
+    document.getElementById('nome').value = f.nome || '';
+    document.getElementById('nomeFantasia').value = f.nome_fantasia || '';
+    document.getElementById('cnpjCpf').value = f.cnpj_cpf || '';
+    document.getElementById('inscricaoEstadual').value = f.inscricao_estadual || '';
+    document.getElementById('email').value = f.email || '';
+    document.getElementById('telefone').value = f.telefone || '';
+    document.getElementById('celular').value = f.celular || '';
+    document.getElementById('site').value = f.site || '';
+    document.getElementById('cep').value = f.cep || '';
+    document.getElementById('logradouro').value = f.logradouro || '';
+    document.getElementById('numero').value = f.numero || '';
+    document.getElementById('complemento').value = f.complemento || '';
+    document.getElementById('bairro').value = f.bairro || '';
+    document.getElementById('cidade').value = f.cidade || '';
+    document.getElementById('estado').value = f.estado || '';
+    document.getElementById('produtosServicos').value = f.produtos_servicos || '';
+    document.getElementById('prazoEntrega').value = f.prazo_entrega || '';
+    document.getElementById('prazoPagamento').value = f.prazo_pagamento || '';
+    document.getElementById('banco').value = f.banco || '';
+    document.getElementById('agencia').value = f.agencia || '';
+    document.getElementById('conta').value = f.conta || '';
+    document.getElementById('pix').value = f.pix || '';
+    document.getElementById('contatoNome').value = f.contato_nome || '';
+    document.getElementById('contatoCargo').value = f.contato_cargo || '';
+    document.getElementById('contatoTelefone').value = f.contato_telefone || '';
+    document.getElementById('contatoEmail').value = f.contato_email || '';
+    document.getElementById('avaliacao').value = f.avaliacao || '';
+    document.getElementById('status').value = f.status || 'Ativo';
+    document.getElementById('observacoes').value = f.observacoes || '';
+    
+    const modal = new bootstrap.Modal(document.getElementById('modalFornecedor'));
+    modal.show();
+  } catch (error) {
+    mostrarAlerta('Erro ao carregar fornecedor', 'danger');
+  }
+}
+
+async function salvarFornecedor() {
+  const id = document.getElementById('fornecedorId').value;
+  const nome = document.getElementById('nome').value.trim();
+  
+  if (!nome) {
+    mostrarAlerta('Nome é obrigatório', 'warning');
+    return;
+  }
+  
+  const dados = {
+    nome: nome,
+    nome_fantasia: document.getElementById('nomeFantasia').value,
+    cnpj_cpf: document.getElementById('cnpjCpf').value,
+    inscricao_estadual: document.getElementById('inscricaoEstadual').value,
+    email: document.getElementById('email').value,
+    telefone: document.getElementById('telefone').value,
+    celular: document.getElementById('celular').value,
+    site: document.getElementById('site').value,
+    cep: document.getElementById('cep').value,
+    logradouro: document.getElementById('logradouro').value,
+    numero: document.getElementById('numero').value,
+    complemento: document.getElementById('complemento').value,
+    bairro: document.getElementById('bairro').value,
+    cidade: document.getElementById('cidade').value,
+    estado: document.getElementById('estado').value,
+    produtos_servicos: document.getElementById('produtosServicos').value,
+    prazo_entrega: document.getElementById('prazoEntrega').value,
+    prazo_pagamento: document.getElementById('prazoPagamento').value,
+    banco: document.getElementById('banco').value,
+    agencia: document.getElementById('agencia').value,
+    conta: document.getElementById('conta').value,
+    pix: document.getElementById('pix').value,
+    contato_nome: document.getElementById('contatoNome').value,
+    contato_cargo: document.getElementById('contatoCargo').value,
+    contato_telefone: document.getElementById('contatoTelefone').value,
+    contato_email: document.getElementById('contatoEmail').value,
+    avaliacao: document.getElementById('avaliacao').value ? parseInt(document.getElementById('avaliacao').value) : null,
+    status: document.getElementById('status').value,
+    observacoes: document.getElementById('observacoes').value
+  };
+  
+  try {
+    const url = id ? `/api/fornecedores/${id}` : '/api/fornecedores/add';
+    const method = id ? 'PUT' : 'POST';
+    
+    const response = await fetch(url, {
+      method: method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(dados)
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok) {
+      mostrarAlerta(result.mensagem, 'success');
+      bootstrap.Modal.getInstance(document.getElementById('modalFornecedor')).hide();
+      carregarFornecedores();
+    } else {
+      mostrarAlerta(result.mensagem || 'Erro ao salvar', 'danger');
+    }
+  } catch (error) {
+    mostrarAlerta('Erro ao salvar fornecedor', 'danger');
+  }
+}
+
+async function excluirFornecedor(id, nome) {
+  if (!confirm(`Tem certeza que deseja excluir o fornecedor "${nome}"?`)) {
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/fornecedores/${id}`, {
+      method: 'DELETE'
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok) {
+      mostrarAlerta(result.mensagem, 'success');
+      carregarFornecedores();
+    } else {
+      mostrarAlerta(result.mensagem || 'Erro ao excluir', 'danger');
+    }
+  } catch (error) {
+    mostrarAlerta('Erro ao excluir fornecedor', 'danger');
+  }
+}
+
+async function visualizarFornecedor(id) {
+  try {
+    const response = await fetch(`/api/fornecedores/${id}`);
+    const f = await response.json();
+    
+    document.getElementById('viewNome').textContent = f.nome;
+    
+    const html = `
+      <div class="row">
+        <div class="col-md-6">
+          <h6>Dados Básicos</h6>
+          <p><strong>Nome Fantasia:</strong> ${f.nome_fantasia || '-'}</p>
+          <p><strong>CNPJ/CPF:</strong> ${f.cnpj_cpf || '-'}</p>
+          <p><strong>Inscrição Estadual:</strong> ${f.inscricao_estadual || '-'}</p>
+          
+          <h6 class="mt-3">Contato</h6>
+          <p><strong>Email:</strong> ${f.email || '-'}</p>
+          <p><strong>Telefone:</strong> ${f.telefone || '-'}</p>
+          <p><strong>Celular:</strong> ${f.celular || '-'}</p>
+          <p><strong>Site:</strong> ${f.site || '-'}</p>
+          
+          <h6 class="mt-3">Endereço</h6>
+          <p><strong>CEP:</strong> ${f.cep || '-'}</p>
+          <p><strong>Endereço:</strong> ${f.logradouro || ''} ${f.numero || ''} ${f.complemento || ''}</p>
+          <p><strong>Bairro:</strong> ${f.bairro || '-'}</p>
+          <p><strong>Cidade:</strong> ${f.cidade || '-'} - ${f.estado || '-'}</p>
+        </div>
+        
+        <div class="col-md-6">
+          <h6>Informações Comerciais</h6>
+          <p><strong>Produtos/Serviços:</strong> ${f.produtos_servicos || '-'}</p>
+          <p><strong>Prazo Entrega:</strong> ${f.prazo_entrega || '-'}</p>
+          <p><strong>Prazo Pagamento:</strong> ${f.prazo_pagamento || '-'}</p>
+          
+          <h6 class="mt-3">Dados Bancários</h6>
+          <p><strong>Banco:</strong> ${f.banco || '-'}</p>
+          <p><strong>Agência:</strong> ${f.agencia || '-'}</p>
+          <p><strong>Conta:</strong> ${f.conta || '-'}</p>
+          <p><strong>PIX:</strong> ${f.pix || '-'}</p>
+          
+          <h6 class="mt-3">Contato Principal</h6>
+          <p><strong>Nome:</strong> ${f.contato_nome || '-'}</p>
+          <p><strong>Cargo:</strong> ${f.contato_cargo || '-'}</p>
+          <p><strong>Telefone:</strong> ${f.contato_telefone || '-'}</p>
+          <p><strong>Email:</strong> ${f.contato_email || '-'}</p>
+          
+          <h6 class="mt-3">Status e Avaliação</h6>
+          <p><strong>Status:</strong> <span class="fornecedor-status status-${f.status.toLowerCase()}">${f.status}</span></p>
+          <p><strong>Avaliação:</strong> ${f.avaliacao ? '⭐'.repeat(f.avaliacao) : '-'}</p>
+          <p><strong>Observações:</strong> ${f.observacoes || '-'}</p>
+          <p><strong>Cadastrado em:</strong> ${f.data_cadastro || '-'}</p>
+        </div>
+      </div>
+    `;
+    
+    document.getElementById('viewContent').innerHTML = html;
+    
+    const modal = new bootstrap.Modal(document.getElementById('modalVisualizacao'));
+    modal.show();
+  } catch (error) {
+    mostrarAlerta('Erro ao carregar detalhes', 'danger');
+  }
+}
+
+function mostrarAlerta(mensagem, tipo) {
+  const container = document.getElementById('alertsContainer');
+  const alerta = document.createElement('div');
+  alerta.className = `alert alert-${tipo} alert-dismissible fade show`;
+  alerta.innerHTML = `
+    ${mensagem}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  `;
+  container.appendChild(alerta);
+  
+  setTimeout(() => {
+    alerta.remove();
+  }, 5000);
+}
+</script>
+
+{% endblock %}
