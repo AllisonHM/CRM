@@ -12,6 +12,7 @@ import io
 import os
 import secrets
 from flask_migrate import Migrate
+from dotenv import load_dotenv
 from database_rls import db, tenant_db, init_db
 from models import Cliente, MesaNegocio, Ocorrencia, WhatsAppMensagem, ChatbotRegra, Produto, Movimentacao, PlannerEvento, UsuarioCRM, ConfiguracaoUsuario, Parametrizacao, Tarefa, Fornecedor
 from sqlalchemy import or_, and_
@@ -26,19 +27,33 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.secret_key = "seusegredo"
 
+# Carrega variáveis do arquivo .env (se existir), sempre da pasta deste arquivo
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ENV_PATH = os.path.join(BASE_DIR, '.env')
+load_dotenv(ENV_PATH)
+
+
+def _bool_from_env(var_name, default=False):
+    """Converte variável de ambiente para bool com fallback seguro."""
+    value = os.getenv(var_name)
+    if value is None:
+        return default
+    return value.strip().lower() in ('1', 'true', 'yes', 'on', 'sim')
+
 # ------------------- BANCO COM RLS -------------------
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg2://postgres:Amovoce123%40@localhost:1222/crm'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ECHO'] = False  # True para debug SQL
 
 # ------------------- CONFIGURAÇÕES DE EMAIL -------------------
-# IMPORTANTE: Configure suas credenciais de email aqui
-app.config['MAIL_SERVER'] = 'smtp.gmail.com'  # ou seu servidor SMTP
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'seu_email@gmail.com'  # Altere aqui
-app.config['MAIL_PASSWORD'] = 'sua_senha_app'  # Use senha de app do Gmail
-app.config['MAIL_DEFAULT_SENDER'] = 'seu_email@gmail.com'  # Altere aqui
+# Prioridade: variáveis de ambiente (.env) -> valores padrão
+app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
+app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT', '587'))
+app.config['MAIL_USE_TLS'] = _bool_from_env('MAIL_USE_TLS', True)
+app.config['MAIL_USE_SSL'] = _bool_from_env('MAIL_USE_SSL', False)
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME', 'seu_email@gmail.com')
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD', 'sua_senha_app')
+app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_DEFAULT_SENDER', app.config['MAIL_USERNAME'])
 
 # Inicializa DB com suporte a RLS
 db.init_app(app)
@@ -3473,11 +3488,6 @@ def emitir_novo_contato(cliente):
         'nome': cliente.nome,
         'telefone': cliente.telefone
     }, broadcast=True)
-
-requests.post(
-  "https://proaristocracy-breathtakingly-indira.ngrok-free.dev/webhook/messages",
-  json={"phone":"+5547999471874","text":{"message":"Teste via ngrok"}}
-)
 
 if __name__ == "__main__":
     # Inicializa o banco de dados
