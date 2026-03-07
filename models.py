@@ -251,6 +251,12 @@ class Parametrizacao(db.Model):
     horario_atendimento_inicio = db.Column(db.Time, nullable=True)
     horario_atendimento_fim = db.Column(db.Time, nullable=True)
     resposta_automatica_ativa = db.Column(db.Boolean, default=False)
+
+    # Integração Meta Graph API (dados por cliente/tenant)
+    meta_graph_access_token = db.Column(db.Text, nullable=True)
+    meta_graph_verify_token = db.Column(db.String(255), nullable=True)
+    meta_graph_app_id = db.Column(db.String(120), nullable=True)
+    meta_graph_phone_number_id = db.Column(db.String(120), nullable=True)
     
     data_atualizacao = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -314,3 +320,122 @@ class Fornecedor(db.Model):
     
     def __repr__(self):
         return f"<Fornecedor {self.nome}>"
+
+
+class FacebookPage(db.Model):
+    """
+    Páginas do Facebook e contas do Instagram Business conectadas
+    por cada cliente/tenant via OAuth da Meta.
+    Um mesmo usuário pode ter várias páginas; cada linha é uma página.
+    """
+    __tablename__ = 'facebook_pages'
+
+    __table_args__ = (
+        # Garante que a combinação (usuário + page_id) seja única
+        # para permitir upsert sem duplicatas na reconexão.
+        db.UniqueConstraint('usuario_crm_id', 'page_id', name='uq_fb_page_usuario'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_crm_id = db.Column(
+        db.Integer,
+        db.ForeignKey('usuario_crm.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+
+    # Identificação da página
+    page_id = db.Column(db.String(100), nullable=False)
+    page_name = db.Column(db.String(255), nullable=False)
+
+    # Token de acesso específico da página (page_access_token)
+    # Diferente do user_access_token — tem permissões limitadas à página
+    page_access_token = db.Column(db.Text, nullable=False)
+
+    # Instagram Business Account vinculado à página (pode ser NULL)
+    instagram_id = db.Column(db.String(100), nullable=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    # Relacionamento reverso no UsuarioCRM disponível como .facebook_pages
+    usuario = db.relationship(
+        'UsuarioCRM',
+        backref=db.backref('facebook_pages', cascade='all, delete-orphan'),
+    )
+
+    def __repr__(self) -> str:
+        insta = f" / IG:{self.instagram_id}" if self.instagram_id else ""
+        return f"<FacebookPage {self.page_name}{insta}>"
+
+
+class Conversation(db.Model):
+    """
+    Representa uma conversa entre um contato externo e uma das páginas do cliente.
+    Uma mesma conversa agrupa todas as mensagens entre page_id e contact_id.
+    """
+    __tablename__ = 'conversations'
+
+    __table_args__ = (
+        # Índice composto para consultas ordenadas por recência (inbox)
+        db.Index('ix_conv_usuario_last', 'usuario_crm_id', 'last_message_at'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_crm_id = db.Column(
+        db.Integer,
+        db.ForeignKey('usuario_crm.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+    page_id = db.Column(db.String(100), nullable=False)
+    contact_id = db.Column(db.String(100), nullable=False)
+    platform = db.Column(db.String(20), nullable=False, default='facebook')  # 'facebook' | 'instagram'
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_message_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    messages = db.relationship(
+        'Message',
+        backref='conversation',
+        lazy=True,
+        cascade='all, delete-orphan',
+        order_by='Message.created_at',
+    )
+    usuario = db.relationship(
+        'UsuarioCRM',
+        backref=db.backref('conversations', lazy=True),
+    )
+
+    def __repr__(self) -> str:
+        return f"<Conversation {self.platform}/{self.contact_id}>"
+
+
+class Message(db.Model):
+    """
+    Mensagem individual dentro de uma Conversation.
+    O campo platform_message_id garante deduplicação — a Meta pode reenviar
+    o mesmo evento mais de uma vez; o UNIQUE constraint impede duplicatas.
+    """
+    __tablename__ = 'messages'
+
+    __table_args__ = (
+        db.Index('ix_msg_conv_created', 'conversation_id', 'created_at'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    conversation_id = db.Column(
+        db.Integer,
+        db.ForeignKey('conversations.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+    # 'customer' = recebida do contato externo
+    # 'agent'    = enviada pelo atendente pelo CRM
+    # 'bot'      = enviada por automação
+    sender_type = db.Column(db.String(20), nullable=False, default='customer')
+    message_text = db.Column(db.Text, nullable=False)
+    # ID da mensagem fornecido pela Meta – NULL para mensagens enviadas pelo agente
+    platform_message_id = db.Column(db.String(255), nullable=True, unique=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self) -> str:
+        return f"<Message [{self.sender_type}] {self.message_text[:40]!r}>"

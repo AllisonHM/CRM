@@ -1,0 +1,318 @@
+{% extends "base.html" %}
+{% block title %}Inbox — CRM{% endblock %}
+
+{% block content %}
+<style>
+/* ──────────────────────────── Layout ──────────────────────────── */
+#inbox-wrapper         { height: calc(100vh - 130px); overflow: hidden; }
+#conv-panel            { height: 100%; display: flex; flex-direction: column; background: #f8f5fb; border-right: 1px solid #dee2e6; }
+#conv-list             { flex: 1; overflow-y: auto; }
+#msg-panel             { height: 100%; display: flex; flex-direction: column; }
+#msg-body              { flex: 1; overflow-y: auto; padding: 1rem 1.25rem; background: #fff; }
+#msg-footer            { padding: .75rem 1rem; background: #fff; border-top: 1px solid #dee2e6; flex-shrink: 0; }
+
+/* ──────────────────────────── Conversation items ───────────────── */
+.conv-item             { cursor: pointer; padding: .75rem 1rem; border-bottom: 1px solid #ece6f5; transition: background .15s; }
+.conv-item:hover       { background: #ede4f7; }
+.conv-item.active      { background: #e0d0f0; border-left: 3px solid #6c3483; }
+.conv-item .contact    { font-size: .875rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+.conv-item .preview    { font-size: .78rem; color: #6c757d; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv-item .time       { font-size: .72rem; color: #aaa; white-space: nowrap; }
+
+/* ──────────────────────────── Message bubbles ──────────────────── */
+.msg-row               { display: flex; margin-bottom: .4rem; }
+.msg-row.in            { justify-content: flex-start; }
+.msg-row.out           { justify-content: flex-end; }
+.bubble                { max-width: 72%; padding: .5rem .85rem; border-radius: 1.1rem; word-break: break-word; font-size: .9rem; }
+.bubble.customer       { background: #f0eaf8; color: #2c1a3d; border-bottom-left-radius: .3rem; }
+.bubble.agent          { background: #6c3483; color: #fff; border-bottom-right-radius: .3rem; }
+.bubble.bot            { background: #3498db; color: #fff; border-bottom-right-radius: .3rem; }
+.bubble .ts            { font-size: .68rem; opacity: .65; text-align: right; margin-top: .25rem; }
+
+/* ──────────────────────────── Platform badges ──────────────────── */
+.badge-fb   { background: #1877F2; color: #fff; font-size: .7rem; padding: 2px 7px; border-radius: 20px; }
+.badge-ig   { background: linear-gradient(135deg,#f09433 0%,#e6683c 30%,#dc2743 60%,#bc1888 100%); color: #fff; font-size: .7rem; padding: 2px 7px; border-radius: 20px; }
+
+/* ──────────────────────────── Misc ─────────────────────────────── */
+#conv-search     { border-radius: 20px; font-size: .83rem; }
+#msg-input       { resize: none; font-size: .9rem; }
+#msg-send-btn    { background: #6c3483; border-color: #6c3483; }
+#msg-send-btn:hover { background: #4a235a; border-color: #4a235a; }
+.inbox-placeholder { opacity: .45; }
+</style>
+
+<div class="container-fluid px-3 pt-2">
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h4 class="mb-0">
+      <i class="bi bi-chat-dots-fill me-2" style="color:#6c3483;"></i>Inbox
+    </h4>
+    <span class="text-muted small" id="update-ts"></span>
+  </div>
+
+  <!-- Main split view -->
+  <div id="inbox-wrapper" class="row g-0 border rounded shadow-sm overflow-hidden">
+
+    <!-- ── LEFT: Conversation list ────────────────────────────── -->
+    <div class="col-md-4 col-lg-3 d-flex flex-column" id="conv-panel">
+      <div class="p-2 border-bottom bg-white">
+        <input class="form-control form-control-sm" id="conv-search"
+               placeholder="&#xF52A;  Buscar por contato ou mensagem..." autocomplete="off">
+      </div>
+      <div id="conv-list">
+        <div class="text-center text-muted p-4 small">
+          <i class="bi bi-arrow-repeat d-block fs-4 mb-1"></i>Carregando conversas…
+        </div>
+      </div>
+    </div>
+
+    <!-- ── RIGHT: Message panel ───────────────────────────────── -->
+    <div class="col-md-8 col-lg-9 d-flex flex-column" id="msg-panel">
+
+      <!-- Header -->
+      <div id="msg-header" class="px-3 py-2 border-bottom bg-white align-items-center gap-2 d-none" style="flex-shrink:0;">
+        <span id="msg-header-platform"></span>
+        <span id="msg-header-contact" class="fw-semibold"></span>
+        <span class="text-muted small ms-2" id="msg-header-page"></span>
+      </div>
+
+      <!-- Messages -->
+      <div id="msg-body">
+        <div id="msg-placeholder" class="text-center inbox-placeholder py-5">
+          <i class="bi bi-chat-square-dots display-3 d-block mb-3" style="color:#6c3483;"></i>
+          <p class="fw-semibold mb-1">Selecione uma conversa</p>
+          <p class="text-muted small">As mensagens aparecerão aqui.</p>
+        </div>
+      </div>
+
+      <!-- Send input -->
+      <div id="msg-footer" class="d-none">
+        <div class="input-group">
+          <textarea class="form-control" id="msg-input" rows="2"
+                    placeholder="Escreva a mensagem e pressione Enter…"></textarea>
+          <button class="btn btn-primary" id="msg-send-btn" title="Enviar (Enter)">
+            <i class="bi bi-send-fill"></i>
+          </button>
+        </div>
+        <div class="text-muted" style="font-size:.73rem;" id="msg-error"></div>
+      </div>
+
+    </div><!-- /col-msg -->
+  </div><!-- /inbox-wrapper -->
+</div>
+
+<script>
+"use strict";
+
+// ── State ─────────────────────────────────────────────────────────────────
+let activeId    = null;   // conversa ativa
+let pollTimer   = null;   // setTimeout handle para polling de msgs
+let convTimer   = null;   // setInterval handle para polling de lista
+let allConvs    = [];     // cache da lista completa
+
+// ── Boot ──────────────────────────────────────────────────────────────────
+loadConversations();
+convTimer = setInterval(loadConversations, 10_000);   // atualiza lista a cada 10s
+
+// ── Conversations ─────────────────────────────────────────────────────────
+async function loadConversations() {
+  try {
+    const r = await fetch("/api/conversations");
+    if (!r.ok) return;
+    allConvs = await r.json();
+    renderConvList(allConvs);
+    document.getElementById("update-ts").textContent =
+      "Atualizado: " + new Date().toLocaleTimeString("pt-BR");
+  } catch (e) {
+    console.error("Erro ao carregar conversas:", e);
+  }
+}
+
+function renderConvList(convs) {
+  const query = document.getElementById("conv-search").value.toLowerCase();
+  const filtered = query
+    ? convs.filter(c =>
+        c.contact_id.toLowerCase().includes(query) ||
+        (c.last_message || "").toLowerCase().includes(query) ||
+        (c.page_name || "").toLowerCase().includes(query)
+      )
+    : convs;
+
+  const list = document.getElementById("conv-list");
+
+  if (!filtered.length) {
+    list.innerHTML = `
+      <div class="text-center text-muted p-4 small">
+        ${query ? "Nenhuma conversa encontrada para essa busca." :
+          'Nenhuma conversa ainda.<br>Conecte suas páginas em <a href="/parametrizacoes">Parametrizações</a>.'}
+      </div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(c => {
+    const active  = c.id === activeId ? "active" : "";
+    const isPlatFb = c.platform === "facebook";
+    const icoClass = isPlatFb ? "bi-facebook" : "bi-instagram";
+    const icoColor = isPlatFb ? "#1877F2" : "#e1306c";
+    const timeStr  = c.last_message_at
+      ? new Date(c.last_message_at).toLocaleTimeString("pt-BR", {hour:"2-digit",minute:"2-digit"})
+      : "";
+    const preview = esc(c.last_message || "…");
+    const contact = esc(c.contact_id);
+    const page    = esc(c.page_name || c.page_id);
+
+    return `
+      <div class="conv-item ${active}" data-id="${c.id}" data-contact="${contact}"
+           data-platform="${c.platform}" data-page="${page}"
+           onclick="openConversation(${c.id})">
+        <div class="d-flex justify-content-between align-items-center">
+          <div class="d-flex align-items-center gap-1 overflow-hidden">
+            <i class="bi ${icoClass} flex-shrink-0" style="color:${icoColor};font-size:.9rem;"></i>
+            <span class="contact">${contact}</span>
+          </div>
+          <span class="time flex-shrink-0 ms-1">${timeStr}</span>
+        </div>
+        <div class="preview mt-1">${preview}</div>
+      </div>`;
+  }).join("");
+}
+
+// ── Open conversation ─────────────────────────────────────────────────────
+async function openConversation(id) {
+  activeId = id;
+
+  // Marca item ativo
+  document.querySelectorAll(".conv-item").forEach(el => {
+    el.classList.toggle("active", +el.dataset.id === id);
+  });
+
+  const item = document.querySelector(`.conv-item[data-id="${id}"]`);
+  if (item) {
+    const platform = item.dataset.platform;
+    const contact  = item.dataset.contact;
+    const page     = item.dataset.page;
+
+    document.getElementById("msg-header").classList.remove("d-none");
+    document.getElementById("msg-footer").classList.remove("d-none");
+    document.getElementById("msg-placeholder").classList.add("d-none");
+    document.getElementById("msg-header-contact").textContent = contact;
+    document.getElementById("msg-header-page").textContent = "• " + page;
+
+    const platEl = document.getElementById("msg-header-platform");
+    if (platform === "facebook") {
+      platEl.innerHTML = '<span class="badge-fb"><i class="bi bi-facebook me-1"></i>Messenger</span>';
+    } else {
+      platEl.innerHTML = '<span class="badge-ig"><i class="bi bi-instagram me-1"></i>Instagram DM</span>';
+    }
+  }
+
+  // Para polling anterior e inicia novo
+  clearTimeout(pollTimer);
+  await loadMessages(id);
+  scheduleMsgPoll(id);
+}
+
+// ── Messages ──────────────────────────────────────────────────────────────
+async function loadMessages(conversationId) {
+  try {
+    const r = await fetch(`/api/conversations/${conversationId}/messages`);
+    if (!r.ok) return;
+    const data = await r.json();
+    renderMessages(data.messages);
+  } catch (e) {
+    console.error("Erro ao carregar mensagens:", e);
+  }
+}
+
+function renderMessages(msgs) {
+  const body    = document.getElementById("msg-body");
+  const atBottom = body.scrollHeight - body.scrollTop <= body.clientHeight + 60;
+
+  if (!msgs.length) {
+    body.innerHTML = `<div class="text-center text-muted small py-4">Nenhuma mensagem ainda.</div>`;
+    return;
+  }
+
+  body.innerHTML = msgs.map(m => {
+    const isOut  = m.sender_type !== "customer";
+    const dir    = isOut ? "out" : "in";
+    const cls    = m.sender_type;   // customer | agent | bot
+    const time   = m.created_at
+      ? new Date(m.created_at).toLocaleTimeString("pt-BR", {hour:"2-digit",minute:"2-digit"})
+      : "";
+    const label  = m.sender_type === "agent" ? "Você" : m.sender_type === "bot" ? "Bot" : "";
+
+    return `
+      <div class="msg-row ${dir}">
+        <div class="bubble ${cls}">
+          ${label ? `<div style="font-size:.7rem;opacity:.7;margin-bottom:.15rem;">${label}</div>` : ""}
+          ${esc(m.message_text)}
+          <div class="ts">${time}</div>
+        </div>
+      </div>`;
+  }).join("");
+
+  if (atBottom) body.scrollTop = body.scrollHeight;
+}
+
+function scheduleMsgPoll(id) {
+  pollTimer = setTimeout(async () => {
+    if (activeId === id) {
+      await loadMessages(id);
+      scheduleMsgPoll(id);
+    }
+  }, 4_000);   // atualiza mensagens a cada 4s quando numa conversa ativa
+}
+
+// ── Send ──────────────────────────────────────────────────────────────────
+document.getElementById("msg-send-btn").addEventListener("click", sendMessage);
+document.getElementById("msg-input").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+
+async function sendMessage() {
+  if (!activeId) return;
+  const input   = document.getElementById("msg-input");
+  const errEl   = document.getElementById("msg-error");
+  const texto   = input.value.trim();
+  if (!texto) return;
+
+  const btn = document.getElementById("msg-send-btn");
+  btn.disabled = true;
+  errEl.textContent = "";
+
+  try {
+    const r = await fetch("/api/messages/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conversation_id: activeId, message: texto }),
+    });
+    const data = await r.json();
+
+    if (r.ok) {
+      input.value = "";
+      await loadMessages(activeId);
+      await loadConversations();
+    } else {
+      errEl.textContent = "⚠ " + (data.error || "Erro ao enviar. Tente novamente.");
+    }
+  } catch (e) {
+    errEl.textContent = "⚠ Falha de conexão. Verifique sua internet.";
+  } finally {
+    btn.disabled = false;
+    input.focus();
+  }
+}
+
+// ── Search ────────────────────────────────────────────────────────────────
+document.getElementById("conv-search").addEventListener("input", () => renderConvList(allConvs));
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s ?? "")
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;").replace(/"/g,"&quot;")
+    .replace(/\n/g,"<br>");
+}
+</script>
+{% endblock %}

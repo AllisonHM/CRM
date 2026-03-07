@@ -11,11 +11,14 @@ import csv
 import io
 import os
 import secrets
-from flask_migrate import Migrate
 from dotenv import load_dotenv
+from flask_migrate import Migrate
 from database_rls import db, tenant_db, init_db
-from models import Cliente, MesaNegocio, Ocorrencia, WhatsAppMensagem, ChatbotRegra, Produto, Movimentacao, PlannerEvento, UsuarioCRM, ConfiguracaoUsuario, Parametrizacao, Tarefa, Fornecedor
+from models import Cliente, MesaNegocio, Ocorrencia, WhatsAppMensagem, ChatbotRegra, Produto, Movimentacao, PlannerEvento, UsuarioCRM, ConfiguracaoUsuario, Parametrizacao, Tarefa, Fornecedor, FacebookPage, Conversation, Message
 from sqlalchemy import or_, and_
+
+# Carrega variáveis do arquivo .env (se existir)
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
 
 # Configurar logging
 logging.basicConfig(
@@ -27,33 +30,19 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.secret_key = "seusegredo"
 
-# Carrega variáveis do arquivo .env (se existir), sempre da pasta deste arquivo
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-ENV_PATH = os.path.join(BASE_DIR, '.env')
-load_dotenv(ENV_PATH)
-
-
-def _bool_from_env(var_name, default=False):
-    """Converte variável de ambiente para bool com fallback seguro."""
-    value = os.getenv(var_name)
-    if value is None:
-        return default
-    return value.strip().lower() in ('1', 'true', 'yes', 'on', 'sim')
-
 # ------------------- BANCO COM RLS -------------------
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg2://postgres:Amovoce123%40@localhost:1222/crm'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ECHO'] = False  # True para debug SQL
 
 # ------------------- CONFIGURAÇÕES DE EMAIL -------------------
-# Prioridade: variáveis de ambiente (.env) -> valores padrão
-app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
-app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT', '587'))
-app.config['MAIL_USE_TLS'] = _bool_from_env('MAIL_USE_TLS', True)
-app.config['MAIL_USE_SSL'] = _bool_from_env('MAIL_USE_SSL', False)
-app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME', 'seu_email@gmail.com')
-app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD', 'sua_senha_app')
-app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_DEFAULT_SENDER', app.config['MAIL_USERNAME'])
+# IMPORTANTE: Configure suas credenciais de email aqui
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'  # ou seu servidor SMTP
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = 'seu_email@gmail.com'  # Altere aqui
+app.config['MAIL_PASSWORD'] = 'sua_senha_app'  # Use senha de app do Gmail
+app.config['MAIL_DEFAULT_SENDER'] = 'seu_email@gmail.com'  # Altere aqui
 
 # Inicializa DB com suporte a RLS
 db.init_app(app)
@@ -102,6 +91,17 @@ def get_usuario_filter():
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 migrate = Migrate(app, db)
+
+# ------------------- INTEGRAÇÃO META (FACEBOOK / INSTAGRAM) -------------------
+from routes.meta_auth import meta_auth_bp
+from routes.meta_webhook import meta_webhook_bp
+from routes.conversations import conversations_bp
+from routes.messages import messages_bp
+
+app.register_blueprint(meta_auth_bp)
+app.register_blueprint(meta_webhook_bp)
+app.register_blueprint(conversations_bp)
+app.register_blueprint(messages_bp)
 
 # ------------------- Z-API -------------------
 instance = "3E70C9784E1060A6F423AE9094E04006"
@@ -192,6 +192,28 @@ def verificar_tarefas_proximas():
             time.sleep(60)
 
 threading.Thread(target=verificar_tarefas_proximas, daemon=True).start()
+
+
+# ------------------- JOB: RENOVAÇÃO AUTOMÁTICA DE TOKENS META (30 dias) ---
+def _renovar_tokens_meta_job():
+    """Roda a cada 30 dias e renova os page_access_tokens de todas as páginas."""
+    time.sleep(120)  # aguarda 2 min para o app inicializar completamente
+    while True:
+        with app.app_context():
+            try:
+                app_id = os.getenv('META_APP_ID')
+                app_secret = os.getenv('META_APP_SECRET')
+                if app_id and app_secret:
+                    from services.message_service import renovar_tokens_expirados
+                    n = renovar_tokens_expirados(app_id, app_secret)
+                    logger.info(f'Renovação de tokens Meta concluída: {n} token(s) renovado(s).')
+                else:
+                    logger.debug('META_APP_ID/SECRET não configurados — job de renovação ignorado.')
+            except Exception as _exc:
+                logger.error(f'Erro no job de renovação de tokens Meta: {_exc}')
+        time.sleep(30 * 24 * 3600)  # aguarda 30 dias
+
+threading.Thread(target=_renovar_tokens_meta_job, daemon=True).start()
 
 
 # ------------------- ROTAS DE AUTENTICAÇÃO -------------------
@@ -470,6 +492,11 @@ def parametrizacoes():
         db.session.commit()
     
     if request.method == 'POST':
+        def normalizar_campo(campo):
+            valor = request.form.get(campo, '')
+            valor = valor.strip()
+            return valor if valor else None
+
         # Atualizar mensagens automáticas
         param.mensagem_boas_vindas = request.form.get('mensagem_boas_vindas', '')
         param.mensagem_ausencia = request.form.get('mensagem_ausencia', '')
@@ -487,12 +514,44 @@ def parametrizacoes():
             param.horario_atendimento_inicio = datetime.strptime(horario_inicio, '%H:%M').time()
         if horario_fim:
             param.horario_atendimento_fim = datetime.strptime(horario_fim, '%H:%M').time()
+
+        # Dados de integração da Meta Graph API (salvos por cliente)
+        param.meta_graph_app_id = normalizar_campo('meta_graph_app_id')
+        param.meta_graph_phone_number_id = normalizar_campo('meta_graph_phone_number_id')
+
+        if 'limpar_tokens_meta' in request.form:
+            param.meta_graph_access_token = None
+            param.meta_graph_verify_token = None
+        else:
+            novo_access_token = normalizar_campo('meta_graph_access_token')
+            novo_verify_token = normalizar_campo('meta_graph_verify_token')
+
+            # Campo vazio nao sobrescreve token existente para evitar apagar acidentalmente.
+            if novo_access_token is not None:
+                param.meta_graph_access_token = novo_access_token
+            if novo_verify_token is not None:
+                param.meta_graph_verify_token = novo_verify_token
         
         db.session.commit()
         flash('Parametrizações salvas com sucesso!', 'success')
         return redirect(url_for('parametrizacoes'))
     
-    return render_template('parametrizacoes.html', param=param)
+    # Busca páginas do Facebook/Instagram conectadas por este usuário
+    paginas_meta = FacebookPage.query.filter_by(
+        usuario_crm_id=current_user.id
+    ).order_by(FacebookPage.page_name).all()
+
+    return render_template('parametrizacoes.html', param=param, paginas_meta=paginas_meta)
+
+
+@app.route('/inbox')
+@login_required
+def inbox():
+    """Inbox de mensagens Facebook/Instagram."""
+    if not current_user.tem_permissao('whatsapp'):
+        flash('Você não tem acesso ao Inbox.', 'danger')
+        return redirect(url_for('menu'))
+    return render_template('inbox.html')
 
 
 @app.route('/criar_super_admin')
