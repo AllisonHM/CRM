@@ -1,30 +1,67 @@
-# tasks.py
-from celery import Celery
-import requests
+# tasks.py — Tarefas assíncronas com Celery
 import os
+import logging
+import requests
+from celery import Celery
+from dotenv import load_dotenv
 
-celery = Celery('tasks', broker=os.getenv('REDIS_URL'))
+load_dotenv()
 
-instance = "3E70C9784E1060A6F423AE9094E04006"
-token = "E4E83715DE9F517EFB9A28CA"
-client_token = "Fc5c052a80080460b823a2e506d4d6167S"
+logger = logging.getLogger(__name__)
 
-# Headers com client-token
-headers = {
-    'client-token': client_token,
-    'Content-Type': 'application/json'
-}
+# ------------------------------------------------------------------
+# Configuração do Celery (requer REDIS_URL no .env)
+# Exemplo: REDIS_URL=redis://localhost:6379/0
+# ------------------------------------------------------------------
+REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
 
-ZAPI_URL = os.getenv('https://api.z-api.io/instances/{instance}/token/{token}/send-text')  # endpoint Z-API
-ZAPI_TOKEN = os.getenv('E4E83715DE9F517EFB9A28CA')
+celery = Celery(
+    'tasks',
+    broker=REDIS_URL,
+    backend=REDIS_URL,
+)
+celery.conf.update(
+    task_serializer='json',
+    result_serializer='json',
+    accept_content=['json'],
+    timezone='America/Sao_Paulo',
+    enable_utc=True,
+)
 
-@celery.task(bind=True, max_retries=3)
-def enviar_whatsapp(self, empresa_id, numero, texto):
+# ------------------------------------------------------------------
+# Credenciais Z-API — lidas do .env
+# ------------------------------------------------------------------
+ZAPI_INSTANCE = os.getenv('ZAPI_INSTANCE', '')
+ZAPI_TOKEN = os.getenv('ZAPI_TOKEN', '')
+ZAPI_CLIENT_TOKEN = os.getenv('ZAPI_CLIENT_TOKEN', '')
+
+
+def _build_zapi_url(endpoint: str) -> str:
+    return (
+        f"https://api.z-api.io/instances/{ZAPI_INSTANCE}"
+        f"/token/{ZAPI_TOKEN}/{endpoint}"
+    )
+
+
+@celery.task(bind=True, max_retries=3, default_retry_delay=10)
+def enviar_whatsapp(self, numero: str, texto: str):
+    """Envia mensagem de texto via Z-API de forma assíncrona."""
+    if not ZAPI_INSTANCE or not ZAPI_TOKEN:
+        logger.error("ZAPI_INSTANCE ou ZAPI_TOKEN não configurados no .env")
+        return {"status": "error", "detail": "Credenciais Z-API ausentes"}
+
+    url = _build_zapi_url("send-text")
+    headers = {
+        'client-token': ZAPI_CLIENT_TOKEN,
+        'Content-Type': 'application/json',
+    }
+    payload = {"phone": numero, "message": texto}
+
     try:
-        payload = {"number": numero, "message": texto}
-        headers = {"Authorization": f"Bearer {ZAPI_TOKEN}", "Content-Type": "application/json"}
-        r = requests.post(ZAPI_URL + "/sendMessage", json=payload, headers=headers, timeout=30)
-        r.raise_for_status()
-        return r.json()
-    except Exception as e:
-        raise self.retry(exc=e, countdown=10)
+        resp = requests.post(url, json=payload, headers=headers, timeout=30)
+        resp.raise_for_status()
+        logger.info(f"Mensagem enviada para {numero}: {resp.status_code}")
+        return resp.json()
+    except requests.exceptions.RequestException as exc:
+        logger.error(f"Erro ao enviar WhatsApp para {numero}: {exc}")
+        raise self.retry(exc=exc)

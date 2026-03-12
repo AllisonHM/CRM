@@ -10,18 +10,11 @@
 </head>
 
 <style>
-    :root {
-        --menu-offset: 60px; /* ajuste aqui o quanto vai para a direita */
-    }
-
     body {
         padding: 1.5rem;
-        padding-left: calc(1.5rem + var(--menu-offset));
     }
 
-    /* Navbar deslocada */
     .navbar {
-        margin-left: var(--menu-offset);
         border-radius: 10px;
     }
 
@@ -195,7 +188,7 @@
                         <!-- Usuário Logado -->
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                                {{ current_user.nome }}
+                                {{ current_user.nome.split()[0] }}
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end">
                                 <li><span class="dropdown-item-text"><small>{{ current_user.email }}</small></span></li>
@@ -215,7 +208,7 @@
     </nav>
 
     <!-- Conteúdo -->
-    <div class="container">
+    <div class="container-fluid px-2">
         {% block content %}
         {% endblock %}
     </div>

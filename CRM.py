@@ -14,7 +14,7 @@ import secrets
 from dotenv import load_dotenv
 from flask_migrate import Migrate
 from database_rls import db, tenant_db, init_db
-from models import Cliente, MesaNegocio, Ocorrencia, WhatsAppMensagem, ChatbotRegra, Produto, Movimentacao, PlannerEvento, UsuarioCRM, ConfiguracaoUsuario, Parametrizacao, Tarefa, Fornecedor, FacebookPage, Conversation, Message
+from models import Cliente, MesaNegocio, Ocorrencia, WhatsAppMensagem, ChatbotRegra, Produto, Movimentacao, PlannerEvento, UsuarioCRM, ConfiguracaoUsuario, Parametrizacao, Tarefa, Fornecedor, FacebookPage, Conversation, Message, ConversaConfig
 from sqlalchemy import or_, and_
 
 # Carrega variáveis do arquivo .env (se existir)
@@ -28,21 +28,27 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.secret_key = "seusegredo"
+_secret_key = os.getenv('SECRET_KEY')
+if not _secret_key:
+    raise RuntimeError('SECRET_KEY não definida no .env — defina antes de iniciar.')
+app.secret_key = _secret_key
 
 # ------------------- BANCO COM RLS -------------------
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql+psycopg2://postgres:Amovoce123%40@localhost:1222/crm'
+_database_url = os.getenv('DATABASE_URL')
+if not _database_url:
+    raise RuntimeError('DATABASE_URL não definida no .env — defina antes de iniciar.')
+app.config['SQLALCHEMY_DATABASE_URI'] = _database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ECHO'] = False  # True para debug SQL
 
 # ------------------- CONFIGURAÇÕES DE EMAIL -------------------
-# IMPORTANTE: Configure suas credenciais de email aqui
-app.config['MAIL_SERVER'] = 'smtp.gmail.com'  # ou seu servidor SMTP
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'seu_email@gmail.com'  # Altere aqui
-app.config['MAIL_PASSWORD'] = 'sua_senha_app'  # Use senha de app do Gmail
-app.config['MAIL_DEFAULT_SENDER'] = 'seu_email@gmail.com'  # Altere aqui
+app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
+app.config['MAIL_PORT'] = int(os.getenv('MAIL_PORT', 587))
+app.config['MAIL_USE_TLS'] = os.getenv('MAIL_USE_TLS', 'true').lower() == 'true'
+app.config['MAIL_USE_SSL'] = os.getenv('MAIL_USE_SSL', 'false').lower() == 'true'
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME', '')
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD', '')
+app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_DEFAULT_SENDER', os.getenv('MAIL_USERNAME', ''))
 
 # Inicializa DB com suporte a RLS
 db.init_app(app)
@@ -104,9 +110,9 @@ app.register_blueprint(conversations_bp)
 app.register_blueprint(messages_bp)
 
 # ------------------- Z-API -------------------
-instance = "3E70C9784E1060A6F423AE9094E04006"
-token = "E4E83715DE9F517EFB9A28CA"
-client_token = "Fc5c052a80080460b823a2e506d4d6167S"
+instance = os.getenv('ZAPI_INSTANCE', '')
+token = os.getenv('ZAPI_TOKEN', '')
+client_token = os.getenv('ZAPI_CLIENT_TOKEN', '')
 headers = {'client-token': client_token, 'Content-Type': 'application/json'}
 
 def enviar_whatsapp_zapi(numero, mensagem, instance_id=None, token_id=None):
@@ -150,10 +156,10 @@ def verificar_eventos_proximos():
 
             for evento in eventos:
                 socketio.emit('notificacao_evento', {
-                    'titulo': evento.titulo,
+                    'titulo': f"{evento.tipo} - {evento.cliente or 'Sem cliente'}",
                     'descricao': evento.descricao,
                     'hora': evento.data_hora.strftime('%H:%M'),
-                    'cliente': evento.cliente.nome if evento.cliente else "N/A"
+                    'cliente': evento.cliente or 'N/A'
                 })
 
             time.sleep(60)  # roda a cada 60 segundos
@@ -256,11 +262,10 @@ def verificar_configuracao_email():
     """Verifica se o email está configurado corretamente"""
     username = app.config.get('MAIL_USERNAME', '')
     password = app.config.get('MAIL_PASSWORD', '')
-    
-    # Verifica se ainda está com os valores padrão
-    if username in ['seu_email@gmail.com', '', None] or password in ['sua_senha_app', '', None]:
-        return False, "Configurações de email não foram definidas. Configure MAIL_USERNAME e MAIL_PASSWORD no CRM.py"
-    
+
+    if not username or not password:
+        return False, "Configurações de email não foram definidas. Configure MAIL_USERNAME e MAIL_PASSWORD no .env"
+
     return True, None
 
 def enviar_email_recuperacao(usuario, token):
@@ -553,28 +558,6 @@ def inbox():
         return redirect(url_for('menu'))
     return render_template('inbox.html')
 
-
-@app.route('/criar_super_admin')
-def criar_super_admin():
-    """Rota temporária para criar o primeiro super admin"""
-    # Verificar se já existe um super admin
-    super_admin_existe = UsuarioCRM.query.filter_by(tipo_usuario='super_admin').first()
-    if super_admin_existe:
-        return "Super Admin já existe!"
-    
-    # Criar super admin
-    super_admin = UsuarioCRM(
-        nome="Administrador",
-        email="admin@crm.com",
-        tipo_usuario="super_admin",
-        ativo=True
-    )
-    super_admin.set_password("admin123")  # ALTERAR ESTA SENHA APÓS PRIMEIRO LOGIN!
-    
-    db.session.add(super_admin)
-    db.session.commit()
-    
-    return "Super Admin criado com sucesso! Email: admin@crm.com | Senha: admin123"
 
 
 # ------------------- GESTÃO DE USUÁRIOS (SUPER ADMIN) -------------------
@@ -905,7 +888,20 @@ def deletar_colaborador(id):
 def enviar_pesquisa_nps(cliente):
     """
     Envia pesquisa de NPS via WhatsApp quando uma mesa é ganha.
+    Respeita quarentena configurada no usuário dono do cliente.
     """
+    # --- Quarentena NPS ---
+    if cliente.data_ultimo_nps_envio:
+        usuario_dono = UsuarioCRM.query.get(cliente.usuario_crm_id)
+        dias_quarentena = (usuario_dono.dias_quarentena_nps or 30) if usuario_dono else 30
+        proximo_envio = cliente.data_ultimo_nps_envio + timedelta(days=dias_quarentena)
+        if datetime.utcnow() < proximo_envio:
+            logger.info(
+                f"NPS ignorado para {cliente.nome}: em quarentena até "
+                f"{proximo_envio.strftime('%d/%m/%Y')}"
+            )
+            return False
+
     print(f"\n🔍 === INICIANDO ENVIO DE NPS ===")
     print(f"📋 Cliente: {cliente.nome}")
     print(f"📞 Telefone original: {cliente.telefone}")
@@ -931,8 +927,9 @@ Por favor, responda apenas com um número de 0 a 10."""
     
     if resultado["status"] == "Sucesso":
         print(f"✅ Mensagem enviada com sucesso!")
-        # Marcar que está aguardando resposta de NPS
+        # Marcar que está aguardando resposta de NPS e registrar data de envio
         cliente.aguardando_nps = True
+        cliente.data_ultimo_nps_envio = datetime.utcnow()
         db.session.commit()
         
         # Salvar mensagem enviada
@@ -2225,27 +2222,37 @@ def marcar_conversa_lida(numero):
 @login_required
 def fixar_conversa(numero):
     """Fixa uma conversa no topo"""
-    data = request.get_json()
+    data = request.get_json() or {}
     fixada = data.get('fixada', True)
     numero_norm = normalize_phone(numero)
-    
-    # Buscar ou criar configuração da conversa
-    # (Necessitará criar model ConversaConfig se não existir)
-    
+    user_id = current_user.get_usuario_principal_id()
+
+    config = ConversaConfig.query.filter_by(usuario_crm_id=user_id, telefone=numero_norm).first()
+    if not config:
+        config = ConversaConfig(usuario_crm_id=user_id, telefone=numero_norm)
+        db.session.add(config)
+    config.fixada = fixada
+    db.session.commit()
+
     return jsonify({"status": "ok", "fixada": fixada})
 
 @app.route("/canais/conversa/<string:numero>/arquivar", methods=["POST"])
 @login_required
 def arquivar_conversa(numero):
     """Arquiva uma conversa"""
-    data = request.get_json()
+    data = request.get_json() or {}
     arquivada = data.get('arquivada', True)
     numero_norm = normalize_phone(numero)
-    
-    # Buscar ou criar configuração da conversa
-    # (Necessitará criar model ConversaConfig se não existir)
-    
-    return jsonify({" status": "ok", "arquivada": arquivada})
+    user_id = current_user.get_usuario_principal_id()
+
+    config = ConversaConfig.query.filter_by(usuario_crm_id=user_id, telefone=numero_norm).first()
+    if not config:
+        config = ConversaConfig(usuario_crm_id=user_id, telefone=numero_norm)
+        db.session.add(config)
+    config.arquivada = arquivada
+    db.session.commit()
+
+    return jsonify({"status": "ok", "arquivada": arquivada})
 
 @app.route("/canais/mensagem/<int:msg_id>/excluir", methods=["DELETE"])
 @login_required
@@ -2386,16 +2393,25 @@ def contar_nao_lidas():
 @permission_required('chatbot')
 def configurar_chatbot():
     if request.method == "POST":
-        palavra = request.form["palavra_chave"]
-        resposta = request.form["resposta"]
+        palavra = request.form.get("palavra_chave", "").strip()
+        resposta = request.form.get("resposta", "").strip()
+        if not palavra or not resposta:
+            return jsonify({"status": "error", "message": "palavra_chave e resposta são obrigatórios"}), 400
         user_id = get_usuario_filter()
         regra = ChatbotRegra(
-            palavra_chave=palavra, 
+            palavra_chave=palavra,
             resposta=resposta,
             usuario_crm_id=user_id if user_id else current_user.id
         )
-        db.session.add(regra)
-        db.session.commit()
+        try:
+            db.session.add(regra)
+            db.session.commit()
+            return jsonify({"status": "success", "message": "Regra criada", "id": regra.id})
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro ao criar regra chatbot: {e}")
+            return jsonify({"status": "error", "message": "Erro ao salvar regra"}), 500
+    return redirect(url_for('configuracoes_chatbot'))
 
 @app.route("/mensagens")
 @login_required
@@ -2968,7 +2984,7 @@ def historico_movimentacoes(produto_id):
     else:
         produto = Produto.query.get_or_404(produto_id)
     
-    movimentacoes = Movimentacao.query.filter_by(produto_id=produto.id).order_by(Movimentacao.data.desc()).all()
+    movimentacoes = Movimentacao.query.filter_by(produto_id=produto.id).order_by(Movimentacao.data_registro.desc()).all()
     return render_template("movimentacoes.html", produto=produto, movimentacoes=movimentacoes)
 
 # ==================== ROTAS DE FORNECEDORES ====================
@@ -3246,6 +3262,7 @@ def planner():
     )
 
 @app.route("/planner/salvar", methods=["POST"])
+@login_required
 def salvar_evento():
     tipo = request.form["tipo"]
     cliente = request.form.get("cliente")
@@ -3257,11 +3274,12 @@ def salvar_evento():
     data_hora = datetime.strptime(f"{data_str} {hora_str}", "%Y-%m-%d %H:%M")
 
     novo = PlannerEvento(
+        usuario_crm_id=current_user.get_usuario_principal_id(),
         tipo=tipo,
         cliente=cliente,
         data=datetime.strptime(data_str, "%Y-%m-%d").date(),
         hora=datetime.strptime(hora_str, "%H:%M").time(),
-        data_hora=data_hora,   # <- AQUI ESTÁ O QUE FALTAVA
+        data_hora=data_hora,
         descricao=descricao
     )
 
@@ -3271,6 +3289,7 @@ def salvar_evento():
     return redirect(url_for("planner"))
 
 @app.route("/planner/excluir/<int:id>", methods=["POST"])
+@login_required
 def excluir_evento(id):
     evento = PlannerEvento.query.get(id)
 
@@ -3415,11 +3434,11 @@ def excluir_tarefa(id):
     return redirect(url_for("tarefas"))
 
 
-# --- RELATÓRIOS (DESATIVADO)
-# @app.route("/relatorios")
-# @login_required
-# @permission_required('relatorios')
-def relatorios_desativado():
+# --- RELATÓRIOS
+@app.route("/relatorios")
+@login_required
+@permission_required('relatorios')
+def relatorios():
     user_id = get_usuario_filter()
 
     if user_id:
@@ -3513,31 +3532,6 @@ def relatorios_desativado():
         vendas_valores=vendas_valores,
         ocorrencias_total=ocorrencias_total
     )
-
-@app.route("/tickets")
-def list_tickets():
-    tickets = Ticket.query.filter_by(status="open").all()
-    return jsonify([
-        {
-            "id": t.id,
-            "contact": t.contact_phone,
-            "lastMessage": t.messages[-1].body if t.messages else "",
-            "unread": count_unread(t.id)
-        }
-        for t in tickets
-    ])
-
-@app.route("/tickets/<int:ticket_id>/messages")
-def ticket_messages(ticket_id):
-    msgs = Message.query.filter_by(ticket_id=ticket_id).all()
-    return jsonify([
-        {
-            "direction": m.direction,
-            "body": m.body,
-            "time": m.created_at.strftime("%H:%M")
-        }
-        for m in msgs
-    ])
 
 
 # quando criar cliente, emitir novo_contato para atualizar lista (opcional)

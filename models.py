@@ -133,6 +133,11 @@ class WhatsAppMensagem(db.Model):
     remetente = db.Column(db.String(100))  # <-- esta linha é obrigatória
     mensagem = db.Column(db.Text, nullable=False)
     recebido_em = db.Column(db.DateTime, nullable=False)
+    # Campos de estado/mídia
+    lida = db.Column(db.Boolean, default=False, nullable=False)
+    status = db.Column(db.String(30), nullable=True)   # enviado, entregue, lido, erro
+    tipo_midia = db.Column(db.String(30), nullable=True)  # image, audio, video, document
+    arquivo_url = db.Column(db.Text, nullable=True)
 
 class ChatbotRegra(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -439,3 +444,31 @@ class Message(db.Model):
 
     def __repr__(self) -> str:
         return f"<Message [{self.sender_type}] {self.message_text[:40]!r}>"
+
+
+class ConversaConfig(db.Model):
+    """Configurações por conversa (fixar, arquivar) para o canal WhatsApp."""
+    __tablename__ = 'conversa_config'
+
+    __table_args__ = (
+        db.UniqueConstraint('usuario_crm_id', 'telefone', name='uq_conversa_config'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_crm_id = db.Column(
+        db.Integer,
+        db.ForeignKey('usuario_crm.id', ondelete='CASCADE'),
+        nullable=False,
+    )
+    telefone = db.Column(db.String(50), nullable=False)
+    fixada = db.Column(db.Boolean, default=False, nullable=False)
+    arquivada = db.Column(db.Boolean, default=False, nullable=False)
+    data_config = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    usuario = db.relationship(
+        'UsuarioCRM',
+        backref=db.backref('conversas_config', lazy=True),
+    )
+
+    def __repr__(self) -> str:
+        return f"<ConversaConfig {self.telefone} fixada={self.fixada} arquivada={self.arquivada}>"
