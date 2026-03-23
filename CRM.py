@@ -83,14 +83,21 @@ def permission_required(modulo):
 
 # Função auxiliar para filtrar dados por usuário
 def get_usuario_filter():
-    """Retorna o ID do usuário principal para filtrar dados
-    
-    NOTA: Com RLS ativo, esta função não é mais necessária para segurança,
-    mas mantemos para compatibilidade com código legado.
-    O PostgreSQL RLS automaticamente filtra os dados pelo tenant_id.
+    """Retorna o ID do usuário para filtrar dados.
+
+    Todos os tipos de usuário (incluindo super_admin) enxergam apenas os
+    próprios registros. Isso garante o isolamento correto entre tenants.
+
+    Para acesso administrativo irrestrito (visão geral de todos os usuários),
+    use a rota /admin/painel que faz queries explícitas sem filtro.
+    """
+    return current_user.get_usuario_principal_id()
+
+def get_usuario_filter_admin_global():
+    """Retorna None se o usuário for super_admin (acesso irrestrito).
+    Usado apenas em rotas administrativas explícitas.
     """
     if current_user.tipo_usuario == 'super_admin':
-        # Super admin pode ver tudo (RLS será desabilitado manualmente quando necessário)
         return None
     return current_user.get_usuario_principal_id()
 
@@ -2066,6 +2073,63 @@ def receber_mensagem_webhook():
                 print(f"❌ Erro ao processar NPS: {e}")
     else:
         print(f"ℹ️ Cliente não encontrado para o número {numero}")
+
+    # ========== ETAPA 5.5: RESPOSTA AUTOMÁTICA PARAMETRIZADA ==========
+    if usuario_crm_id:
+        try:
+            param_auto = Parametrizacao.query.filter_by(usuario_crm_id=usuario_crm_id).first()
+            if param_auto and param_auto.resposta_automatica_ativa:
+                usuario_dono = UsuarioCRM.query.get(usuario_crm_id)
+                agora_time = datetime.now().time()
+
+                # Verificar se está fora do horário de atendimento
+                horario_configurado = bool(param_auto.horario_atendimento_inicio and param_auto.horario_atendimento_fim)
+                fora_do_horario = False
+                if horario_configurado:
+                    h_inicio = param_auto.horario_atendimento_inicio
+                    h_fim = param_auto.horario_atendimento_fim
+                    if h_inicio <= h_fim:
+                        fora_do_horario = not (h_inicio <= agora_time <= h_fim)
+                    else:
+                        # Horário que ultrapassa meia-noite (ex: 22:00 a 06:00)
+                        fora_do_horario = not (agora_time >= h_inicio or agora_time <= h_fim)
+
+                mensagem_auto = None
+                tipo_resposta = None
+
+                if fora_do_horario and param_auto.mensagem_ausencia:
+                    # Fora do horário configurado → mensagem de ausência
+                    mensagem_auto = param_auto.mensagem_ausencia
+                    tipo_resposta = "ausência"
+                    print(f"⏰ Fora do horário de atendimento - preparando mensagem de ausência")
+                elif not horario_configurado and param_auto.mensagem_ausencia:
+                    # Sem horário definido e mensagem de ausência configurada → sempre envia ausência
+                    mensagem_auto = param_auto.mensagem_ausencia
+                    tipo_resposta = "ausência (sem horário definido)"
+                    print(f"⏰ Sem horário configurado - preparando mensagem de ausência")
+                elif horario_configurado and not fora_do_horario and param_auto.mensagem_boas_vindas:
+                    # Dentro do horário → mensagem de boas-vindas na primeira mensagem do cliente
+                    qtd_msgs_anteriores = WhatsAppMensagem.query.filter(
+                        WhatsAppMensagem.numero == numero,
+                        WhatsAppMensagem.id != msg.id
+                    ).count()
+                    if qtd_msgs_anteriores == 0:
+                        mensagem_auto = param_auto.mensagem_boas_vindas
+                        tipo_resposta = "boas-vindas"
+                        print(f"👋 Primeira mensagem do cliente - preparando mensagem de boas-vindas")
+
+                if mensagem_auto:
+                    if usuario_dono and usuario_dono.api_instance and usuario_dono.api_token:
+                        resultado_auto = enviar_whatsapp_zapi(
+                            numero, mensagem_auto,
+                            instance_id=usuario_dono.api_instance,
+                            token_id=usuario_dono.api_token
+                        )
+                        print(f"📤 Resposta automática ({tipo_resposta}) enviada: {resultado_auto.get('status')}")
+                    else:
+                        print(f"⚠️ Resposta automática ({tipo_resposta}) não enviada: usuário sem Z-API configurada (api_instance/api_token ausentes)")
+        except Exception as e:
+            print(f"❌ Erro ao processar resposta automática: {e}")
 
     # ========== ETAPA 6: EMITIR VIA WEBSOCKET ==========
     cliente_found = find_cliente_by_phone(numero)
