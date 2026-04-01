@@ -37,9 +37,14 @@
     .tipo-agendamento { background: #28a745; }
     .tipo-contato { background: #007bff; }
     .tipo-outros { background: #6c757d; }
+    .cell {
+        cursor: pointer;
+    }
     .cell:hover {
         background: #eef7ff;
-        cursor: pointer;
+    }
+    html, body {
+        overflow: hidden;
     }
 </style>
 
@@ -64,13 +69,15 @@
         Registrar agendamento
     </button>
 
-    <div class="table-responsive" style="max-height: 80vh; overflow-y: scroll;">
+    {% set dias_pt = {'Monday': 'Segunda', 'Tuesday': 'Terça', 'Wednesday': 'Quarta', 'Thursday': 'Quinta', 'Friday': 'Sexta', 'Saturday': 'Sábado', 'Sunday': 'Domingo'} %}
+    {% set tipos_pt = {'agendamento': 'Agendamento', 'contato': 'Contato', 'outros': 'Outros'} %}
+    <div class="table-responsive" style="max-height: 75vh; overflow-y: auto;">
         <table class="planner-table table-bordered">
             <thead>
                 <tr>
                     <th class="horario-col">Hora</th>
                     {% for dia in dias %}
-                        <th>{{ dia.strftime('%A') }}<br>{{ dia.strftime('%d/%m') }}</th>
+                        <th>{{ dias_pt[dia.strftime('%A')] }}<br>{{ dia.strftime('%d/%m') }}</th>
                     {% endfor %}
                 </tr>
             </thead>
@@ -96,14 +103,14 @@
                                         '{{ ev.tipo }}',
                                         '{{ ev.cliente or '' }}',
                                         '{{ ev.data }}',
-                                        '{{ ev.hora }}',
+                                        '{{ ev.hora.strftime('%H:%M') }}',
                                         `{{ ev.descricao or '' }}`
                                      )"
                                      style="position: relative;">
 
                                     <div>
                                         <strong>{{ ev.hora.strftime('%H:%M') }}</strong><br>
-                                        {{ ev.tipo }}<br>
+                                        {{ tipos_pt[ev.tipo] if ev.tipo in tipos_pt else ev.tipo }}<br>
                                         {% if ev.cliente %}{{ ev.cliente }}{% endif %}
                                     </div>
 
@@ -132,35 +139,37 @@
 </div>
 
 <!-- Modal Novo Agendamento -->
-<div class="modal fade" id="modalAgendamento">
-    <div class="modal-dialog">
-        <div class="modal-content p-3">
+<div class="modal fade" id="modalAgendamento" tabindex="-1" aria-labelledby="modalAgendamentoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalAgendamentoLabel">Novo Agendamento</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" action="/planner/salvar">
+                    <label class="form-label">Tipo</label>
+                    <select class="form-control mb-2" name="tipo" required>
+                        <option value="agendamento">Agendamento</option>
+                        <option value="contato">Contato a realizar</option>
+                        <option value="outros">Outros</option>
+                    </select>
 
-            <h4>Novo Registro</h4>
+                    <label class="form-label">Cliente</label>
+                    <input class="form-control mb-2" name="cliente">
 
-            <form method="POST" action="/planner/salvar">
-                <label>Tipo</label>
-                <select class="form-control mb-2" name="tipo" required>
-                    <option value="agendamento">Agendamento</option>
-                    <option value="contato">Contato a realizar</option>
-                    <option value="outros">Outros</option>
-                </select>
+                    <label class="form-label">Data</label>
+                    <input type="date" class="form-control mb-2" name="data" id="modalData" required>
 
-                <label>Cliente</label>
-                <input class="form-control mb-2" name="cliente">
+                    <label class="form-label">Hora</label>
+                    <input type="time" class="form-control mb-2" name="hora" id="modalHora" required>
 
-                <label>Data</label>
-                <input type="date" class="form-control mb-2" name="data" id="modalData" required>
+                    <label class="form-label">Descrição</label>
+                    <textarea class="form-control mb-3" name="descricao"></textarea>
 
-                <label>Hora (você pode digitar qualquer horário)</label>
-                <input type="time" class="form-control mb-2" name="hora" id="modalHora" required>
-
-                <label>Descrição</label>
-                <textarea class="form-control mb-2" name="descricao"></textarea>
-
-                <button class="btn btn-success w-100" type="submit">Salvar</button>
-            </form>
-
+                    <button class="btn btn-success w-100" type="submit">Salvar</button>
+                </form>
+            </div>
         </div>
     </div>
 </div>
@@ -191,11 +200,12 @@ function abrirModalHorario(cell) {
     new bootstrap.Modal(document.getElementById("modalAgendamento")).show();
 }
 
+const tiposPt = { agendamento: 'Agendamento', contato: 'Contato', outros: 'Outros' };
 function abrirModalDetalhes(id, tipo, cliente, data, hora, descricao) {
-    document.getElementById('detalheTipo').innerText = tipo;
+    document.getElementById('detalheTipo').innerText = tiposPt[tipo] || tipo;
     document.getElementById('detalheCliente').innerText = cliente || "—";
     document.getElementById('detalheData').innerText = data;
-    document.getElementById('detalheHora').innerText = hora;
+    document.getElementById('detalheHora').innerText = hora.substring(0, 5);
     document.getElementById('detalheDescricao').innerText = descricao || "—";
     document.getElementById('deleteForm').action = "/planner/excluir/" + id;
     new bootstrap.Modal(document.getElementById('modalDetalhes')).show();

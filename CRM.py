@@ -1554,15 +1554,20 @@ def atualizar_ocorrencia(id):
 def cadastro():
     if request.method == "POST":
         nome = request.form["nome"]
-        telefone = request.form["telefone"]
+        telefone_bruto = request.form["telefone"]
+        telefone = normalize_phone(telefone_bruto)
         email = request.form["email"]
         tipo_pessoa = request.form["tipo_pessoa"]
 
+        if not telefone:
+            flash("Número de telefone inválido. Informe com DDD.", "danger")
+            return redirect(url_for("cadastro"))
+
         cliente = Cliente(
             usuario_crm_id=current_user.get_usuario_principal_id(),
-            nome=nome, 
-            telefone=telefone, 
-            email=email, 
+            nome=nome,
+            telefone=telefone,
+            email=email,
             tipo_pessoa=tipo_pessoa
         )
 
@@ -1593,6 +1598,61 @@ def cadastro():
     return render_template("cadastro.html", clientes=clientes)
 
 
+@app.route("/clientes/modelo-importacao")
+@login_required
+def modelo_importacao_clientes():
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from flask import send_file
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Clientes"
+
+    headers = [
+        "Nome", "Telefone", "Email", "Tipo de Pessoa",
+        "Data de Nascimento", "Data de Abertura", "Renda", "Faturamento",
+        "Segmento de Trabalho", "Segmento", "Qtd. Funcionários", "Endereço", "Observações"
+    ]
+    obrigatorios = {"Nome", "Telefone", "Email", "Tipo de Pessoa"}
+
+    fill_obrig = PatternFill(start_color="667EEA", end_color="667EEA", fill_type="solid")
+    fill_opc   = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+    font_branca = Font(color="FFFFFF", bold=True)
+    font_escura = Font(color="333333", bold=True)
+
+    for col_idx, header in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=col_idx, value=header)
+        if header in obrigatorios:
+            cell.fill = fill_obrig
+            cell.font = font_branca
+        else:
+            cell.fill = fill_opc
+            cell.font = font_escura
+        cell.alignment = Alignment(horizontal="center")
+
+    # Linha de exemplo
+    ws.append([
+        "Maria Silva", "+5547999999999", "maria@email.com", "Física",
+        "1990-01-15", "", "", "", "Tecnologia", "TI", "10", "Rua das Flores, 123", ""
+    ])
+
+    # Ajuste automático de largura
+    for col in ws.columns:
+        max_len = max((len(str(cell.value or "")) for cell in col), default=10)
+        ws.column_dimensions[col[0].column_letter].width = max_len + 4
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return send_file(
+        output,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name="modelo_importacao_clientes.xlsx"
+    )
+
+
 @app.route("/clientes/importar", methods=["GET", "POST"])
 @login_required
 @permission_required('clientes')
@@ -1605,31 +1665,52 @@ def importar_clientes():
         modo = request.form.get("modo", "pular")  # pular ou atualizar
 
         if not arquivo or not arquivo.filename:
-            flash("Selecione um arquivo CSV para importar.", "warning")
+            flash("Selecione um arquivo CSV ou Excel (.xlsx) para importar.", "warning")
             return redirect(url_for("importar_clientes"))
 
         conteudo = arquivo.read()
-        try:
-            texto = conteudo.decode("utf-8-sig")
-        except Exception:
-            texto = conteudo.decode("latin-1", errors="ignore")
-
-        amostra = texto[:2048]
-        delimitador = ";" if amostra.count(";") > amostra.count(",") else ","
-
-        reader = csv.DictReader(io.StringIO(texto), delimiter=delimitador)
-        if not reader.fieldnames:
-            flash("Arquivo CSV sem cabeçalho.", "danger")
-            return redirect(url_for("importar_clientes"))
+        filename_lower = arquivo.filename.lower()
 
         def normalizar_header(h):
             import re
+            import unicodedata
             h = (h or "").strip().lower()
+            h = unicodedata.normalize('NFKD', h).encode('ascii', 'ignore').decode('ascii')
             h = re.sub(r"\s+", "_", h)
             h = re.sub(r"[^a-z0-9_]+", "", h)
             return h
 
-        # Mapeamento de colunas aceitas
+        # Leitura do arquivo (CSV ou XLSX)
+        rows_para_importar = []
+        if filename_lower.endswith('.xlsx'):
+            import openpyxl
+            wb = openpyxl.load_workbook(io.BytesIO(conteudo), read_only=True, data_only=True)
+            ws = wb.active
+            linhas = list(ws.iter_rows(values_only=True))
+            wb.close()
+            if not linhas:
+                flash("Arquivo Excel vazio.", "danger")
+                return redirect(url_for("importar_clientes"))
+            cabecalhos = [str(h) if h is not None else "" for h in linhas[0]]
+            for linha in linhas[1:]:
+                if any(v is not None and str(v).strip() for v in linha):
+                    rows_para_importar.append(
+                        dict(zip(cabecalhos, [str(v) if v is not None else "" for v in linha]))
+                    )
+        else:
+            try:
+                texto = conteudo.decode("utf-8-sig")
+            except Exception:
+                texto = conteudo.decode("latin-1", errors="ignore")
+            amostra = texto[:2048]
+            delimitador = ";" if amostra.count(";") > amostra.count(",") else ","
+            reader = csv.DictReader(io.StringIO(texto), delimiter=delimitador)
+            if not reader.fieldnames:
+                flash("Arquivo CSV sem cabeçalho.", "danger")
+                return redirect(url_for("importar_clientes"))
+            rows_para_importar = list(reader)
+
+        # Mapeamento de colunas aceitas (snake_case e nomes legíveis normalizados)
         mapa = {
             "nome": "nome",
             "email": "email",
@@ -1637,17 +1718,22 @@ def importar_clientes():
             "celular": "telefone",
             "tipo_pessoa": "tipo_pessoa",
             "tipopessoa": "tipo_pessoa",
+            "tipo_de_pessoa": "tipo_pessoa",
             "data_nascimento": "data_nascimento",
             "datanascimento": "data_nascimento",
+            "data_de_nascimento": "data_nascimento",
             "data_abertura": "data_abertura",
             "dataabertura": "data_abertura",
+            "data_de_abertura": "data_abertura",
             "renda": "renda",
             "faturamento": "faturamento",
             "segmento_trabalho": "segmento_trabalho",
             "segmentotrabalho": "segmento_trabalho",
+            "segmento_de_trabalho": "segmento_trabalho",
             "segmento": "segmento",
             "qtd_funcionarios": "qtd_funcionarios",
             "qtdfuncionarios": "qtd_funcionarios",
+            "qtd_funcionarios": "qtd_funcionarios",
             "endereco": "endereco",
             "observacoes": "observacoes"
         }
@@ -1662,7 +1748,7 @@ def importar_clientes():
         duplicados = 0
         ignorados = 0
 
-        for idx, row in enumerate(reader, start=2):
+        for idx, row in enumerate(rows_para_importar, start=2):
             dados = {}
             for chave, valor in row.items():
                 destino = mapa.get(normalizar_header(chave))
@@ -1674,9 +1760,15 @@ def importar_clientes():
             telefone = normalize_phone(telefone_bruto)
             email = (dados.get("email") or "").strip().lower()
 
-            if not nome or not telefone:
+            tipo_pessoa_val = dados.get("tipo_pessoa")
+            campos_faltando = []
+            if not nome: campos_faltando.append("Nome")
+            if not telefone: campos_faltando.append("Telefone")
+            if not email: campos_faltando.append("Email")
+            if not tipo_pessoa_val: campos_faltando.append("Tipo de Pessoa")
+            if campos_faltando:
                 ignorados += 1
-                erros.append(f"Linha {idx}: nome ou telefone ausente")
+                erros.append(f"Linha {idx}: campo(s) obrigatório(s) ausente(s): {', '.join(campos_faltando)}")
                 continue
 
             cliente_existente = None

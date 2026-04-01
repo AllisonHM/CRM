@@ -60,16 +60,21 @@
 
         <div class="mb-3">
             <label for="telefone" class="form-label">Telefone</label>
-            <input 
-                type="text" 
-                name="telefone" 
-                id="telefone" 
-                class="form-control"
-                required
-                placeholder="+55 47 99999-9999"
-                pattern="^\+\d{2}\s\d{2}\s\d{4,5}-?\d{4}$"
-                title="Digite no formato +55 47 99999-9999"
-            >
+            <div class="input-group">
+                <span class="input-group-text">📞</span>
+                <input
+                    type="text"
+                    name="telefone"
+                    id="telefone"
+                    class="form-control"
+                    required
+                    autocomplete="off"
+                    placeholder="(47) 99999-9999"
+                    inputmode="numeric"
+                >
+            </div>
+            <div id="telefone-feedback"></div>
+            <div class="form-text text-muted">Digite somente os dígitos com DDD. Ex: <code>(47) 99999-9999</code> ou com código <code>+55 (47) 99999-9999</code></div>
         </div>
 
         <div class="mb-3">
@@ -82,7 +87,6 @@
         </div>
 
         <button type="submit" class="btn btn-success">Salvar</button>
-        <a href="{{ url_for('relacionamento') }}" class="btn btn-secondary">Cancelar</a>
     </form>
 
     <!-- Campo de busca -->
@@ -119,9 +123,9 @@
                     <td>{{ cliente.telefone }}</td>
                     <td>{{ cliente.tipo_pessoa }}</td>
                     <td>
-                        <form action="{{ url_for('excluir_cliente', id=cliente.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('ATENÇÃO!\n\nVocê está prestes a excluir o cliente:\n\n« {{ cliente.nome }} »\n\nTodos os dados vinculados (negócios e ocorrências) também serão DELETADOS!\n\nTem certeza que deseja continuar?');">
-                            <button type="submit" class="btn btn-danger btn-sm">Excluir</button>
-                        </form>
+                        <button type="button" class="btn btn-danger btn-sm btn-excluir"
+                            data-id="{{ cliente.id }}"
+                            data-nome="{{ cliente.nome }}">Excluir</button>
                     </td>
                 </tr>
                 {% endfor %}
@@ -133,7 +137,52 @@
     {% endif %}
 </div>
 
+<!-- Modal de confirmação de exclusão -->
+<div class="modal fade" id="modalExcluir" tabindex="-1" aria-labelledby="modalExcluirLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title text-white" id="modalExcluirLabel">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="me-2 mb-1" viewBox="0 0 16 16">
+                        <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/>
+                    </svg>
+                    Confirmar Exclusão
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body py-4 px-4">
+                <p class="mb-1">Você está prestes a excluir o cliente:</p>
+                <p class="fw-bold fs-5 mb-3" id="modalNomeCliente"></p>
+                <div class="alert alert-warning d-flex align-items-center mb-0 py-2" role="alert">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="me-2 flex-shrink-0" viewBox="0 0 16 16">
+                        <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.47l-.451-.081.082-.381 2.29-.287zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/>
+                    </svg>
+                    <small>Todos os dados vinculados (negócios e ocorrências) serão <strong>excluídos permanentemente</strong>.</small>
+                </div>
+            </div>
+            <div class="modal-footer border-0 pt-0">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <form id="formExcluir" method="POST">
+                    <button type="submit" class="btn btn-danger">Sim, excluir</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
+function confirmarExclusao(id, nome) {
+    document.getElementById('modalNomeCliente').textContent = nome;
+    document.getElementById('formExcluir').action = '/cliente/' + id + '/excluir';
+    var modal = new bootstrap.Modal(document.getElementById('modalExcluir'));
+    modal.show();
+}
+
+document.querySelectorAll('.btn-excluir').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+        confirmarExclusao(this.dataset.id, this.dataset.nome);
+    });
+});
 function filtrarClientes() {
     const filtro = document.getElementById("buscaCliente").value.toLowerCase();
     const linhas = document.querySelectorAll("tbody tr");
@@ -149,6 +198,116 @@ function filtrarClientes() {
         }
     });
 }
+
+// ── Máscara e validação de telefone ──────────────────────────────────────────
+(function () {
+    const campo = document.getElementById('telefone');
+    if (!campo) return;
+
+    function soDigitos(v) { return v.replace(/\D/g, ''); }
+
+    // Formata 12 ou 13 dígitos (com código 55) para exibição
+    function formatarCompleto(d) {
+        if (d.length === 13) {
+            return '+' + d.slice(0,2) + ' (' + d.slice(2,4) + ') ' + d.slice(4,9) + '-' + d.slice(9);
+        }
+        if (d.length === 12) {
+            return '+' + d.slice(0,2) + ' (' + d.slice(2,4) + ') ' + d.slice(4,8) + '-' + d.slice(8);
+        }
+        return d;
+    }
+
+    // Formata parcialmente durante a digitação (sem país)
+    function formatarParcial(d) {
+        if (d.length <= 0)  return '';
+        if (d.length <= 2)  return '(' + d + (d.length === 2 ? ') ' : '');
+        if (d.length <= 6)  return '(' + d.slice(0,2) + ') ' + d.slice(2);
+        if (d.length <= 10) return '(' + d.slice(0,2) + ') ' + d.slice(2,6) + '-' + d.slice(6);
+        return '(' + d.slice(0,2) + ') ' + d.slice(2,7) + '-' + d.slice(7,11);
+    }
+
+    function validarDigitos(d) {
+        return (d.length === 12 || d.length === 13) && d.startsWith('55');
+    }
+
+    function normalizarDigitos(d) {
+        if ((d.length === 10 || d.length === 11) && !d.startsWith('55')) {
+            d = '55' + d;
+        }
+        return d.slice(0, 13);
+    }
+
+    function exibirFeedback(ok) {
+        const div = document.getElementById('telefone-feedback');
+        campo.classList.remove('is-valid', 'is-invalid');
+        if (!div) return;
+        if (ok) {
+            campo.classList.add('is-valid');
+            div.textContent = 'Número válido.';
+            div.className = 'valid-feedback d-block';
+        } else if (campo.value.length > 0) {
+            campo.classList.add('is-invalid');
+            div.textContent = 'Informe um número válido com DDD. Ex: (47) 99999-9999';
+            div.className = 'invalid-feedback d-block';
+        } else {
+            div.textContent = '';
+            div.className = '';
+        }
+    }
+
+    // Formata enquanto digita (sem mostrar is-valid ainda)
+    campo.addEventListener('input', function () {
+        const start = this.selectionStart;
+        const oldLen = this.value.length;
+
+        let d = soDigitos(this.value);
+
+        if (d.startsWith('55') && d.length >= 4) {
+            d = d.slice(0, 13);
+            this.value = formatarCompleto(d);
+        } else {
+            d = d.slice(0, 11);
+            this.value = formatarParcial(d);
+        }
+
+        // Ajusta cursor
+        const diff = this.value.length - oldLen;
+        const pos = Math.max(0, start + diff);
+        try { this.setSelectionRange(pos, pos); } catch(e) {}
+
+        // Limpa feedback durante digitação
+        this.classList.remove('is-valid', 'is-invalid');
+        const div = document.getElementById('telefone-feedback');
+        if (div) { div.textContent = ''; div.className = ''; }
+    });
+
+    // Normaliza e valida ao sair do campo
+    campo.addEventListener('blur', function () {
+        let d = normalizarDigitos(soDigitos(this.value));
+        if (validarDigitos(d)) {
+            this.value = formatarCompleto(d);
+            exibirFeedback(true);
+        } else if (this.value.length > 0) {
+            exibirFeedback(false);
+        }
+    });
+
+    // Bloqueia submit se inválido e limpa para dígitos antes de enviar
+    const form = campo.closest('form');
+    if (form) {
+        form.addEventListener('submit', function (e) {
+            let d = normalizarDigitos(soDigitos(campo.value));
+            if (!validarDigitos(d)) {
+                e.preventDefault();
+                campo.focus();
+                exibirFeedback(false);
+                return;
+            }
+            // Envia apenas dígitos — backend normaliza
+            campo.value = d;
+        });
+    }
+})();
 </script>
 
 {% endblock %}

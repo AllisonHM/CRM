@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="container mt-4">
-    <h1 class="mb-3">Importar Clientes (CSV)</h1>
+    <h1 class="mb-3">Importar Clientes</h1>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -17,12 +17,115 @@
       {% endif %}
     {% endwith %}
 
+    <!-- Card de colunas aceitas (no topo) -->
     <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Colunas aceitas</h5>
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-3">
+                Campos obrigatórios: <strong>Nome</strong>, <strong>Telefone</strong>, <strong>Email</strong> e <strong>Tipo de Pessoa</strong>.
+                Os demais são opcionais e, se não preenchidos, não interferirão na importação.
+            </p>
+            <div class="row">
+                <div class="col-md-6">
+                    <table class="table table-sm table-bordered align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Coluna</th>
+                                <th class="text-center">Obrigatório</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="table-warning fw-semibold">
+                                <td>Nome</td>
+                                <td class="text-center"><span class="badge bg-danger">Sim</span></td>
+                            </tr>
+                            <tr class="table-warning fw-semibold">
+                                <td>Telefone</td>
+                                <td class="text-center"><span class="badge bg-danger">Sim</span></td>
+                            </tr>
+                            <tr class="table-warning fw-semibold">
+                                <td>Email</td>
+                                <td class="text-center"><span class="badge bg-danger">Sim</span></td>
+                            </tr>
+                            <tr class="table-warning fw-semibold">
+                                <td>Tipo de Pessoa</td>
+                                <td class="text-center"><span class="badge bg-danger">Sim</span></td>
+                            </tr>
+                            <tr>
+                                <td>Data de Nascimento</td>
+                                <td class="text-center"><span class="badge bg-secondary">Não</span></td>
+                            </tr>
+                            <tr>
+                                <td>Data de Abertura</td>
+                                <td class="text-center"><span class="badge bg-secondary">Não</span></td>
+                            </tr>
+                            <tr>
+                                <td>Renda</td>
+                                <td class="text-center"><span class="badge bg-secondary">Não</span></td>
+                            </tr>
+                            <tr>
+                                <td>Faturamento</td>
+                                <td class="text-center"><span class="badge bg-secondary">Não</span></td>
+                            </tr>
+                            <tr>
+                                <td>Segmento de Trabalho</td>
+                                <td class="text-center"><span class="badge bg-secondary">Não</span></td>
+                            </tr>
+                            <tr>
+                                <td>Segmento</td>
+                                <td class="text-center"><span class="badge bg-secondary">Não</span></td>
+                            </tr>
+                            <tr>
+                                <td>Qtd. Funcionários</td>
+                                <td class="text-center"><span class="badge bg-secondary">Não</span></td>
+                            </tr>
+                            <tr>
+                                <td>Endereço</td>
+                                <td class="text-center"><span class="badge bg-secondary">Não</span></td>
+                            </tr>
+                            <tr>
+                                <td>Observações</td>
+                                <td class="text-center"><span class="badge bg-secondary">Não</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <p class="fw-semibold">Dicas de preenchimento:</p>
+                    <ul class="small mb-3">
+                        <li>Datas no formato <code>AAAA-MM-DD</code> (ex: <code>1990-01-15</code>)</li>
+                        <li><strong>Tipo de Pessoa</strong>: use <code>Física</code> ou <code>Jurídica</code></li>
+                        <li>Arquivos aceitos: <code>.csv</code> e <code>.xlsx</code></li>
+                        <li>Delimitador CSV: <code>,</code> ou <code>;</code> (detectado automaticamente)</li>
+                        <li>Renda e Faturamento: apenas números (ex: <code>3500.00</code>)</li>
+                    </ul>
+                    <a href="{{ url_for('modelo_importacao_clientes') }}" class="btn btn-success">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="me-1" viewBox="0 0 16 16">
+                            <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                            <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+                        </svg>
+                        Baixar modelo Excel
+                    </a>
+                    <p class="text-muted small mt-2">
+                        O modelo já vem com cabeçalhos coloridos — azul para obrigatórios, cinza para opcionais — e uma linha de exemplo.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card do formulário de importação -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Enviar arquivo</h5>
+        </div>
         <div class="card-body">
             <form method="POST" enctype="multipart/form-data">
                 <div class="mb-3">
-                    <label class="form-label">Arquivo CSV</label>
-                    <input type="file" name="arquivo" class="form-control" accept=".csv" required>
+                    <label class="form-label">Arquivo <span class="text-muted small">(.csv ou .xlsx)</span></label>
+                    <input type="file" name="arquivo" class="form-control" accept=".csv,.xlsx" required>
                 </div>
 
                 <div class="mb-3">
@@ -36,22 +139,6 @@
                 <button class="btn btn-success" type="submit">Importar</button>
                 <a class="btn btn-secondary" href="{{ url_for('cadastro') }}">Voltar</a>
             </form>
-        </div>
-    </div>
-
-    <div class="card mb-4">
-        <div class="card-body">
-            <h5>Colunas aceitas</h5>
-            <p class="text-muted mb-2">Obrigatórias: <strong>nome</strong>, <strong>telefone</strong>. As demais são opcionais.</p>
-            <div class="small">
-                nome, email, telefone, tipo_pessoa, data_nascimento, data_abertura, renda, faturamento, segmento_trabalho,
-                segmento, qtd_funcionarios, endereco, observacoes
-            </div>
-            <div class="mt-2">
-                <code>Exemplo:</code>
-                <pre class="mb-0">nome,telefone,email,tipo_pessoa
-Maria,+5547999999999,maria@email.com,Física</pre>
-            </div>
         </div>
     </div>
 
@@ -72,3 +159,4 @@ Maria,+5547999999999,maria@email.com,Física</pre>
     {% endif %}
 </div>
 {% endblock %}
+
