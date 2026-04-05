@@ -99,8 +99,26 @@
                   </select>
                 </th>
                 <th><input type="text" id="filterValor" placeholder="Filtrar..."></th>
-                <th class="col-data"><input type="text" id="filterData" placeholder="Filtrar..."></th>
-                <th><input type="text" id="filterHora" placeholder="Filtrar..."></th>
+                <th class="col-data">
+                  <select id="filterDataOp">
+                    <option value="igual">Igual</option>
+                    <option value="lte">&#8804; Menor ou igual</option>
+                    <option value="gte">&#8805; Maior ou igual</option>
+                    <option value="entre">Entre</option>
+                  </select>
+                  <input type="text" id="filterData" placeholder="DD/MM/AAAA" style="margin-top:3px;">
+                  <input type="text" id="filterDataAte" placeholder="at&#233; DD/MM/AAAA" style="display:none;margin-top:3px;">
+                </th>
+                <th>
+                  <select id="filterHoraOp">
+                    <option value="igual">Igual</option>
+                    <option value="lte">&#8804; Menor ou igual</option>
+                    <option value="gte">&#8805; Maior ou igual</option>
+                    <option value="entre">Entre</option>
+                  </select>
+                  <input type="text" id="filterHora" placeholder="HH:MM" style="margin-top:3px;">
+                  <input type="text" id="filterHoraAte" placeholder="at&#233; HH:MM" style="display:none;margin-top:3px;">
+                </th>
                 <th></th>
             </tr>
         </thead>
@@ -123,8 +141,8 @@
                   {% endif %}
                 </td>
                 <td>R$ {{ m.valor_total }}</td>
-                <td class="col-data">{{ m.data_registro }}</td>
-                <td>{{ m.hora_registro.strftime('%H:%M:%S') if m.hora_registro else '' }}</td>
+                <td class="col-data" data-data="{{ m.data_registro.strftime('%Y-%m-%d') if m.data_registro else '' }}">{{ m.data_registro.strftime('%d/%m/%Y') if m.data_registro else '' }}</td>
+                <td data-hora="{{ m.hora_registro.strftime('%H:%M') if m.hora_registro else '' }}">{{ m.hora_registro.strftime('%H:%M') if m.hora_registro else '' }}</td>
                 <td>
                     {% if m.situacao == "Em negociação" %}
                     <a class="btn btn-sm btn-primary" href="{{ url_for('detalhe_mesa', id=m.id) }}">Ver</a>
@@ -139,6 +157,18 @@
 </div>
 
 <script>
+  // Mostrar/ocultar segundo campo "até" para filtro Entre
+  document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('filterDataOp').addEventListener('change', function() {
+      document.getElementById('filterDataAte').style.display = this.value === 'entre' ? '' : 'none';
+      filtrarTabela();
+    });
+    document.getElementById('filterHoraOp').addEventListener('change', function() {
+      document.getElementById('filterHoraAte').style.display = this.value === 'entre' ? '' : 'none';
+      filtrarTabela();
+    });
+  });
+
   // Adiciona listeners aos filtros
   document.getElementById('filterCliente').addEventListener('keyup', filtrarTabela);
   document.getElementById('filterTopico').addEventListener('keyup', filtrarTabela);
@@ -146,43 +176,91 @@
   document.getElementById('filterSituacao').addEventListener('change', filtrarTabela);
   document.getElementById('filterValor').addEventListener('keyup', filtrarTabela);
   document.getElementById('filterData').addEventListener('keyup', filtrarTabela);
+  document.getElementById('filterDataAte').addEventListener('keyup', filtrarTabela);
   document.getElementById('filterHora').addEventListener('keyup', filtrarTabela);
+  document.getElementById('filterHoraAte').addEventListener('keyup', filtrarTabela);
+
+  function parseInputDate(str) {
+    // Aceita DD/MM/AAAA -> converte para YYYY-MM-DD
+    str = str.trim();
+    const parts = str.split('/');
+    if (parts.length === 3 && parts[2].length === 4) {
+      return parts[2] + '-' + parts[1].padStart(2, '0') + '-' + parts[0].padStart(2, '0');
+    }
+    return str;
+  }
+
+  function timeToMins(t) {
+    const parts = t.split(':');
+    return parseInt(parts[0] || 0) * 60 + parseInt(parts[1] || 0);
+  }
+
+  function matchDateFilter(cellDate, op, val1, val2) {
+    if (!val1) return true;
+    const d1 = parseInputDate(val1);
+    if (op === 'igual') return cellDate === d1;
+    if (op === 'lte')   return cellDate !== '' && cellDate <= d1;
+    if (op === 'gte')   return cellDate !== '' && cellDate >= d1;
+    if (op === 'entre') {
+      if (!val2) return cellDate !== '' && cellDate >= d1;
+      const d2 = parseInputDate(val2);
+      return cellDate !== '' && cellDate >= d1 && cellDate <= d2;
+    }
+    return true;
+  }
+
+  function matchTimeFilter(cellTime, op, val1, val2) {
+    if (!val1) return true;
+    if (op === 'igual') return cellTime === val1.trim();
+    const ct = timeToMins(cellTime);
+    const t1 = timeToMins(val1.trim());
+    if (op === 'lte')   return cellTime !== '' && ct <= t1;
+    if (op === 'gte')   return cellTime !== '' && ct >= t1;
+    if (op === 'entre') {
+      if (!val2) return cellTime !== '' && ct >= t1;
+      const t2 = timeToMins(val2.trim());
+      return cellTime !== '' && ct >= t1 && ct <= t2;
+    }
+    return true;
+  }
 
   function filtrarTabela() {
     const tabela = document.getElementById('tabelaMesas');
     const linhas = tabela.querySelectorAll('tbody tr');
-    
-    const filterCliente = document.getElementById('filterCliente').value.toLowerCase();
-    const filterTopico = document.getElementById('filterTopico').value.toLowerCase();
+
+    const filterCliente  = document.getElementById('filterCliente').value.toLowerCase();
+    const filterTopico   = document.getElementById('filterTopico').value.toLowerCase();
     const filterProdutos = document.getElementById('filterProdutos').value.toLowerCase();
     const filterSituacao = document.getElementById('filterSituacao').value;
-    const filterValor = document.getElementById('filterValor').value.toLowerCase();
-    const filterData = document.getElementById('filterData').value.toLowerCase();
-    const filterHora = document.getElementById('filterHora').value.toLowerCase();
+    const filterValor    = document.getElementById('filterValor').value.toLowerCase();
+
+    const filterDataOp  = document.getElementById('filterDataOp').value;
+    const filterData    = document.getElementById('filterData').value.trim();
+    const filterDataAte = document.getElementById('filterDataAte').value.trim();
+
+    const filterHoraOp  = document.getElementById('filterHoraOp').value;
+    const filterHora    = document.getElementById('filterHora').value.trim();
+    const filterHoraAte = document.getElementById('filterHoraAte').value.trim();
 
     linhas.forEach(linha => {
       const colunas = linha.querySelectorAll('td');
-      const cliente = colunas[0].textContent.toLowerCase();
-      const topico = colunas[1].textContent.toLowerCase();
+      const cliente  = colunas[0].textContent.toLowerCase();
+      const topico   = colunas[1].textContent.toLowerCase();
       const produtos = colunas[2].textContent.toLowerCase();
       const situacao = colunas[3].textContent;
-      const valor = colunas[4].textContent.toLowerCase();
-      const data = colunas[5].textContent.toLowerCase();
-      const hora = colunas[6].textContent.toLowerCase();
+      const valor    = colunas[4].textContent.toLowerCase();
+      const dataVal  = colunas[5].getAttribute('data-data') || '';
+      const horaVal  = colunas[6].getAttribute('data-hora') || '';
 
-      const matchCliente = cliente.includes(filterCliente);
-      const matchTopico = topico.includes(filterTopico);
+      const matchCliente  = cliente.includes(filterCliente);
+      const matchTopico   = topico.includes(filterTopico);
       const matchProdutos = produtos.includes(filterProdutos);
       const matchSituacao = filterSituacao === '' || situacao.includes(filterSituacao);
-      const matchValor = valor.includes(filterValor);
-      const matchData = data.includes(filterData);
-      const matchHora = hora.includes(filterHora);
+      const matchValor    = valor.includes(filterValor);
+      const matchData     = matchDateFilter(dataVal, filterDataOp, filterData, filterDataAte);
+      const matchHora     = matchTimeFilter(horaVal, filterHoraOp, filterHora, filterHoraAte);
 
-      if (matchCliente && matchTopico && matchProdutos && matchSituacao && matchValor && matchData && matchHora) {
-        linha.style.display = '';
-      } else {
-        linha.style.display = 'none';
-      }
+      linha.style.display = (matchCliente && matchTopico && matchProdutos && matchSituacao && matchValor && matchData && matchHora) ? '' : 'none';
     });
   }
 

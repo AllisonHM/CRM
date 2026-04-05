@@ -4,43 +4,97 @@
 {% block content %}
 
 <style>
+  /* Impede scroll da página */
+  body { overflow: hidden; }
+
+  /* Layout principal sem scroll de página */
+  .produtos-row {
+    height: calc(100vh - 185px);
+  }
+
+  /* Coluna esquerda: scroll interno se necessário */
+  .col-produtos-left {
+    height: 100%;
+    overflow-y: auto;
+  }
+
+  /* Coluna direita: ocupa toda a altura */
+  .col-produtos-right {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .col-produtos-right .card {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Scroll do Estoque Atual ocupa espaço restante */
+  .table-scroll-estoque {
+    flex: 1;
+    overflow-y: auto;
+    border-radius: 0 0 8px 8px;
+  }
+
+  .table-scroll-estoque table {
+    margin-bottom: 0;
+  }
+
+  /* Cadastrar produto - compacto */
   .card-compact .card-body {
-    padding: 0.75rem;
+    padding: 0.6rem;
   }
-  
+
   .card-compact .form-label {
-    margin-bottom: 0.25rem;
-    font-size: 0.9rem;
+    margin-bottom: 0.2rem;
+    font-size: 0.88rem;
   }
-  
+
   .card-compact .form-control,
   .card-compact .form-select {
-    padding: 0.4rem 0.6rem;
-    font-size: 0.9rem;
+    padding: 0.35rem 0.55rem;
+    font-size: 0.88rem;
   }
-  
+
   .card-compact .btn {
-    padding: 0.4rem 0.8rem;
-    font-size: 0.9rem;
+    padding: 0.35rem 0.7rem;
+    font-size: 0.88rem;
   }
-  
+
   .card-compact .mb-3 {
-    margin-bottom: 0.5rem !important;
+    margin-bottom: 0.4rem !important;
   }
-  
+
   .card-compact .mb-2 {
-    margin-bottom: 0.35rem !important;
+    margin-bottom: 0.25rem !important;
   }
-  
-  .table-scroll {
-    max-height: 500px;
-    overflow-y: auto;
-    border: 1px solid #dee2e6;
-    border-radius: 8px;
+
+  /* Entrada / Saída - ainda mais compacto */
+  .card-entradas .card-body {
+    padding: 0.45rem;
   }
-  
-  .table-scroll table {
-    margin-bottom: 0;
+
+  .card-entradas .form-label {
+    margin-bottom: 0.1rem;
+    font-size: 0.82rem;
+  }
+
+  .card-entradas .form-control,
+  .card-entradas .form-select {
+    padding: 0.2rem 0.45rem;
+    font-size: 0.82rem;
+  }
+
+  .card-entradas .mb-2 {
+    margin-bottom: 0.2rem !important;
+  }
+
+  .card-entradas .btn {
+    padding: 0.25rem 0.6rem;
+    font-size: 0.82rem;
+    margin-top: 0.3rem;
   }
 </style>
 
@@ -59,8 +113,8 @@
   <!-- Mensagens de status -->
   <div id="alerts"></div>
 
-  <div class="row">
-    <div class="col-md-4">
+  <div class="row produtos-row">
+    <div class="col-md-4 col-produtos-left">
       <div class="card card-compact mb-3">
         <div class="card-header">Cadastrar Produto</div>
         <div class="card-body">
@@ -78,7 +132,7 @@
         </div>
       </div>
 
-      <div class="card card-compact">
+      <div class="card card-compact card-entradas">
         <div class="card-header">Entrada / Saída</div>
         <div class="card-body">
           <form id="formMovimentacao">
@@ -99,7 +153,7 @@
             </div>
             <div class="mb-2">
               <label class="form-label">Descrição</label>
-              <textarea id="movDescricao" class="form-control" rows="2" required></textarea>
+              <textarea id="movDescricao" class="form-control" rows="1" required></textarea>
             </div>
             <button type="submit" class="btn btn-success">Registrar</button>
           </form>
@@ -107,10 +161,10 @@
       </div>
     </div>
 
-    <div class="col-md-8">
+    <div class="col-md-8 col-produtos-right">
       <div class="card">
         <div class="card-header">Estoque Atual</div>
-        <div class="table-scroll">
+        <div class="table-scroll-estoque">
           <table class="table table-striped" id="tabelaProdutos">
             <thead class="table-dark">
               <tr>
