@@ -45,6 +45,10 @@
     border-radius: 4px;
   }
 
+  .col-data {
+    min-width: 160px;
+  }
+
   .btn-export {
     padding: 10px 18px;
     background: var(--accent-yellow);
@@ -72,14 +76,23 @@
     <table class="table table-crm" id="tabelaOcorrencias">
         <thead>
             <tr>
-                <th>Data de Registro</th>
+                <th class="col-data">Data de Registro</th>
                 <th>Cliente</th>
                 <th>Tópico</th>
                 <th>Situação</th>
                 <th>Ações</th>
             </tr>
             <tr class="filter-row">
-                <th><input type="text" id="filterData" placeholder="Filtrar..."></th>
+                <th class="col-data">
+                  <select id="filterDataOp">
+                    <option value="igual">Igual</option>
+                    <option value="lte">&#8804; Menor ou igual</option>
+                    <option value="gte">&#8805; Maior ou igual</option>
+                    <option value="entre">Entre</option>
+                  </select>
+                  <input type="text" id="filterData" placeholder="DD/MM/AAAA" style="margin-top:3px;">
+                  <input type="text" id="filterDataAte" placeholder="até DD/MM/AAAA" style="display:none;margin-top:3px;">
+                </th>
                 <th><input type="text" id="filterCliente" placeholder="Filtrar..."></th>
                 <th><input type="text" id="filterTopico" placeholder="Filtrar..."></th>
                 <th>
@@ -97,7 +110,7 @@
         <tbody>
             {% for o in ocorrencias %}
             <tr>
-                <td>{{ o.data_registro.strftime('%d/%m/%Y') if o.data_registro else '—' }}</td>
+                <td class="col-data" data-data="{{ o.data_registro.strftime('%Y-%m-%d') if o.data_registro else '' }}">{{ o.data_registro.strftime('%d/%m/%Y') if o.data_registro else '—' }}</td>
 
                 <td>
                     {{ (o.cliente.nome if o.cliente else (o.cliente_nome if o.cliente_nome else '—')) }}
@@ -131,38 +144,66 @@
 </div>
 
 <script>
-  // Adiciona listeners aos filtros
+  document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('filterDataOp').addEventListener('change', function() {
+      document.getElementById('filterDataAte').style.display = this.value === 'entre' ? '' : 'none';
+      filtrarTabela();
+    });
+  });
+
   document.getElementById('filterData').addEventListener('keyup', filtrarTabela);
+  document.getElementById('filterDataAte').addEventListener('keyup', filtrarTabela);
   document.getElementById('filterCliente').addEventListener('keyup', filtrarTabela);
   document.getElementById('filterTopico').addEventListener('keyup', filtrarTabela);
   document.getElementById('filterSituacao').addEventListener('change', filtrarTabela);
 
+  function parseInputDate(str) {
+    str = str.trim();
+    const parts = str.split('/');
+    if (parts.length === 3 && parts[2].length === 4) {
+      return parts[2] + '-' + parts[1].padStart(2, '0') + '-' + parts[0].padStart(2, '0');
+    }
+    return str;
+  }
+
+  function matchDateFilter(cellDate, op, val1, val2) {
+    if (!val1) return true;
+    const d1 = parseInputDate(val1);
+    if (op === 'igual') return cellDate === d1;
+    if (op === 'lte')   return cellDate !== '' && cellDate <= d1;
+    if (op === 'gte')   return cellDate !== '' && cellDate >= d1;
+    if (op === 'entre') {
+      if (!val2) return cellDate !== '' && cellDate >= d1;
+      const d2 = parseInputDate(val2);
+      return cellDate !== '' && cellDate >= d1 && cellDate <= d2;
+    }
+    return true;
+  }
+
   function filtrarTabela() {
     const tabela = document.getElementById('tabelaOcorrencias');
     const linhas = tabela.querySelectorAll('tbody tr');
-    
-    const filterData = document.getElementById('filterData').value.toLowerCase();
+
+    const filterDataOp  = document.getElementById('filterDataOp').value;
+    const filterData    = document.getElementById('filterData').value.trim();
+    const filterDataAte = document.getElementById('filterDataAte').value.trim();
     const filterCliente = document.getElementById('filterCliente').value.toLowerCase();
-    const filterTopico = document.getElementById('filterTopico').value.toLowerCase();
+    const filterTopico  = document.getElementById('filterTopico').value.toLowerCase();
     const filterSituacao = document.getElementById('filterSituacao').value;
 
     linhas.forEach(linha => {
-      const colunas = linha.querySelectorAll('td');
-      const data = colunas[0].textContent.toLowerCase();
-      const cliente = colunas[1].textContent.toLowerCase();
-      const topico = colunas[2].textContent.toLowerCase();
+      const colunas  = linha.querySelectorAll('td');
+      const dataVal  = colunas[0].getAttribute('data-data') || '';
+      const cliente  = colunas[1].textContent.toLowerCase();
+      const topico   = colunas[2].textContent.toLowerCase();
       const situacao = colunas[3].textContent;
 
-      const matchData = data.includes(filterData);
-      const matchCliente = cliente.includes(filterCliente);
-      const matchTopico = topico.includes(filterTopico);
+      const matchData     = matchDateFilter(dataVal, filterDataOp, filterData, filterDataAte);
+      const matchCliente  = cliente.includes(filterCliente);
+      const matchTopico   = topico.includes(filterTopico);
       const matchSituacao = filterSituacao === '' || situacao.includes(filterSituacao);
 
-      if (matchData && matchCliente && matchTopico && matchSituacao) {
-        linha.style.display = '';
-      } else {
-        linha.style.display = 'none';
-      }
+      linha.style.display = (matchData && matchCliente && matchTopico && matchSituacao) ? '' : 'none';
     });
   }
 

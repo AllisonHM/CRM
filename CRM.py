@@ -1406,8 +1406,12 @@ def add_mesa(id):
         except:
             produtos_quantidades = {}
         
+        usuario_principal_id = current_user.get_usuario_principal_id()
+        proximo_numero_mesa = MesaNegocio.query.filter_by(usuario_crm_id=usuario_principal_id).count() + 1
+
         mesa = MesaNegocio(
-            usuario_crm_id=current_user.get_usuario_principal_id(),
+            usuario_crm_id=usuario_principal_id,
+            numero=proximo_numero_mesa,
             cliente_id=id,
             topico=request.form["topico"],
             produtos=request.form["produtos"],
@@ -1502,8 +1506,12 @@ def detalhe_mesa(id):
 def add_ocorrencia(id):
     cliente = Cliente.query.get_or_404(id)
     if request.method == "POST":
+        usuario_principal_id = current_user.get_usuario_principal_id()
+        proximo_numero_ocorrencia = Ocorrencia.query.filter_by(usuario_crm_id=usuario_principal_id).count() + 1
+
         ocorrencia = Ocorrencia(
-            usuario_crm_id=current_user.get_usuario_principal_id(),
+            usuario_crm_id=usuario_principal_id,
+            numero=proximo_numero_ocorrencia,
             cliente_id=id,
             topico=request.form["topico"],
             status=request.form["status"],
@@ -1556,7 +1564,12 @@ def cadastro():
         nome = request.form["nome"]
         telefone_bruto = request.form["telefone"]
         telefone = normalize_phone(telefone_bruto)
-        email = request.form["email"]
+        email = request.form["email"].strip()
+
+        if not email or '@' not in email or '.' not in email.split('@')[-1]:
+            flash("Email inválido. Informe um email com @ e domínio válido.", "danger")
+            return redirect(url_for("cadastro"))
+
         tipo_pessoa = request.form["tipo_pessoa"]
 
         if not telefone:

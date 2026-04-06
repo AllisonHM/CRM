@@ -14,7 +14,7 @@
     <div class="card card-accent hover-lift">
       <div class="card-header">Informações da Ocorrência</div>
       <div class="card-body">
-        <p><strong>ID:</strong> {{ ocorrencia.id }}</p>
+        <p><strong>Nº:</strong> {{ ocorrencia.numero or ocorrencia.id }}</p>
         <p><strong>Cliente:</strong> {{ ocorrencia.cliente.nome }}</p>
         <p><strong>Tópico:</strong> {{ ocorrencia.topico }}</p>
         <p><strong>Descrição:</strong> {{ ocorrencia.descricao }}</p>

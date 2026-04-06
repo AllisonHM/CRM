@@ -103,6 +103,7 @@ class MesaNegocio(db.Model):
     __tablename__ = 'mesa_negocio'
 
     id = db.Column(db.Integer, primary_key=True)
+    numero = db.Column(db.Integer, nullable=True)  # Numeração sequencial por usuário
     usuario_crm_id = db.Column(db.Integer, db.ForeignKey('usuario_crm.id'), nullable=True)
     cliente_id = db.Column(db.Integer, db.ForeignKey('cliente.id'), nullable=True)
     topico = db.Column(db.String(150), nullable=False)
@@ -117,6 +118,7 @@ class MesaNegocio(db.Model):
 
 class Ocorrencia(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    numero = db.Column(db.Integer, nullable=True)  # Numeração sequencial por usuário
     usuario_crm_id = db.Column(db.Integer, db.ForeignKey('usuario_crm.id'), nullable=True)
     cliente_id = db.Column(db.Integer, db.ForeignKey('cliente.id'), nullable=False)
     topico = db.Column(db.String(200), nullable=False)

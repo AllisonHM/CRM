@@ -14,7 +14,7 @@
     <div class="card card-accent hover-lift">
       <div class="card-header">Informações da Mesa</div>
       <div class="card-body">
-        <p><strong>ID:</strong> {{ mesa.id }}</p>
+        <p><strong>Nº:</strong> {{ mesa.numero or mesa.id }}</p>
         <p><strong>Cliente:</strong> {{ mesa.cliente.nome }}</p>
         <p><strong>Tópico:</strong> {{ mesa.topico }}</p>
         <p><strong>Descrição:</strong> {{ mesa.descricao }}</p>
