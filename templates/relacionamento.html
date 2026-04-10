@@ -5,39 +5,146 @@
 
 <h1 class="section-title">Relacionamento</h1>
 
-<div class="mb-4">
-  <input 
-    type="text" 
-    id="searchInput" 
-    class="form-control" 
+<div class="mb-3 d-flex flex-wrap gap-2 align-items-center">
+  <input
+    type="text"
+    id="searchInput"
+    class="form-control"
     placeholder="Buscar cliente..."
-    style="max-width: 500px;">
+    style="max-width: 400px;">
+
+  <!-- Botão 1: Selecionar campos extras -->
+  <div class="dropdown">
+    <button class="btn btn-outline-primary dropdown-toggle" type="button" id="dropdownCampos"
+      data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+      <i class="fas fa-sliders-h"></i> Campos
+    </button>
+    <div class="dropdown-menu p-3 shadow" style="min-width: 240px;" aria-labelledby="dropdownCampos">
+      <p class="fw-semibold small mb-2 text-muted">Selecione os campos a exibir:</p>
+      <div class="form-check">
+        <input class="form-check-input campo-toggle" type="checkbox" id="campo_data_nascimento" value="data_nascimento" data-label="Nascimento">
+        <label class="form-check-label" for="campo_data_nascimento">Data de Nascimento</label>
+      </div>
+      <div class="form-check">
+        <input class="form-check-input campo-toggle" type="checkbox" id="campo_renda" value="renda" data-label="Renda">
+        <label class="form-check-label" for="campo_renda">Renda Mensal</label>
+      </div>
+      <div class="form-check">
+        <input class="form-check-input campo-toggle" type="checkbox" id="campo_segmento_trabalho" value="segmento_trabalho" data-label="Segmento Trab.">
+        <label class="form-check-label" for="campo_segmento_trabalho">Segmento de Trabalho</label>
+      </div>
+      <div class="form-check">
+        <input class="form-check-input campo-toggle" type="checkbox" id="campo_endereco" value="endereco" data-label="Endereço">
+        <label class="form-check-label" for="campo_endereco">Endereço</label>
+      </div>
+      <hr class="my-2">
+      <div class="form-check">
+        <input class="form-check-input campo-toggle" type="checkbox" id="campo_data_abertura" value="data_abertura" data-label="Abertura">
+        <label class="form-check-label" for="campo_data_abertura">Data de Abertura</label>
+      </div>
+      <div class="form-check">
+        <input class="form-check-input campo-toggle" type="checkbox" id="campo_faturamento" value="faturamento" data-label="Faturamento">
+        <label class="form-check-label" for="campo_faturamento">Faturamento</label>
+      </div>
+      <div class="form-check">
+        <input class="form-check-input campo-toggle" type="checkbox" id="campo_segmento" value="segmento" data-label="Segmento">
+        <label class="form-check-label" for="campo_segmento">Segmento</label>
+      </div>
+      <div class="form-check">
+        <input class="form-check-input campo-toggle" type="checkbox" id="campo_qtd_funcionarios" value="qtd_funcionarios" data-label="Funcionários">
+        <label class="form-check-label" for="campo_qtd_funcionarios">Qtd. Funcionários</label>
+      </div>
+      <hr class="my-2">
+      <div class="form-check">
+        <input class="form-check-input campo-toggle" type="checkbox" id="campo_nps_nota" value="nps_nota" data-label="NPS">
+        <label class="form-check-label" for="campo_nps_nota">NPS</label>
+      </div>
+      <div class="form-check">
+        <input class="form-check-input campo-toggle" type="checkbox" id="campo_observacoes" value="observacoes" data-label="Obs.">
+        <label class="form-check-label" for="campo_observacoes">Observações</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Botão 2: Exportar Excel -->
+  <button class="btn btn-success" id="btnExportar">
+    <i class="fas fa-file-excel"></i> Exportar Excel
+  </button>
+  <form id="formExportar" method="POST" action="{{ url_for('exportar_relacionamento') }}" style="display:none;">
+    <input type="hidden" name="colunas" id="exportColunas">
+    <input type="hidden" name="filtro" id="exportFiltro">
+  </form>
 </div>
 
-<div class="list-group">
+<div class="list-group" id="listaClientes">
   {% for c in clientes %}
-  <a href="{{ url_for('detalhe_cliente', id=c.id) }}" class="list-group-item list-group-item-action cliente-item" data-nome="{{ c.nome.lower() }}">
+  <a href="{{ url_for('detalhe_cliente_novo', id=c.id) }}"
+     class="list-group-item list-group-item-action cliente-item"
+     data-nome="{{ c.nome.lower() }}"
+
+     data-data_nascimento="{{ c.data_nascimento.strftime('%d/%m/%Y') if c.data_nascimento else '' }}"
+     data-renda="{% if c.renda %}R$ {{ '{:,.2f}'.format(c.renda) }}{% endif %}"
+     data-segmento_trabalho="{{ c.segmento_trabalho or '' }}"
+     data-endereco="{{ c.endereco or '' }}"
+     data-data_abertura="{{ c.data_abertura.strftime('%d/%m/%Y') if c.data_abertura else '' }}"
+     data-faturamento="{% if c.faturamento %}R$ {{ '{:,.2f}'.format(c.faturamento) }}{% endif %}"
+     data-segmento="{{ c.segmento or '' }}"
+     data-qtd_funcionarios="{{ c.qtd_funcionarios or '' }}"
+     data-nps_nota="{{ c.nps_nota if c.nps_nota is not none else '' }}"
+     data-observacoes="{{ c.observacoes or '' }}">
     <div class="d-flex justify-content-between align-items-center">
-      <div>
+      <div class="flex-grow-1">
         <h5 class="mb-1">{{ c.nome }}</h5>
-        <p class="mb-0 text-muted small">{{ c.tipo_pessoa }}</p>
+        <p class="mb-0 text-muted small">
+          {{ c.tipo_pessoa }}
+          {% if c.telefone %} &nbsp;|&nbsp; <i class="fas fa-phone fa-xs"></i> {{ c.telefone }}{% endif %}
+          {% if c.email %} &nbsp;|&nbsp; <i class="fas fa-envelope fa-xs"></i> {{ c.email }}{% endif %}
+        </p>
+        <div class="campos-extras mt-1 small text-secondary"></div>
       </div>
-      <span class="badge badge-primary">→</span>
+      <span class="badge badge-primary ms-2">→</span>
     </div>
   </a>
   {% endfor %}
 </div>
 
 <script>
-document.getElementById("searchInput").addEventListener("keyup", function() {
-    const filtro = this.value.toLowerCase();
-    const itens = document.querySelectorAll(".cliente-item");
-
-    itens.forEach(item => {
-        const texto = item.getAttribute("data-nome");
-        item.style.display = texto.includes(filtro) ? "" : "none";
+(function () {
+  // Atualiza os campos extras visíveis em cada card
+  function atualizarExtras() {
+    const checks = Array.from(document.querySelectorAll('.campo-toggle:checked'));
+    document.querySelectorAll('.cliente-item').forEach(function (item) {
+      const div = item.querySelector('.campos-extras');
+      if (!div) return;
+      if (checks.length === 0) { div.innerHTML = ''; return; }
+      const partes = checks.map(function (cb) {
+        const val = item.getAttribute('data-' + cb.value);
+        return val ? '<span class="me-3"><strong>' + cb.getAttribute('data-label') + ':</strong> ' + val + '</span>' : null;
+      }).filter(Boolean);
+      div.innerHTML = partes.join('');
     });
-});
+  }
+
+  document.querySelectorAll('.campo-toggle').forEach(function (cb) {
+    cb.addEventListener('change', atualizarExtras);
+  });
+
+  // Busca por nome
+  document.getElementById('searchInput').addEventListener('keyup', function () {
+    const filtro = this.value.toLowerCase();
+    document.querySelectorAll('.cliente-item').forEach(function (item) {
+      item.style.display = item.getAttribute('data-nome').includes(filtro) ? '' : 'none';
+    });
+  });
+
+  // Exportar Excel: envia colunas selecionadas + filtro atual ao backend
+  document.getElementById('btnExportar').addEventListener('click', function () {
+    const cols = Array.from(document.querySelectorAll('.campo-toggle:checked')).map(function (c) { return c.value; });
+    document.getElementById('exportColunas').value = cols.join(',');
+    document.getElementById('exportFiltro').value = document.getElementById('searchInput').value;
+    document.getElementById('formExportar').submit();
+  });
+})();
 </script>
 
 {% endblock %}

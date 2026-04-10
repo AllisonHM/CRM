@@ -42,6 +42,15 @@
     <button type="submit" class="btn btn-success">Salvar</button>
     <a href="{{ url_for('index') }}" class="btn btn-secondary">Cancelar</a>
   </form>
+  <script>
+  (function() {
+      var hoje = new Date();
+      var maxDate = hoje.toISOString().split('T')[0];
+      var minDate = new Date(hoje.getFullYear() - 100, hoje.getMonth(), hoje.getDate()).toISOString().split('T')[0];
+      var el = document.getElementById('data_nascimento_abertura');
+      if (el) { el.setAttribute('max', maxDate); el.setAttribute('min', minDate); }
+  })();
+  </script>
 </body>
 </html>
 {% endblock %}

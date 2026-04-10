@@ -257,4 +257,17 @@
     </div>
 </div>
 
+<script>
+(function() {
+    var hoje = new Date();
+    var maxDate = hoje.toISOString().split('T')[0];
+    var minDate = new Date(hoje.getFullYear() - 100, hoje.getMonth(), hoje.getDate()).toISOString().split('T')[0];
+    var campos = ['data_nascimento', 'data_abertura'];
+    campos.forEach(function(nome) {
+        var el = document.querySelector('input[name="' + nome + '"]');
+        if (el) { el.setAttribute('max', maxDate); el.setAttribute('min', minDate); }
+    });
+})();
+</script>
+
 {% endblock %}

@@ -140,7 +140,7 @@
                     <span class="badge badge-primary">{{ m.situacao }}</span>
                   {% endif %}
                 </td>
-                <td>R$ {{ m.valor_total }}</td>
+                <td>R$ {{ m.valor_total|string|replace(".", ",") if m.valor_total is not none else '' }}</td>
                 <td class="col-data" data-data="{{ m.data_registro.strftime('%Y-%m-%d') if m.data_registro else '' }}">{{ m.data_registro.strftime('%d/%m/%Y') if m.data_registro else '' }}</td>
                 <td data-hora="{{ m.hora_registro.strftime('%H:%M') if m.hora_registro else '' }}">{{ m.hora_registro.strftime('%H:%M') if m.hora_registro else '' }}</td>
                 <td>

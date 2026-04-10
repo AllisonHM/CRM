@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Disparos de WhatsApp{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1 class="section-title mb-0">Disparos de WhatsApp</h1>
+  <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalNovo">
+    <i class="fas fa-paper-plane me-1"></i> Novo Disparo
+  </button>
+</div>
+
+<!-- ========== MODAL: NOVO DISPARO ========== -->
+<div class="modal fade" id="modalNovo" tabindex="-1" aria-labelledby="modalNovoLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('disparos_novo') }}" enctype="multipart/form-data">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalNovoLabel"><i class="fab fa-whatsapp text-success me-2"></i>Novo Disparo</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+
+          <div class="row g-3">
+            <!-- Nome da campanha -->
+            <div class="col-12">
+              <label class="form-label fw-semibold">Nome da Campanha <span class="text-danger">*</span></label>
+              <input type="text" name="nome" class="form-control" placeholder="Ex: Promoção de Abril" required maxlength="200">
+            </div>
+
+            <!-- Mensagem -->
+            <div class="col-12">
+              <label class="form-label fw-semibold">Mensagem <span class="text-danger">*</span></label>
+              <textarea name="mensagem" id="mensagemInput" class="form-control" rows="5"
+                placeholder="Olá {nome}, temos uma novidade especial para você!" required></textarea>
+              <div class="form-text">
+                Variáveis disponíveis: <code>{nome}</code> <code>{telefone}</code>
+              </div>
+            </div>
+
+            <!-- Preview dinâmico -->
+            <div class="col-12">
+              <label class="form-label fw-semibold text-muted">Pré-visualização</label>
+              <div id="preview" class="p-3 rounded border bg-light"
+                   style="font-family:monospace;white-space:pre-wrap;min-height:60px;font-size:.9rem;">
+                —
+              </div>
+            </div>
+
+            <!-- Arquivo de contatos -->
+            <div class="col-md-8">
+              <label class="form-label fw-semibold">Arquivo de Contatos (.csv / .xlsx) <span class="text-danger">*</span></label>
+              <input type="file" name="arquivo" class="form-control" accept=".csv,.xlsx" required>
+              <div class="form-text">
+                Colunas esperadas: <code>nome</code> (opcional) e <code>telefone</code> (obrigatório, com DDI+DDD).
+              </div>
+            </div>
+
+            <!-- Delay -->
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Intervalo entre Envios (s)</label>
+              <input type="number" name="delay" class="form-control" value="2" min="1" max="10" step="0.5">
+              <div class="form-text">Recomendado: 2–3 s para evitar bloqueios.</div>
+            </div>
+
+            <!-- Agendamento -->
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Agendar para (opcional)</label>
+              <input type="datetime-local" name="agendado_para" class="form-control">
+            </div>
+
+            <!-- Opt-in LGPD -->
+            <div class="col-12">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="checkLgpd" required>
+                <label class="form-check-label" for="checkLgpd">
+                  Confirmo que todos os contatos deram opt-in e consentiram receber mensagens (LGPD).
+                </label>
+              </div>
+            </div>
+          </div>
+
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success">
+            <i class="fas fa-plus me-1"></i> Criar Disparo
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ========== TABELA DE CAMPANHAS ========== -->
+{% if campanhas %}
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0 align-middle">
+      <thead class="table-light">
+        <tr>
+          <th>#</th>
+          <th>Nome</th>
+          <th>Contatos</th>
+          <th>Enviados</th>
+          <th>Entregues</th>
+          <th>Falhos</th>
+          <th>Taxa</th>
+          <th>Status</th>
+          <th>Criado em</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in campanhas %}
+        <tr>
+          <td class="text-muted small">{{ c.id }}</td>
+          <td><strong>{{ c.nome }}</strong></td>
+          <td>{{ c.total or 0 }}</td>
+          <td>{{ c.enviados or 0 }}</td>
+          <td>{{ c.entregues or 0 }}</td>
+          <td>{{ c.falhos or 0 }}</td>
+          <td>
+            {% set taxa = c.taxa_sucesso() %}
+            <span class="badge {{ 'bg-success' if taxa >= 80 else ('bg-warning text-dark' if taxa >= 50 else 'bg-danger') }}">
+              {{ taxa }}%
+            </span>
+          </td>
+          <td>
+            {% if c.status == 'rascunho' %}
+              <span class="badge bg-secondary">Rascunho</span>
+            {% elif c.status == 'em_envio' %}
+              <span class="badge bg-primary"><span class="spinner-border spinner-border-sm me-1"></span>Enviando</span>
+            {% elif c.status == 'pausado' %}
+              <span class="badge bg-warning text-dark">Pausado</span>
+            {% elif c.status == 'concluido' %}
+              <span class="badge bg-success">Concluído</span>
+            {% elif c.status == 'cancelado' %}
+              <span class="badge bg-danger">Cancelado</span>
+            {% else %}
+              <span class="badge bg-secondary">{{ c.status }}</span>
+            {% endif %}
+          </td>
+          <td class="small text-muted">{{ c.criado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+          <td>
+            <a href="{{ url_for('disparos_detalhe', id=c.id) }}" class="btn btn-sm btn-outline-primary">
+              <i class="fas fa-eye"></i>
+            </a>
+            <a href="{{ url_for('disparos_exportar', id=c.id) }}" class="btn btn-sm btn-outline-success ms-1">
+              <i class="fas fa-file-excel"></i>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="text-center py-5 text-muted">
+  <i class="fas fa-paper-plane fa-3x mb-3 opacity-25"></i>
+  <p>Nenhum disparo criado ainda. Clique em <strong>Novo Disparo</strong> para começar.</p>
+</div>
+{% endif %}
+
+<script>
+// Preview dinâmico da mensagem
+const msgInput  = document.getElementById('mensagemInput');
+const previewEl = document.getElementById('preview');
+
+function atualizarPreview() {
+  const msg = msgInput.value
+    .replace(/\{nome\}/g, 'João Silva')
+    .replace(/\{telefone\}/g, '5547999999999');
+  previewEl.textContent = msg || '—';
+}
+if (msgInput) {
+  msgInput.addEventListener('input', atualizarPreview);
+}
+</script>
+{% endblock %}

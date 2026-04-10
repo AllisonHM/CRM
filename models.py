@@ -474,3 +474,54 @@ class ConversaConfig(db.Model):
 
     def __repr__(self) -> str:
         return f"<ConversaConfig {self.telefone} fixada={self.fixada} arquivada={self.arquivada}>"
+
+
+class DisparoWpp(db.Model):
+    """Campanha de disparo em massa via WhatsApp (Z-API)."""
+    __tablename__ = 'disparo_wpp'
+
+    id              = db.Column(db.Integer, primary_key=True)
+    usuario_crm_id  = db.Column(db.Integer, db.ForeignKey('usuario_crm.id', ondelete='CASCADE'), nullable=False)
+    nome            = db.Column(db.String(200), nullable=False)
+    mensagem        = db.Column(db.Text, nullable=False)
+    # rascunho | em_envio | pausado | concluido | cancelado
+    status          = db.Column(db.String(20), default='rascunho', nullable=False)
+    delay_segundos  = db.Column(db.Float, default=2.0)
+    agendado_para   = db.Column(db.DateTime, nullable=True)
+    criado_em       = db.Column(db.DateTime, default=datetime.utcnow)
+    iniciado_em     = db.Column(db.DateTime, nullable=True)
+    concluido_em    = db.Column(db.DateTime, nullable=True)
+    total           = db.Column(db.Integer, default=0)
+    enviados        = db.Column(db.Integer, default=0)
+    entregues       = db.Column(db.Integer, default=0)
+    falhos          = db.Column(db.Integer, default=0)
+
+    contatos = db.relationship('DisparoWppContato', backref='disparo', lazy=True,
+                               cascade='all, delete-orphan')
+    usuario  = db.relationship('UsuarioCRM', backref=db.backref('disparos_wpp', lazy=True))
+
+    def taxa_sucesso(self):
+        processados = (self.enviados or 0) + (self.falhos or 0)
+        if not processados:
+            return 0
+        return round((self.enviados or 0) / processados * 100)
+
+
+class DisparoWppContato(db.Model):
+    """Contato individual em um disparo WhatsApp."""
+    __tablename__ = 'disparo_wpp_contato'
+
+    id               = db.Column(db.Integer, primary_key=True)
+    disparo_id       = db.Column(db.Integer, db.ForeignKey('disparo_wpp.id', ondelete='CASCADE'), nullable=False)
+    nome             = db.Column(db.String(200), nullable=True)
+    telefone         = db.Column(db.String(50), nullable=False)
+    mensagem_final   = db.Column(db.Text, nullable=True)
+    # pendente | enviado | entregue | falhou
+    status           = db.Column(db.String(20), default='pendente', nullable=False)
+    zapi_message_id  = db.Column(db.String(255), nullable=True)
+    erro_detalhe     = db.Column(db.Text, nullable=True)
+    tentativas       = db.Column(db.Integer, default=0)
+    enviado_em       = db.Column(db.DateTime, nullable=True)
+    entregue_em      = db.Column(db.DateTime, nullable=True)
+    opt_in           = db.Column(db.Boolean, default=True)  # LGPD
+

@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+{% block title %}Disparo #{{ camp.id }} – {{ camp.nome }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+  <div>
+    <a href="{{ url_for('disparos') }}" class="btn btn-sm btn-outline-secondary me-2">
+      <i class="fas fa-arrow-left"></i> Voltar
+    </a>
+    <h1 class="section-title d-inline-block mb-0">{{ camp.nome }}</h1>
+    <span id="badgeStatus" class="badge ms-2 fs-6 align-middle
+      {% if camp.status == 'rascunho'  %}bg-secondary
+      {% elif camp.status == 'em_envio' %}bg-primary
+      {% elif camp.status == 'pausado'  %}bg-warning text-dark
+      {% elif camp.status == 'concluido'%}bg-success
+      {% elif camp.status == 'cancelado'%}bg-danger
+      {% else %}bg-secondary{% endif %}">
+      {% if camp.status == 'em_envio' %}<span class="spinner-border spinner-border-sm me-1"></span>{% endif %}
+      {{ camp.status | replace('_', ' ') | title }}
+    </span>
+  </div>
+
+  <!-- Botões de controle -->
+  <div class="d-flex gap-2 flex-wrap" id="controles">
+    {% if camp.status in ('rascunho', 'pausado', 'cancelado') %}
+    <button class="btn btn-success" onclick="acao('iniciar')">
+      <i class="fas fa-play me-1"></i> Iniciar
+    </button>
+    {% endif %}
+    {% if camp.status == 'em_envio' %}
+    <button class="btn btn-warning" onclick="acao('pausar')">
+      <i class="fas fa-pause me-1"></i> Pausar
+    </button>
+    {% endif %}
+    {% if camp.status == 'pausado' %}
+    <button class="btn btn-primary" onclick="acao('retomar')">
+      <i class="fas fa-redo me-1"></i> Retomar
+    </button>
+    {% endif %}
+    {% if camp.status in ('em_envio', 'pausado') %}
+    <button class="btn btn-danger" onclick="confirmarCancelar()">
+      <i class="fas fa-stop me-1"></i> Cancelar
+    </button>
+    {% endif %}
+    <a href="{{ url_for('disparos_exportar', id=camp.id) }}" class="btn btn-outline-success">
+      <i class="fas fa-file-excel me-1"></i> Exportar
+    </a>
+  </div>
+</div>
+
+<!-- Mensagem da campanha -->
+<div class="card mb-4 shadow-sm">
+  <div class="card-header fw-semibold">Mensagem</div>
+  <div class="card-body">
+    <pre class="mb-0" style="white-space:pre-wrap;font-size:.95rem;">{{ camp.mensagem }}</pre>
+    {% if camp.agendado_para %}
+    <hr>
+    <small class="text-muted"><i class="fas fa-clock me-1"></i>Agendado para: {{ camp.agendado_para.strftime('%d/%m/%Y %H:%M') }}</small>
+    {% endif %}
+    <hr>
+    <small class="text-muted">
+      Intervalo: {{ camp.delay_segundos }}s entre envios &nbsp;|&nbsp;
+      Criado em: {{ camp.criado_em.strftime('%d/%m/%Y %H:%M') }}
+      {% if camp.iniciado_em %} &nbsp;|&nbsp; Iniciado: {{ camp.iniciado_em.strftime('%d/%m/%Y %H:%M') }}{% endif %}
+      {% if camp.concluido_em %} &nbsp;|&nbsp; Concluído: {{ camp.concluido_em.strftime('%d/%m/%Y %H:%M') }}{% endif %}
+    </small>
+  </div>
+</div>
+
+<!-- Cards de estatísticas -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card text-center shadow-sm">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold" id="statTotal">{{ camp.total or 0 }}</div>
+        <div class="text-muted small">Total</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center shadow-sm border-primary">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold text-primary" id="statEnviados">{{ camp.enviados or 0 }}</div>
+        <div class="text-muted small">Enviados</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center shadow-sm border-success">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold text-success" id="statEntregues">{{ camp.entregues or 0 }}</div>
+        <div class="text-muted small">Entregues</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card text-center shadow-sm border-danger">
+      <div class="card-body py-3">
+        <div class="fs-2 fw-bold text-danger" id="statFalhos">{{ camp.falhos or 0 }}</div>
+        <div class="text-muted small">Falhos</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Barra de progresso -->
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <div class="d-flex justify-content-between mb-1">
+      <span class="small text-muted">Progresso</span>
+      <span class="small fw-semibold" id="pctLabel">
+        {% set proc = (camp.enviados or 0) + (camp.falhos or 0) %}
+        {{ ((proc / [camp.total, 1]|max) * 100)|round|int }}%
+      </span>
+    </div>
+    <div class="progress" style="height:18px;">
+      {% set proc = (camp.enviados or 0) + (camp.falhos or 0) %}
+      {% set pct  = ((proc / [camp.total, 1]|max) * 100)|round|int %}
+      <div id="progressBar" class="progress-bar progress-bar-striped
+           {% if camp.status == 'em_envio' %}progress-bar-animated bg-primary
+           {% elif camp.status == 'concluido' %}bg-success
+           {% elif camp.status == 'cancelado' %}bg-danger
+           {% else %}bg-warning{% endif %}"
+           role="progressbar" style="width:{{ pct }}%"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabela de contatos -->
+<div class="card shadow-sm">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span class="fw-semibold">Contatos ({{ camp.total or 0 }})</span>
+    <span class="text-muted small">Página {{ pagina }} / {{ total_pags }}</span>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0 align-middle" id="tabelaContatos">
+        <thead class="table-light">
+          <tr>
+            <th>Nome</th>
+            <th>Telefone</th>
+            <th>Status</th>
+            <th>Tentativas</th>
+            <th>Enviado em</th>
+            <th>Entregue em</th>
+            <th>Erro</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ct in contatos %}
+          <tr>
+            <td>{{ ct.nome or '—' }}</td>
+            <td><code>{{ ct.telefone }}</code></td>
+            <td>
+              {% if ct.status == 'pendente' %}
+                <span class="badge bg-secondary">Pendente</span>
+              {% elif ct.status == 'enviado' %}
+                <span class="badge bg-primary">Enviado</span>
+              {% elif ct.status == 'entregue' %}
+                <span class="badge bg-success">Entregue</span>
+              {% elif ct.status == 'falhou' %}
+                <span class="badge bg-danger">Falhou</span>
+              {% endif %}
+            </td>
+            <td>{{ ct.tentativas }}</td>
+            <td class="small">{{ ct.enviado_em.strftime('%d/%m %H:%M') if ct.enviado_em else '—' }}</td>
+            <td class="small">{{ ct.entregue_em.strftime('%d/%m %H:%M') if ct.entregue_em else '—' }}</td>
+            <td class="small text-danger" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                title="{{ ct.erro_detalhe or '' }}">
+              {{ ct.erro_detalhe[:60] ~ '…' if ct.erro_detalhe and ct.erro_detalhe|length > 60 else (ct.erro_detalhe or '') }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% if total_pags > 1 %}
+  <div class="card-footer d-flex justify-content-between align-items-center">
+    {% if pagina > 1 %}
+      <a href="{{ url_for('disparos_detalhe', id=camp.id, pagina=pagina-1) }}" class="btn btn-sm btn-outline-secondary">← Anterior</a>
+    {% else %}<span></span>{% endif %}
+    {% if pagina < total_pags %}
+      <a href="{{ url_for('disparos_detalhe', id=camp.id, pagina=pagina+1) }}" class="btn btn-sm btn-outline-primary">Próxima →</a>
+    {% else %}<span></span>{% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<script>
+const campId    = {{ camp.id }};
+const statusUrl = `/api/disparos/${campId}/status`;
+let   polling   = null;
+
+const ATIVO = ['rascunho', 'em_envio', 'pausado'];
+
+function atualizarUI(d) {
+  // stats
+  document.getElementById('statEnviados').textContent  = d.enviados;
+  document.getElementById('statEntregues').textContent = d.entregues;
+  document.getElementById('statFalhos').textContent    = d.falhos;
+
+  // barra
+  const bar = document.getElementById('progressBar');
+  bar.style.width = d.pct + '%';
+  document.getElementById('pctLabel').textContent = d.pct + '%';
+
+  // badge status
+  const badge = document.getElementById('badgeStatus');
+  const labels = {
+    rascunho: 'Rascunho', em_envio: 'Enviando',
+    pausado: 'Pausado', concluido: 'Concluído', cancelado: 'Cancelado'
+  };
+  const classes = {
+    rascunho: 'bg-secondary', em_envio: 'bg-primary',
+    pausado: 'bg-warning text-dark', concluido: 'bg-success', cancelado: 'bg-danger'
+  };
+  badge.className = `badge ms-2 fs-6 align-middle ${classes[d.status] || 'bg-secondary'}`;
+  badge.textContent = labels[d.status] || d.status;
+
+  // Para de fazer polling quando terminar
+  if (!['em_envio', 'rascunho'].includes(d.status) && !d.is_running) {
+    if (polling) { clearInterval(polling); polling = null; }
+    if (['concluido', 'cancelado'].includes(d.status)) return;
+  }
+}
+
+function iniciarPolling() {
+  if (polling) return;
+  polling = setInterval(async () => {
+    try {
+      const resp = await fetch(statusUrl);
+      const d    = await resp.json();
+      atualizarUI(d);
+    } catch(e) {}
+  }, 2500);
+}
+
+function acao(tipo) {
+  fetch(`/disparos/${campId}/${tipo}`, { method: 'POST' })
+    .then(() => { window.location.reload(); });
+}
+
+function confirmarCancelar() {
+  if (confirm('Tem certeza que deseja cancelar este disparo? Os envios pendentes serão descartados.')) {
+    acao('cancelar');
+  }
+}
+
+// Inicia polling se a campanha estiver ativa
+{% if camp.status in ('em_envio',) or is_running %}
+iniciarPolling();
+{% endif %}
+</script>
+{% endblock %}

@@ -147,6 +147,7 @@
                         {% if current_user.tem_permissao('whatsapp') %}
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('whatsapp_index') }}">WhatsApp</a></li>
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('canais') }}">Canais</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('disparos') }}">Disparos</a></li>
                         {% endif %}
                         
                         {% if current_user.tem_permissao('planner') %}

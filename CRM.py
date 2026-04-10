@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, session, g
+from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, session, g, send_file
 from flask_socketio import SocketIO, join_room
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_mail import Mail, Message
@@ -14,7 +14,7 @@ import secrets
 from dotenv import load_dotenv
 from flask_migrate import Migrate
 from database_rls import db, tenant_db, init_db
-from models import Cliente, MesaNegocio, Ocorrencia, WhatsAppMensagem, ChatbotRegra, Produto, Movimentacao, PlannerEvento, UsuarioCRM, ConfiguracaoUsuario, Parametrizacao, Tarefa, Fornecedor, FacebookPage, Conversation, Message, ConversaConfig
+from models import Cliente, MesaNegocio, Ocorrencia, WhatsAppMensagem, ChatbotRegra, Produto, Movimentacao, PlannerEvento, UsuarioCRM, ConfiguracaoUsuario, Parametrizacao, Tarefa, Fornecedor, FacebookPage, Conversation, Message, ConversaConfig, DisparoWpp, DisparoWppContato
 from sqlalchemy import or_, and_
 
 # Carrega variáveis do arquivo .env (se existir)
@@ -149,6 +149,149 @@ def enviar_whatsapp_zapi(numero, mensagem, instance_id=None, token_id=None):
         return {"status": "Erro", "detalhe": str(e)}
     
 import threading, time
+
+# ---- Estado global dos workers de disparo WhatsApp ----
+_dispatch_threads: dict = {}   # campaign_id -> Thread
+_dispatch_stop:    dict = {}   # campaign_id -> threading.Event
+_dispatch_pause:   dict = {}   # campaign_id -> threading.Event
+
+def _parse_contatos(arquivo_bytes: bytes, filename: str):
+    """Lê CSV ou XLSX e retorna lista de dicts {nome, telefone}. Remove duplicatas e inválidos."""
+    import re
+    contatos = []
+    fn = filename.lower()
+
+    if fn.endswith('.xlsx'):
+        import openpyxl
+        wb = openpyxl.load_workbook(io.BytesIO(arquivo_bytes), read_only=True, data_only=True)
+        ws = wb.active
+        rows = list(ws.iter_rows(values_only=True))
+        if not rows:
+            return []
+        header = [str(c or '').lower().strip() for c in rows[0]]
+        col_nome = next((i for i, h in enumerate(header) if 'nome' in h), None)
+        col_tel  = next((i for i, h in enumerate(header)
+                         if any(p in h for p in ['tel','fone','numero','número','phone'])), None)
+        if col_tel is None:
+            col_tel = 1 if col_nome == 0 else 0
+        for row in rows[1:]:
+            if not row:
+                continue
+            tel  = re.sub(r'\D', '', str(row[col_tel] or ''))  if col_tel  < len(row) else ''
+            nome = str(row[col_nome] or '').strip()             if col_nome is not None and col_nome < len(row) else ''
+            if len(tel) >= 10:
+                contatos.append({'nome': nome, 'telefone': tel})
+    else:
+        content = arquivo_bytes.decode('utf-8', errors='replace')
+        reader = csv.DictReader(io.StringIO(content))
+        for row in reader:
+            tel_key  = next((k for k in row if any(p in k.lower() for p in ['tel','fone','numero','número','phone'])), None)
+            nome_key = next((k for k in row if 'nome' in k.lower()), None)
+            tel  = re.sub(r'\D', '', row.get(tel_key, '') or '') if tel_key else ''
+            nome = (row.get(nome_key, '') or '').strip()         if nome_key else ''
+            if len(tel) >= 10:
+                contatos.append({'nome': nome, 'telefone': tel})
+
+    seen, unique = set(), []
+    for c in contatos:
+        if c['telefone'] not in seen:
+            seen.add(c['telefone'])
+            unique.append(c)
+    return unique
+
+
+def _worker_disparo(campaign_id: int):
+    """Thread de background: processa envios de um disparo em fila."""
+    stop_evt  = _dispatch_stop.get(campaign_id)
+    pause_evt = _dispatch_pause.get(campaign_id)
+
+    with app.app_context():
+        camp = DisparoWpp.query.get(campaign_id)
+        if not camp:
+            return
+
+        usuario = UsuarioCRM.query.get(camp.usuario_crm_id)
+        inst = (usuario.api_instance if usuario else None) or instance
+        tok  = (usuario.api_token   if usuario else None) or token
+
+        camp.status     = 'em_envio'
+        camp.iniciado_em = datetime.utcnow()
+        db.session.commit()
+
+        while True:
+            # ----- Verificar sinal de stop -----
+            if stop_evt and stop_evt.is_set():
+                camp = DisparoWpp.query.get(campaign_id)
+                camp.status = 'cancelado'
+                db.session.commit()
+                break
+
+            # ----- Verificar pausa -----
+            if pause_evt and pause_evt.is_set():
+                camp = DisparoWpp.query.get(campaign_id)
+                if camp.status != 'pausado':
+                    camp.status = 'pausado'
+                    db.session.commit()
+                time.sleep(1)
+                continue
+
+            # ----- Próximo contato pendente -----
+            contato = DisparoWppContato.query.filter_by(
+                disparo_id=campaign_id, status='pendente'
+            ).order_by(DisparoWppContato.id).first()
+
+            if not contato:
+                camp = DisparoWpp.query.get(campaign_id)
+                camp.status       = 'concluido'
+                camp.concluido_em = datetime.utcnow()
+                db.session.commit()
+                break
+
+            # ----- Substituir variáveis -----
+            msg = camp.mensagem
+            msg = msg.replace('{nome}',     contato.nome     or '')
+            msg = msg.replace('{telefone}', contato.telefone or '')
+            contato.mensagem_final = msg
+            contato.tentativas    += 1
+
+            # ----- Enviar via Z-API -----
+            resp = enviar_whatsapp_zapi(contato.telefone, msg, inst, tok)
+
+            if resp.get('status') == 'Sucesso':
+                contato.status     = 'enviado'
+                contato.enviado_em = datetime.utcnow()
+                try:
+                    data = json.loads(resp.get('detalhe', '{}'))
+                    contato.zapi_message_id = data.get('zaapId') or data.get('messageId')
+                except Exception:
+                    pass
+                camp = DisparoWpp.query.get(campaign_id)
+                camp.enviados = (camp.enviados or 0) + 1
+            else:
+                if contato.tentativas < 3:
+                    db.session.commit()
+                    time.sleep(5)
+                    continue
+                contato.status       = 'falhou'
+                contato.erro_detalhe = resp.get('detalhe', '')
+                camp = DisparoWpp.query.get(campaign_id)
+                camp.falhos = (camp.falhos or 0) + 1
+
+            db.session.commit()
+
+            socketio.emit('disparo_update', {
+                'campaign_id': campaign_id,
+                'enviados':    camp.enviados or 0,
+                'falhos':      camp.falhos   or 0,
+                'total':       camp.total    or 0,
+                'status':      camp.status,
+            }, broadcast=True)
+
+            time.sleep(camp.delay_segundos or 2.0)
+
+    _dispatch_threads.pop(campaign_id, None)
+    _dispatch_stop.pop(campaign_id, None)
+    _dispatch_pause.pop(campaign_id, None)
 
 def verificar_eventos_proximos():
     with app.app_context():
@@ -1301,7 +1444,97 @@ def relacionamento():
         clientes = Cliente.query.all()
     return render_template("relacionamento.html", clientes=clientes)
 
-@app.route("/cliente/<int:id>")
+@app.route("/relacionamento/exportar", methods=["POST"])
+@login_required
+@permission_required('clientes')
+def exportar_relacionamento():
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    colunas_selecionadas = [c.strip() for c in request.form.get("colunas", "").split(",") if c.strip()]
+    filtro = request.form.get("filtro", "").strip().lower()
+
+    user_id = get_usuario_filter()
+    if user_id:
+        query = Cliente.query.filter_by(usuario_crm_id=user_id)
+    else:
+        query = Cliente.query
+
+    clientes = query.all()
+    if filtro:
+        clientes = [c for c in clientes if filtro in (c.nome or "").lower()]
+
+    campos_labels = {
+        "data_nascimento": "Data de Nascimento",
+        "renda": "Renda Mensal",
+        "segmento_trabalho": "Segmento de Trabalho",
+        "endereco": "Endereço",
+        "data_abertura": "Data de Abertura",
+        "faturamento": "Faturamento",
+        "segmento": "Segmento",
+        "qtd_funcionarios": "Qtd. Funcionários",
+        "nps_nota": "NPS",
+        "observacoes": "Observações",
+    }
+
+    headers = ["Nome", "Tipo de Pessoa", "Telefone", "E-mail"]
+    for col in colunas_selecionadas:
+        if col in campos_labels:
+            headers.append(campos_labels[col])
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Clientes"
+
+    header_fill = PatternFill(start_color="667EEA", end_color="667EEA", fill_type="solid")
+    header_font = Font(color="FFFFFF", bold=True)
+
+    for i, h in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=i, value=h)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center")
+
+    for c in clientes:
+        linha = [c.nome, c.tipo_pessoa, c.telefone, c.email]
+        for col in colunas_selecionadas:
+            if col == "data_nascimento":
+                linha.append(c.data_nascimento.strftime("%d/%m/%Y") if c.data_nascimento else "")
+            elif col == "renda":
+                linha.append(c.renda if c.renda else "")
+            elif col == "segmento_trabalho":
+                linha.append(c.segmento_trabalho or "")
+            elif col == "endereco":
+                linha.append(c.endereco or "")
+            elif col == "data_abertura":
+                linha.append(c.data_abertura.strftime("%d/%m/%Y") if c.data_abertura else "")
+            elif col == "faturamento":
+                linha.append(c.faturamento if c.faturamento else "")
+            elif col == "segmento":
+                linha.append(c.segmento or "")
+            elif col == "qtd_funcionarios":
+                linha.append(c.qtd_funcionarios or "")
+            elif col == "nps_nota":
+                linha.append(c.nps_nota if c.nps_nota is not None else "")
+            elif col == "observacoes":
+                linha.append(c.observacoes or "")
+        ws.append(linha)
+
+    for col in ws.columns:
+        max_len = max((len(str(cell.value or "")) for cell in col), default=10)
+        ws.column_dimensions[col[0].column_letter].width = max_len + 4
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return send_file(
+        output,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name="clientes_relacionamento.xlsx"
+    )
+
+
 @login_required
 @permission_required('clientes')
 def detalhe_cliente(id): 
@@ -1341,7 +1574,11 @@ def editar_cliente(id):
         # Pessoa Física
         if 'data_nascimento' in request.form and request.form.get('data_nascimento'):
             try:
-                cliente.data_nascimento = datetime.strptime(request.form.get('data_nascimento'), '%Y-%m-%d').date()
+                _dn = datetime.strptime(request.form.get('data_nascimento'), '%Y-%m-%d').date()
+                _hoje = datetime.today().date()
+                _idade_calc = _hoje.year - _dn.year - ((_hoje.month, _hoje.day) < (_dn.month, _dn.day))
+                if 0 <= _idade_calc <= 100:
+                    cliente.data_nascimento = _dn
             except:
                 pass
         
@@ -1586,7 +1823,11 @@ def cadastro():
 
         if tipo_pessoa == "Física":
             if request.form.get("data_nascimento"):
-                cliente.data_nascimento = datetime.strptime(request.form["data_nascimento"], "%Y-%m-%d").date()
+                _dn = datetime.strptime(request.form["data_nascimento"], "%Y-%m-%d").date()
+                _hoje = datetime.today().date()
+                _idade_calc = _hoje.year - _dn.year - ((_hoje.month, _hoje.day) < (_dn.month, _dn.day))
+                if 0 <= _idade_calc <= 100:
+                    cliente.data_nascimento = _dn
             cliente.renda = request.form.get("renda") or None
             cliente.segmento_trabalho = request.form.get("segmento_trabalho")
             cliente.endereco = request.form.get("endereco")
@@ -3711,7 +3952,298 @@ def emitir_novo_contato(cliente):
         'telefone': cliente.telefone
     }, broadcast=True)
 
-if __name__ == "__main__":
+
+# ==================== DISPAROS DE WHATSAPP ====================
+
+@app.route('/disparos')
+@login_required
+@permission_required('whatsapp')
+def disparos():
+    user_id = get_usuario_filter()
+    campanhas = DisparoWpp.query.filter_by(usuario_crm_id=user_id)\
+        .order_by(DisparoWpp.criado_em.desc()).all()
+    return render_template('disparos.html', campanhas=campanhas)
+
+
+@app.route('/disparos/novo', methods=['POST'])
+@login_required
+@permission_required('whatsapp')
+def disparos_novo():
+    nome      = request.form.get('nome', '').strip()
+    mensagem  = request.form.get('mensagem', '').strip()
+    delay     = request.form.get('delay', '2')
+    arquivo   = request.files.get('arquivo')
+    agendado_str = request.form.get('agendado_para', '').strip()
+
+    if not nome or not mensagem:
+        flash('Nome e mensagem são obrigatórios.', 'danger')
+        return redirect(url_for('disparos'))
+
+    if not arquivo or not arquivo.filename:
+        flash('Envie um arquivo de contatos (.csv ou .xlsx).', 'danger')
+        return redirect(url_for('disparos'))
+
+    fn = arquivo.filename.lower()
+    if not (fn.endswith('.csv') or fn.endswith('.xlsx')):
+        flash('Formato inválido. Use .csv ou .xlsx.', 'danger')
+        return redirect(url_for('disparos'))
+
+    conteudo = arquivo.read()
+    contatos = _parse_contatos(conteudo, fn)
+
+    if not contatos:
+        flash('Nenhum contato válido encontrado no arquivo.', 'warning')
+        return redirect(url_for('disparos'))
+
+    try:
+        delay_f = max(1.0, min(10.0, float(delay)))
+    except ValueError:
+        delay_f = 2.0
+
+    agendado_para = None
+    if agendado_str:
+        try:
+            agendado_para = datetime.strptime(agendado_str, '%Y-%m-%dT%H:%M')
+        except ValueError:
+            pass
+
+    user_id = get_usuario_filter()
+    camp = DisparoWpp(
+        usuario_crm_id=user_id,
+        nome=nome,
+        mensagem=mensagem,
+        delay_segundos=delay_f,
+        total=len(contatos),
+        enviados=0,
+        entregues=0,
+        falhos=0,
+        agendado_para=agendado_para,
+    )
+    db.session.add(camp)
+    db.session.flush()
+
+    for c in contatos:
+        db.session.add(DisparoWppContato(
+            disparo_id=camp.id,
+            nome=c['nome'],
+            telefone=c['telefone'],
+            opt_in=True,
+        ))
+    db.session.commit()
+
+    flash(f'Disparo "{nome}" criado com {len(contatos)} contato(s).', 'success')
+    return redirect(url_for('disparos_detalhe', id=camp.id))
+
+
+@app.route('/disparos/<int:id>')
+@login_required
+@permission_required('whatsapp')
+def disparos_detalhe(id):
+    user_id = get_usuario_filter()
+    camp = DisparoWpp.query.filter_by(id=id, usuario_crm_id=user_id).first_or_404()
+    pagina   = request.args.get('pagina', 1, type=int)
+    por_pag  = 50
+    total_ct = DisparoWppContato.query.filter_by(disparo_id=id).count()
+    contatos = DisparoWppContato.query.filter_by(disparo_id=id)\
+        .order_by(DisparoWppContato.id)\
+        .offset((pagina - 1) * por_pag).limit(por_pag).all()
+    total_pags = max(1, -(-total_ct // por_pag))
+    return render_template('disparos_detalhe.html',
+                           camp=camp, contatos=contatos,
+                           pagina=pagina, total_pags=total_pags,
+                           is_running=(id in _dispatch_threads and _dispatch_threads[id].is_alive()))
+
+
+@app.route('/api/disparos/<int:id>/status')
+@login_required
+def api_disparo_status(id):
+    user_id = get_usuario_filter()
+    camp = DisparoWpp.query.filter_by(id=id, usuario_crm_id=user_id).first_or_404()
+    processados = (camp.enviados or 0) + (camp.falhos or 0)
+    pct = round(processados / max(camp.total or 1, 1) * 100)
+    return jsonify({
+        'id':           camp.id,
+        'status':       camp.status,
+        'total':        camp.total    or 0,
+        'enviados':     camp.enviados or 0,
+        'entregues':    camp.entregues or 0,
+        'falhos':       camp.falhos   or 0,
+        'pendentes':    (camp.total or 0) - processados,
+        'pct':          pct,
+        'is_running':   id in _dispatch_threads and _dispatch_threads[id].is_alive(),
+        'iniciado_em':  camp.iniciado_em.strftime('%d/%m/%Y %H:%M')  if camp.iniciado_em  else None,
+        'concluido_em': camp.concluido_em.strftime('%d/%m/%Y %H:%M') if camp.concluido_em else None,
+    })
+
+
+@app.route('/disparos/<int:id>/iniciar', methods=['POST'])
+@login_required
+@permission_required('whatsapp')
+def disparos_iniciar(id):
+    user_id = get_usuario_filter()
+    camp = DisparoWpp.query.filter_by(id=id, usuario_crm_id=user_id).first_or_404()
+
+    if id in _dispatch_threads and _dispatch_threads[id].is_alive():
+        return jsonify({'ok': False, 'msg': 'Disparo já em andamento.'})
+
+    stop_evt  = threading.Event()
+    pause_evt = threading.Event()
+    _dispatch_stop[id]  = stop_evt
+    _dispatch_pause[id] = pause_evt
+
+    t = threading.Thread(target=_worker_disparo, args=(id,), daemon=True)
+    _dispatch_threads[id] = t
+    t.start()
+    return jsonify({'ok': True})
+
+
+@app.route('/disparos/<int:id>/pausar', methods=['POST'])
+@login_required
+@permission_required('whatsapp')
+def disparos_pausar(id):
+    user_id = get_usuario_filter()
+    camp = DisparoWpp.query.filter_by(id=id, usuario_crm_id=user_id).first_or_404()
+    evt = _dispatch_pause.get(id)
+    if evt:
+        evt.set()
+    camp.status = 'pausado'
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@app.route('/disparos/<int:id>/retomar', methods=['POST'])
+@login_required
+@permission_required('whatsapp')
+def disparos_retomar(id):
+    user_id = get_usuario_filter()
+    camp = DisparoWpp.query.filter_by(id=id, usuario_crm_id=user_id).first_or_404()
+
+    if id in _dispatch_threads and _dispatch_threads[id].is_alive():
+        evt = _dispatch_pause.get(id)
+        if evt:
+            evt.clear()
+        camp.status = 'em_envio'
+        db.session.commit()
+    else:
+        stop_evt  = threading.Event()
+        pause_evt = threading.Event()
+        _dispatch_stop[id]  = stop_evt
+        _dispatch_pause[id] = pause_evt
+        t = threading.Thread(target=_worker_disparo, args=(id,), daemon=True)
+        _dispatch_threads[id] = t
+        t.start()
+    return jsonify({'ok': True})
+
+
+@app.route('/disparos/<int:id>/cancelar', methods=['POST'])
+@login_required
+@permission_required('whatsapp')
+def disparos_cancelar(id):
+    user_id = get_usuario_filter()
+    camp = DisparoWpp.query.filter_by(id=id, usuario_crm_id=user_id).first_or_404()
+    evt_s = _dispatch_stop.get(id)
+    if evt_s:
+        evt_s.set()
+    evt_p = _dispatch_pause.get(id)
+    if evt_p:
+        evt_p.clear()
+    camp.status = 'cancelado'
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@app.route('/disparos/<int:id>/exportar')
+@login_required
+@permission_required('whatsapp')
+def disparos_exportar(id):
+    user_id = get_usuario_filter()
+    camp    = DisparoWpp.query.filter_by(id=id, usuario_crm_id=user_id).first_or_404()
+    contatos = DisparoWppContato.query.filter_by(disparo_id=id)\
+        .order_by(DisparoWppContato.id).all()
+
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Disparo"
+
+    headers = ['Nome', 'Telefone', 'Status', 'Tentativas', 'Enviado em', 'Entregue em', 'Erro']
+    fill = PatternFill(start_color='667EEA', end_color='667EEA', fill_type='solid')
+    font = Font(color='FFFFFF', bold=True)
+    for i, h in enumerate(headers, 1):
+        c = ws.cell(row=1, column=i, value=h)
+        c.fill = fill; c.font = font
+        c.alignment = Alignment(horizontal='center')
+
+    for ct in contatos:
+        ws.append([
+            ct.nome or '',
+            ct.telefone,
+            ct.status,
+            ct.tentativas,
+            ct.enviado_em.strftime('%d/%m/%Y %H:%M')  if ct.enviado_em  else '',
+            ct.entregue_em.strftime('%d/%m/%Y %H:%M') if ct.entregue_em else '',
+            ct.erro_detalhe or '',
+        ])
+
+    for col in ws.columns:
+        max_len = max((len(str(cell.value or '')) for cell in col), default=10)
+        ws.column_dimensions[col[0].column_letter].width = max_len + 4
+
+    out = io.BytesIO()
+    wb.save(out)
+    out.seek(0)
+    return send_file(out,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                     as_attachment=True,
+                     download_name=f'disparo_{id}_{camp.nome[:30]}.xlsx')
+
+
+@app.route('/webhook/zapi-disparo', methods=['POST'])
+def webhook_zapi_disparo():
+    """Recebe callbacks de status da Z-API (entregue, lido, falhou)."""
+    data = request.get_json(silent=True) or {}
+
+    msg_id     = data.get('zaapId') or data.get('messageId')
+    status_raw = (data.get('status') or '').lower()
+
+    if not msg_id:
+        return jsonify({'ok': True})
+
+    status_map = {
+        'sent':      'enviado',
+        'delivered': 'entregue',
+        'read':      'entregue',
+        'failed':    'falhou',
+        'error':     'falhou',
+    }
+    novo_status = status_map.get(status_raw)
+    if not novo_status:
+        return jsonify({'ok': True})
+
+    contato = DisparoWppContato.query.filter_by(zapi_message_id=msg_id).first()
+    if contato:
+        contato.status = novo_status
+        if novo_status == 'entregue' and not contato.entregue_em:
+            contato.entregue_em = datetime.utcnow()
+            camp = DisparoWpp.query.get(contato.disparo_id)
+            if camp:
+                camp.entregues = (camp.entregues or 0) + 1
+        db.session.commit()
+    return jsonify({'ok': True})
+
+
+    # Ao iniciar, campanhas em_envio interrompidas viram pausadas
+    with app.app_context():
+        try:
+            interrompidas = DisparoWpp.query.filter_by(status='em_envio').all()
+            for c in interrompidas:
+                c.status = 'pausado'
+            if interrompidas:
+                db.session.commit()
+        except Exception:
+            pass
     # Inicializa o banco de dados
     with app.app_context():
         try:
