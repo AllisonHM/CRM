@@ -68,6 +68,17 @@
 </div>
 
 <!-- Cards de estatísticas -->
+{% if camp.status == 'rascunho' %}
+<div class="alert alert-warning d-flex align-items-center gap-2 mb-4" role="alert">
+  <i class="fas fa-exclamation-triangle fa-lg"></i>
+  <div>
+    <strong>Disparo salvo como rascunho.</strong>
+    Clique em <strong>Iniciar</strong> acima para começar o envio das mensagens.
+  </div>
+</div>
+{% endif %}
+
+<!-- Cards de estatísticas -->
 <div class="row g-3 mb-4">
   <div class="col-6 col-md-3">
     <div class="card text-center shadow-sm">

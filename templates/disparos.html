@@ -50,8 +50,11 @@
             <div class="col-md-8">
               <label class="form-label fw-semibold">Arquivo de Contatos (.csv / .xlsx) <span class="text-danger">*</span></label>
               <input type="file" name="arquivo" class="form-control" accept=".csv,.xlsx" required>
-              <div class="form-text">
+              <div class="form-text d-flex align-items-center gap-2 flex-wrap">
                 Colunas esperadas: <code>nome</code> (opcional) e <code>telefone</code> (obrigatório, com DDI+DDD).
+                <a href="{{ url_for('disparos_template_csv') }}" class="btn btn-sm btn-outline-secondary py-0" title="Baixar modelo CSV">
+                  <i class="fas fa-download me-1"></i>Baixar modelo .csv
+                </a>
               </div>
             </div>
 
@@ -66,6 +69,17 @@
             <div class="col-md-6">
               <label class="form-label fw-semibold">Agendar para (opcional)</label>
               <input type="datetime-local" name="agendado_para" class="form-control">
+            </div>
+
+            <!-- Iniciar imediatamente -->
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" name="iniciar_agora" id="checkIniciar" value="1" checked>
+                <label class="form-check-label fw-semibold" for="checkIniciar">
+                  <i class="fas fa-play-circle text-success me-1"></i> Iniciar envio imediatamente após criar
+                </label>
+              </div>
+              <div class="form-text text-muted ps-4">Desmarque para salvar como rascunho e enviar depois.</div>
             </div>
 
             <!-- Opt-in LGPD -->

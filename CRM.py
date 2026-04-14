@@ -3969,11 +3969,14 @@ def disparos():
 @login_required
 @permission_required('whatsapp')
 def disparos_novo():
-    nome      = request.form.get('nome', '').strip()
-    mensagem  = request.form.get('mensagem', '').strip()
-    delay     = request.form.get('delay', '2')
-    arquivo   = request.files.get('arquivo')
+    nome         = request.form.get('nome', '').strip()
+    mensagem     = request.form.get('mensagem', '').strip()
+    delay        = request.form.get('delay', '2')
+    arquivo      = request.files.get('arquivo')
     agendado_str = request.form.get('agendado_para', '').strip()
+    iniciar_agora = request.form.get('iniciar_agora') == '1'
+
+    logger.info(f"[DISPARO] Novo disparo: nome={nome!r}, arquivo={arquivo.filename if arquivo else None}, iniciar_agora={iniciar_agora}")
 
     if not nome or not mensagem:
         flash('Nome e mensagem são obrigatórios.', 'danger')
@@ -3990,9 +3993,10 @@ def disparos_novo():
 
     conteudo = arquivo.read()
     contatos = _parse_contatos(conteudo, fn)
+    logger.info(f"[DISPARO] Contatos parseados: {len(contatos)}")
 
     if not contatos:
-        flash('Nenhum contato válido encontrado no arquivo.', 'warning')
+        flash('Nenhum contato válido encontrado no arquivo. Baixe o modelo CSV e verifique as colunas nome e telefone.', 'warning')
         return redirect(url_for('disparos'))
 
     try:
@@ -4008,31 +4012,65 @@ def disparos_novo():
             pass
 
     user_id = get_usuario_filter()
-    camp = DisparoWpp(
-        usuario_crm_id=user_id,
-        nome=nome,
-        mensagem=mensagem,
-        delay_segundos=delay_f,
-        total=len(contatos),
-        enviados=0,
-        entregues=0,
-        falhos=0,
-        agendado_para=agendado_para,
-    )
-    db.session.add(camp)
-    db.session.flush()
+    try:
+        camp = DisparoWpp(
+            usuario_crm_id=user_id,
+            nome=nome,
+            mensagem=mensagem,
+            delay_segundos=delay_f,
+            total=len(contatos),
+            enviados=0,
+            entregues=0,
+            falhos=0,
+            agendado_para=agendado_para,
+        )
+        db.session.add(camp)
+        db.session.flush()
 
-    for c in contatos:
-        db.session.add(DisparoWppContato(
-            disparo_id=camp.id,
-            nome=c['nome'],
-            telefone=c['telefone'],
-            opt_in=True,
-        ))
-    db.session.commit()
+        for c in contatos:
+            db.session.add(DisparoWppContato(
+                disparo_id=camp.id,
+                nome=c['nome'],
+                telefone=c['telefone'],
+                opt_in=True,
+            ))
+        db.session.commit()
+        logger.info(f"[DISPARO] Salvo com sucesso: id={camp.id}")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f'Erro ao criar disparo: {e}')
+        flash(f'Erro ao salvar disparo: {e}', 'danger')
+        return redirect(url_for('disparos'))
 
     flash(f'Disparo "{nome}" criado com {len(contatos)} contato(s).', 'success')
+
+    # Iniciar automaticamente se o usuário marcou a opção (e não há agendamento futuro)
+    if iniciar_agora and not agendado_para:
+        if camp.id not in _dispatch_threads or not _dispatch_threads[camp.id].is_alive():
+            stop_evt  = threading.Event()
+            pause_evt = threading.Event()
+            _dispatch_stop[camp.id]  = stop_evt
+            _dispatch_pause[camp.id] = pause_evt
+            t = threading.Thread(target=_worker_disparo, args=(camp.id,), daemon=True)
+            _dispatch_threads[camp.id] = t
+            t.start()
+
     return redirect(url_for('disparos_detalhe', id=camp.id))
+
+
+@app.route('/disparos/template-csv')
+@login_required
+@permission_required('whatsapp')
+def disparos_template_csv():
+    """Retorna um arquivo CSV modelo com as colunas necessárias para o disparo."""
+    conteudo = "nome,telefone\nJoão Silva,5547999990001\nMaria Souza,5511988880002\n"
+    buf = io.BytesIO(conteudo.encode('utf-8-sig'))
+    return send_file(
+        buf,
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name='template_disparo.csv'
+    )
 
 
 @app.route('/disparos/<int:id>')
@@ -4234,6 +4272,7 @@ def webhook_zapi_disparo():
     return jsonify({'ok': True})
 
 
+if __name__ == '__main__':
     # Ao iniciar, campanhas em_envio interrompidas viram pausadas
     with app.app_context():
         try:
@@ -4253,12 +4292,12 @@ def webhook_zapi_disparo():
             logger.info("✅ Isolamento multi-tenant configurado")
         except Exception as e:
             logger.error(f"❌ Erro ao inicializar banco: {e}")
-    
+
     print("=" * 60)
     print("✅ CRM Multi-Tenant com RLS Ativo")
     print("✅ Servidor rodando em: http://127.0.0.1:5000")
     print("=" * 60)
-    
+
     # Use socketio.run para suportar corretamente socket.io
     socketio.run(app, debug=True, host='127.0.0.1', port=5000)
 
