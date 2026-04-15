@@ -147,6 +147,33 @@ def enviar_whatsapp_zapi(numero, mensagem, instance_id=None, token_id=None):
     except Exception as e:
         print(f"❌ EXCEÇÃO ao enviar WhatsApp: {str(e)}")
         return {"status": "Erro", "detalhe": str(e)}
+
+
+def enviar_midia_zapi(numero, url_arquivo, caption="", tipo="image", instance_id=None, token_id=None):
+    """Envia imagem ou documento via Z-API."""
+    if not instance_id:
+        instance_id = instance
+    if not token_id:
+        token_id = token
+
+    if tipo == "image":
+        endpoint = "send-image"
+        payload = {"phone": numero, "image": url_arquivo, "caption": caption}
+    elif tipo == "audio":
+        endpoint = "send-audio"
+        payload = {"phone": numero, "audio": url_arquivo}
+    else:
+        endpoint = "send-document"
+        payload = {"phone": numero, "document": url_arquivo, "fileName": caption or "arquivo"}
+
+    url = f"https://api.z-api.io/instances/{instance_id}/token/{token_id}/{endpoint}"
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=15)
+        if response.status_code == 200:
+            return {"status": "Sucesso", "detalhe": response.text}
+        return {"status": "Erro", "detalhe": f"Status {response.status_code}: {response.text}"}
+    except Exception as e:
+        return {"status": "Erro", "detalhe": str(e)}
     
 import threading, time
 
@@ -158,38 +185,70 @@ _dispatch_pause:   dict = {}   # campaign_id -> threading.Event
 def _parse_contatos(arquivo_bytes: bytes, filename: str):
     """Lê CSV ou XLSX e retorna lista de dicts {nome, telefone}. Remove duplicatas e inválidos."""
     import re
+
+    # Padrões aceitos para coluna de telefone
+    _TEL_PATTERNS = ['whatsapp', 'celular', 'cel', 'tel', 'fone', 'numero', 'número', 'phone', 'mobile', 'zap']
+    # Padrões aceitos para coluna de nome
+    _NOME_PATTERNS = ['nome', 'name', 'cliente', 'razao', 'razão']
+
+    def _eh_col_tel(h):
+        hl = h.lower().strip()
+        return any(p in hl for p in _TEL_PATTERNS)
+
+    def _eh_col_nome(h):
+        hl = h.lower().strip()
+        return any(p in hl for p in _NOME_PATTERNS)
+
+    def _normalizar_tel(raw):
+        """Remove não-dígitos; adiciona DDI 55 se ausente; valida 12-13 dígitos."""
+        tel = re.sub(r'\D', '', str(raw or ''))
+        if not tel:
+            return ''
+        if not tel.startswith('55'):
+            tel = '55' + tel
+        if len(tel) < 12 or len(tel) > 13:
+            return ''
+        return tel
+
+    def _decode_csv(data: bytes) -> str:
+        for enc in ('utf-8-sig', 'utf-8', 'latin-1', 'iso-8859-1'):
+            try:
+                return data.decode(enc)
+            except (UnicodeDecodeError, LookupError):
+                continue
+        return data.decode('utf-8', errors='replace')
+
     contatos = []
     fn = filename.lower()
 
-    if fn.endswith('.xlsx'):
+    if fn.endswith('.xlsx') or fn.endswith('.xls') or fn.endswith('.xlsm'):
         import openpyxl
         wb = openpyxl.load_workbook(io.BytesIO(arquivo_bytes), read_only=True, data_only=True)
         ws = wb.active
         rows = list(ws.iter_rows(values_only=True))
         if not rows:
             return []
-        header = [str(c or '').lower().strip() for c in rows[0]]
-        col_nome = next((i for i, h in enumerate(header) if 'nome' in h), None)
-        col_tel  = next((i for i, h in enumerate(header)
-                         if any(p in h for p in ['tel','fone','numero','número','phone'])), None)
+        header = [str(c or '') for c in rows[0]]
+        col_nome = next((i for i, h in enumerate(header) if _eh_col_nome(h)), None)
+        col_tel  = next((i for i, h in enumerate(header) if _eh_col_tel(h)), None)
         if col_tel is None:
             col_tel = 1 if col_nome == 0 else 0
         for row in rows[1:]:
             if not row:
                 continue
-            tel  = re.sub(r'\D', '', str(row[col_tel] or ''))  if col_tel  < len(row) else ''
-            nome = str(row[col_nome] or '').strip()             if col_nome is not None and col_nome < len(row) else ''
-            if len(tel) >= 10:
+            tel  = _normalizar_tel(row[col_tel] if col_tel < len(row) else '')
+            nome = str(row[col_nome] or '').strip() if col_nome is not None and col_nome < len(row) else ''
+            if tel:
                 contatos.append({'nome': nome, 'telefone': tel})
     else:
-        content = arquivo_bytes.decode('utf-8', errors='replace')
+        content = _decode_csv(arquivo_bytes)
         reader = csv.DictReader(io.StringIO(content))
         for row in reader:
-            tel_key  = next((k for k in row if any(p in k.lower() for p in ['tel','fone','numero','número','phone'])), None)
-            nome_key = next((k for k in row if 'nome' in k.lower()), None)
-            tel  = re.sub(r'\D', '', row.get(tel_key, '') or '') if tel_key else ''
-            nome = (row.get(nome_key, '') or '').strip()         if nome_key else ''
-            if len(tel) >= 10:
+            tel_key  = next((k for k in row if _eh_col_tel(k)), None)
+            nome_key = next((k for k in row if _eh_col_nome(k)), None)
+            tel  = _normalizar_tel(row.get(tel_key, '') if tel_key else '')
+            nome = (row.get(nome_key, '') or '').strip() if nome_key else ''
+            if tel:
                 contatos.append({'nome': nome, 'telefone': tel})
 
     seen, unique = set(), []
@@ -2254,6 +2313,71 @@ def webhook_test():
         "timestamp": datetime.now().isoformat()
     }), 200
 
+
+@app.route("/canais/diagnostico")
+@login_required
+def canais_diagnostico():
+    """Diagnóstico completo do módulo Canais para identificar problemas de recebimento."""
+    user_id = get_usuario_filter()
+    usuario = UsuarioCRM.query.get(user_id) if user_id else None
+
+    # Últimas 10 mensagens sem filtro de usuário (para ver se chegaram ao banco)
+    todas_msgs = WhatsAppMensagem.query.order_by(
+        WhatsAppMensagem.recebido_em.desc()
+    ).limit(10).all()
+
+    # Mensagens do usuário logado
+    msgs_usuario = WhatsAppMensagem.query.filter_by(
+        usuario_crm_id=user_id
+    ).order_by(WhatsAppMensagem.recebido_em.desc()).limit(10).all()
+
+    # Mensagens sem usuario_crm_id (orphans)
+    msgs_orphans = WhatsAppMensagem.query.filter_by(
+        usuario_crm_id=None
+    ).order_by(WhatsAppMensagem.recebido_em.desc()).limit(10).all()
+
+    resultado = {
+        "usuario_logado": {
+            "id": user_id,
+            "nome": usuario.nome if usuario else None,
+            "api_instance": usuario.api_instance if usuario else None,
+            "api_token_configurado": bool(usuario.api_token) if usuario else False,
+        },
+        "total_mensagens_banco": WhatsAppMensagem.query.count(),
+        "total_mensagens_usuario": WhatsAppMensagem.query.filter_by(usuario_crm_id=user_id).count(),
+        "total_mensagens_sem_usuario": WhatsAppMensagem.query.filter_by(usuario_crm_id=None).count(),
+        "ultimas_10_todas": [
+            {
+                "id": m.id,
+                "numero": m.numero,
+                "remetente": m.remetente,
+                "mensagem": m.mensagem[:50] if m.mensagem else None,
+                "usuario_crm_id": m.usuario_crm_id,
+                "recebido_em": m.recebido_em.isoformat() if m.recebido_em else None,
+            } for m in todas_msgs
+        ],
+        "ultimas_10_usuario": [
+            {
+                "id": m.id,
+                "numero": m.numero,
+                "remetente": m.remetente,
+                "mensagem": m.mensagem[:50] if m.mensagem else None,
+                "recebido_em": m.recebido_em.isoformat() if m.recebido_em else None,
+            } for m in msgs_usuario
+        ],
+        "ultimas_10_sem_usuario_vinculado": [
+            {
+                "id": m.id,
+                "numero": m.numero,
+                "remetente": m.remetente,
+                "mensagem": m.mensagem[:50] if m.mensagem else None,
+                "recebido_em": m.recebido_em.isoformat() if m.recebido_em else None,
+            } for m in msgs_orphans
+        ],
+    }
+    return jsonify(resultado)
+
+
 @app.route("/canais/webhook", methods=["POST", "OPTIONS"])
 @app.route("/webhook/messages", methods=["POST", "OPTIONS"])
 def receber_mensagem_webhook():
@@ -2274,6 +2398,18 @@ def receber_mensagem_webhook():
     print(f"Payload completo:")
     print(json.dumps(data, indent=2, ensure_ascii=False))
     print("="*60 + "\n")
+
+    # ========== IGNORAR MENSAGENS ENVIADAS PELA PRÓPRIA INSTÂNCIA ==========
+    # Z-API dispara webhook tanto para mensagens recebidas quanto enviadas
+    is_from_me = (
+        data.get("isFromMe") is True
+        or data.get("fromMe") is True
+        or data.get("from_me") is True
+        or str(data.get("type", "")).lower() in ("sent", "sentsuccess")
+    )
+    if is_from_me:
+        print("ℹ️ Webhook ignorado: mensagem enviada pela própria instância (isFromMe)")
+        return {"status": "ignored", "reason": "from_me"}, 200
 
     # ========== ETAPA 1: EXTRAIR TELEFONE ==========
     phone = None
@@ -2382,12 +2518,35 @@ def receber_mensagem_webhook():
 
     # Descobrir a qual usuário CRM essa mensagem pertence
     usuario_crm_id = None
+
+    # 1ª tentativa: pelo cliente cadastrado
     cliente_temp = find_cliente_by_phone(numero)
     if cliente_temp and cliente_temp.usuario_crm_id:
         usuario_crm_id = cliente_temp.usuario_crm_id
-        print(f"✅ Mensagem associada ao usuário CRM ID: {usuario_crm_id}")
-    else:
-        print(f"⚠️ Cliente não encontrado ou sem usuário associado - mensagem será visível para todos")
+        print(f"✅ Mensagem associada ao usuário CRM ID: {usuario_crm_id} (via cliente)")
+
+    # 2ª tentativa: pelo instanceId da Z-API no payload
+    if not usuario_crm_id:
+        instance_id_payload = data.get("instanceId") or data.get("instance_id") or data.get("instanceid")
+        if instance_id_payload:
+            usuario_por_instancia = UsuarioCRM.query.filter_by(api_instance=str(instance_id_payload)).first()
+            if usuario_por_instancia:
+                usuario_crm_id = usuario_por_instancia.id
+                print(f"✅ Mensagem associada ao usuário CRM ID: {usuario_crm_id} (via instanceId: {instance_id_payload})")
+
+    # 3ª tentativa: pelo contato de disparo (caso seja resposta a um disparo)
+    if not usuario_crm_id:
+        # Busca pelo número exato ou pelos últimos 11 dígitos (DDD+número)
+        sufixo = numero[-11:] if len(numero) >= 11 else numero
+        contato_disparo = DisparoWppContato.query.filter(
+            DisparoWppContato.telefone.endswith(sufixo)
+        ).order_by(DisparoWppContato.id.desc()).first()
+        if contato_disparo and contato_disparo.disparo:
+            usuario_crm_id = contato_disparo.disparo.usuario_crm_id
+            print(f"✅ Mensagem associada ao usuário CRM ID: {usuario_crm_id} (via disparo ID: {contato_disparo.disparo_id})")
+
+    if not usuario_crm_id:
+        print(f"⚠️ Usuário CRM não identificado - mensagem salva sem vínculo de usuário")
 
     # Salvar no banco
     msg = WhatsAppMensagem(
@@ -2689,7 +2848,7 @@ def excluir_mensagem(msg_id):
 @app.route("/canais/upload", methods=["POST"])
 @login_required
 def upload_arquivo_canais():
-    """Upload de arquivo (imagem, documento, áudio)"""
+    """Upload de arquivo (imagem, documento, áudio) e envio via Z-API."""
     if 'file' not in request.files:
         return jsonify({"erro": "Nenhum arquivo enviado"}), 400
     
@@ -2701,7 +2860,19 @@ def upload_arquivo_canais():
     
     if not numero:
         return jsonify({"erro": "Número não fornecido"}), 400
-    
+
+    # Validação básica de extensão (segurança)
+    EXTENSOES_PERMITIDAS = {
+        '.jpg', '.jpeg', '.png', '.gif', '.webp',
+        '.mp3', '.wav', '.ogg', '.m4a',
+        '.mp4', '.webm', '.mov',
+        '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.zip'
+    }
+    import uuid
+    file_ext = os.path.splitext(file.filename)[1].lower()
+    if file_ext not in EXTENSOES_PERMITIDAS:
+        return jsonify({"erro": "Tipo de arquivo não permitido"}), 400
+
     # Criar diretório se não existir
     upload_folder = os.path.join(app.root_path, 'static', 'uploads', 'canais')
     os.makedirs(upload_folder, exist_ok=True)
@@ -2720,14 +2891,31 @@ def upload_arquivo_canais():
     
     # Determinar tipo de arquivo
     file_type = 'document'
-    if file_ext.lower() in ['.jpg', '.jpeg', '.png', '.gif', '.webp']:
+    if file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']:
         file_type = 'image'
-    elif file_ext.lower() in ['.mp3', '.wav', '.ogg', '.m4a']:
+    elif file_ext in ['.mp3', '.wav', '.ogg', '.m4a']:
         file_type = 'audio'
-    elif file_ext.lower() in ['.mp4', '.webm', '.mov']:
+    elif file_ext in ['.mp4', '.webm', '.mov']:
         file_type = 'video'
     
     numero_norm = normalize_phone(numero)
+
+    # --- Enviar via Z-API ---
+    user_id = current_user.get_usuario_principal_id()
+    usuario_dono = UsuarioCRM.query.get(user_id)
+    zapi_resultado = {"status": "sem_api"}
+    if usuario_dono and usuario_dono.api_instance and usuario_dono.api_token:
+        # Monta URL pública (necessária para Z-API buscar o arquivo)
+        base_url = request.host_url.rstrip('/')
+        url_publica = f"{base_url}{file_url}"
+        zapi_resultado = enviar_midia_zapi(
+            numero_norm, url_publica,
+            caption=file.filename,
+            tipo=file_type,
+            instance_id=usuario_dono.api_instance,
+            token_id=usuario_dono.api_token
+        )
+        print(f"📤 Z-API mídia: {zapi_resultado}")
     
     # Salvar referência no banco
     msg = WhatsAppMensagem(
@@ -2735,14 +2923,8 @@ def upload_arquivo_canais():
         remetente="Você",
         mensagem=f"[{file_type.upper()}] {file.filename}",
         recebido_em=datetime.utcnow(),
-        usuario_crm_id=current_user.get_usuario_principal_id()
+        usuario_crm_id=user_id
     )
-    
-    # Se tiver campo para tipo de mídia, adicione aqui
-    if hasattr(msg, 'tipo_midia'):
-        msg.tipo_midia = file_type
-        msg.arquivo_url = file_url
-    
     db.session.add(msg)
     db.session.commit()
     
@@ -2767,7 +2949,8 @@ def upload_arquivo_canais():
         "status": "ok",
         "file_url": file_url,
         "file_type": file_type,
-        "message_id": msg.id
+        "message_id": msg.id,
+        "zapi": zapi_resultado.get("status")
     })
 
 @app.route("/canais/conversas/nao_lidas", methods=["GET"])
@@ -2989,10 +3172,13 @@ def ultimas_notificacoes():
     
     user_id = get_usuario_filter()
     
-    # Obter todas as mensagens filtradas por usuário
+    # Obter todas as mensagens filtradas por usuário (inclui as sem vínculo de usuário)
     if user_id:
-        all_msgs = db.session.query(WhatsAppMensagem).filter_by(
-            usuario_crm_id=user_id
+        all_msgs = db.session.query(WhatsAppMensagem).filter(
+            db.or_(
+                WhatsAppMensagem.usuario_crm_id == user_id,
+                WhatsAppMensagem.usuario_crm_id == None
+            )
         ).order_by(WhatsAppMensagem.recebido_em.desc()).all()
     else:
         all_msgs = db.session.query(WhatsAppMensagem).order_by(
@@ -3048,8 +3234,8 @@ def buscar_clientes():
         return jsonify([])
 
     user_id = get_usuario_filter()
-    
-    # Filtrar clientes por usuário
+
+    # 1) Clientes cadastrados
     if user_id:
         clientes = Cliente.query.filter(
             and_(
@@ -3068,14 +3254,54 @@ def buscar_clientes():
             )
         ).limit(20).all()
 
-    return jsonify([
-        {
-            "id": c.id,
-            "nome": c.nome,
-            "telefone": c.telefone
-        }
+    resultado = [
+        {"id": c.id, "nome": c.nome, "telefone": c.telefone}
         for c in clientes
-    ])
+    ]
+
+    # 2) Contatos de disparos (não necessariamente cadastrados como cliente)
+    telefones_ja_incluidos = {r["telefone"] for r in resultado}
+    contatos_disparo = (
+        DisparoWppContato.query
+        .join(DisparoWpp, DisparoWppContato.disparo_id == DisparoWpp.id)
+        .filter(
+            DisparoWpp.usuario_crm_id == user_id,
+            or_(
+                DisparoWppContato.nome.ilike(f"%{q}%"),
+                DisparoWppContato.telefone.ilike(f"%{q}%")
+            )
+        )
+        .limit(20)
+        .all()
+    )
+    for c in contatos_disparo:
+        tel_norm = normalize_phone(c.telefone)
+        if tel_norm not in telefones_ja_incluidos:
+            telefones_ja_incluidos.add(tel_norm)
+            resultado.append({
+                "id": None,
+                "nome": c.nome or tel_norm,
+                "telefone": tel_norm
+            })
+
+    # 3) Números que enviaram mensagens (responderam a disparo ou iniciaram contato)
+    msgs_numeros = (
+        WhatsAppMensagem.query
+        .filter(
+            WhatsAppMensagem.usuario_crm_id == user_id,
+            WhatsAppMensagem.numero.ilike(f"%{q}%")
+        )
+        .distinct(WhatsAppMensagem.numero)
+        .limit(10)
+        .all()
+    )
+    for m in msgs_numeros:
+        tel_norm = normalize_phone(m.numero)
+        if tel_norm not in telefones_ja_incluidos:
+            telefones_ja_incluidos.add(tel_norm)
+            resultado.append({"id": None, "nome": tel_norm, "telefone": tel_norm})
+
+    return jsonify(resultado[:30])
 
 @app.route("/api/produtos/busca")
 @login_required
@@ -3119,11 +3345,17 @@ def carregar_mensagens(numero):
     numero_norm = normalize_phone(numero)
     user_id = get_usuario_filter()
     
-    # busca por número normalizado e filtrado por usuário
+    # busca por número normalizado e filtrado por usuário (inclui mensagens sem vínculo)
     if user_id:
-        msgs = WhatsAppMensagem.query.filter_by(
-            numero=numero_norm,
-            usuario_crm_id=user_id
+        from sqlalchemy import or_
+        msgs = WhatsAppMensagem.query.filter(
+            db.and_(
+                WhatsAppMensagem.numero == numero_norm,
+                db.or_(
+                    WhatsAppMensagem.usuario_crm_id == user_id,
+                    WhatsAppMensagem.usuario_crm_id == None
+                )
+            )
         ).order_by(WhatsAppMensagem.recebido_em.asc()).all()
     else:
         msgs = WhatsAppMensagem.query.filter_by(numero=numero_norm).order_by(
@@ -3132,12 +3364,21 @@ def carregar_mensagens(numero):
     
     mensagens_list = []
     for m in msgs:
-        mensagens_list.append({
+        entry = {
             "id": m.id,
             "remetente": m.remetente,
             "mensagem": m.mensagem,
-            "hora": m.recebido_em.strftime("%Y-%m-%d %H:%M:%S")
-        })
+            "hora": m.recebido_em.strftime("%Y-%m-%d %H:%M:%S"),
+            "tipo_midia": getattr(m, 'tipo_midia', None),
+            "arquivo_url": getattr(m, 'arquivo_url', None),
+        }
+        # Infere tipo_midia e arquivo_url a partir do texto quando não há coluna dedicada
+        if not entry["tipo_midia"] and m.mensagem and m.mensagem.startswith('['):
+            for tipo in ('IMAGE', 'VIDEO', 'AUDIO', 'DOCUMENT'):
+                if m.mensagem.startswith(f'[{tipo}]'):
+                    entry["tipo_midia"] = tipo.lower()
+                    break
+        mensagens_list.append(entry)
     # também devolve nome do cliente (se existir)
     cliente = Cliente.query.filter_by(telefone=numero_norm).first()
     nome = cliente.nome if cliente else numero_norm
