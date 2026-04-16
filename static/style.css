@@ -295,6 +295,7 @@ h1, h2, h3, h4, h5, h6 {
 .modal-title {
   font-weight: 600;
   font-size: 1.25rem;
+  color: var(--white);
 }
 
 .modal-body {
@@ -502,6 +503,17 @@ hr {
 .btn-rounded.btn-warning:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-lg);
+}
+
+/* Responsividade global: todos os wrappers de scroll de tabela */
+.table-scroll {
+  overflow-x: auto;
+}
+
+/* Evita que imagens estourem o layout em mobile */
+img {
+  max-width: 100%;
+  height: auto;
 }
 
 /* Tabelas Com Estilo CRM */

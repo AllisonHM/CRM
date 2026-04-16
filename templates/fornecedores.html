@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}Gerenciamento de Fornecedores{% endblock %}
 
 {% block content %}
@@ -129,10 +129,10 @@
   <div class="card mb-4">
     <div class="card-body">
       <div class="row g-3">
-        <div class="col-md-6">
+        <div class="col-12 col-md-6">
           <input type="text" id="searchInput" class="form-control" placeholder="Buscar por nome, CNPJ, cidade...">
         </div>
-        <div class="col-md-3">
+        <div class="col-12 col-md-3">
           <select id="filterStatus" class="form-select">
             <option value="">Todos os status</option>
             <option value="Ativo">Ativo</option>
@@ -140,7 +140,7 @@
             <option value="Bloqueado">Bloqueado</option>
           </select>
         </div>
-        <div class="col-md-3">
+        <div class="col-12 col-md-3">
           <select id="filterAvaliacao" class="form-select">
             <option value="">Todas avaliações</option>
             <option value="5">⭐⭐⭐⭐⭐ 5 estrelas</option>
@@ -156,7 +156,7 @@
 
   <!-- Estatísticas -->
   <div class="row mb-4">
-    <div class="col-md-3">
+    <div class="col-12 col-md-3">
       <div class="card text-center">
         <div class="card-body">
           <h3 id="totalFornecedores" class="mb-0">0</h3>
@@ -164,7 +164,7 @@
         </div>
       </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-12 col-md-3">
       <div class="card text-center">
         <div class="card-body">
           <h3 id="totalAtivos" class="mb-0 text-success">0</h3>
@@ -172,7 +172,7 @@
         </div>
       </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-12 col-md-3">
       <div class="card text-center">
         <div class="card-body">
           <h3 id="totalInativos" class="mb-0 text-danger">0</h3>
@@ -180,7 +180,7 @@
         </div>
       </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-12 col-md-3">
       <div class="card text-center">
         <div class="card-body">
           <h3 id="mediaAvaliacao" class="mb-0 text-warning">0</h3>
@@ -703,7 +703,7 @@ async function visualizarFornecedor(id) {
     
     const html = `
       <div class="row">
-        <div class="col-md-6">
+        <div class="col-12 col-md-6">
           <h6>Dados Básicos</h6>
           <p><strong>Nome Fantasia:</strong> ${f.nome_fantasia || '-'}</p>
           <p><strong>CNPJ/CPF:</strong> ${f.cnpj_cpf || '-'}</p>
@@ -722,7 +722,7 @@ async function visualizarFornecedor(id) {
           <p><strong>Cidade:</strong> ${f.cidade || '-'} - ${f.estado || '-'}</p>
         </div>
         
-        <div class="col-md-6">
+        <div class="col-12 col-md-6">
           <h6>Informações Comerciais</h6>
           <p><strong>Produtos/Serviços:</strong> ${f.produtos_servicos || '-'}</p>
           <p><strong>Prazo Entrega:</strong> ${f.prazo_entrega || '-'}</p>

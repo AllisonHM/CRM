@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}Gerenciar Bancos de Dados{% endblock %}
 
 {% block content %}
@@ -136,7 +136,7 @@
   {% for banco in bancos %}
   <div class="banco-card" id="banco-{{ banco.cliente_id }}">
     <div class="row align-items-center">
-      <div class="col-md-4">
+      <div class="col-12 col-md-4">
         <h5 style="margin-bottom: 5px;">
           <span class="status-badge {% if banco.ativo %}status-ativo{% else %}status-inativo{% endif %}">
             {% if banco.ativo %}Ativo{% else %}Inativo{% endif %}
@@ -146,7 +146,7 @@
         <div class="db-info">{{ banco.db_name }}</div>
       </div>
       
-      <div class="col-md-4">
+      <div class="col-12 col-md-4">
         <div style="padding: 10px 0;">
           <strong>ID do Cliente:</strong> #{{ banco.cliente_id }}<br>
           <strong>Email:</strong> {{ banco.email }}<br>
@@ -156,7 +156,7 @@
         </div>
       </div>
       
-      <div class="col-md-4 text-end">
+      <div class="col-12 col-md-4 text-end">
         <button class="action-btn btn-migrar" onclick="migrarBanco({{ banco.cliente_id }})">
           Migrar
         </button>

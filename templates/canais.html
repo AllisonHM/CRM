@@ -549,6 +549,9 @@
         Mensagens
       </div>
       <div class="header-buttons">
+        <button class="header-btn" id="new-chat-btn" title="Nova conversa" style="color:#25d366">
+          <i class="fas fa-plus"></i>
+        </button>
         <button class="header-btn" id="select-mode-btn" title="Deletar conversas">
           <i class="fas fa-trash"></i>
         </button>
@@ -599,8 +602,10 @@
       </div>
       
       <div class="input-area">
-        <button class="btn btn-link" style="color: #667781;">
-          <i class="far fa-smile fa-lg"></i>
+        <!-- Input de arquivo oculto -->
+        <input type="file" id="file-input" style="display:none" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip,.mp3,.ogg,.m4a,.mp4">
+        <button class="btn btn-link attach-btn" id="attach-btn" title="Enviar arquivo" style="color:#667781;padding:0 6px">
+          <i class="fas fa-paperclip fa-lg"></i>
         </button>
         <textarea 
           class="input-box" 
@@ -612,6 +617,27 @@
           <i class="fas fa-paper-plane"></i>
         </button>
       </div>
+      <!-- Preview de upload -->
+      <div id="upload-preview" style="display:none; background:#f0f2f5; padding:8px 20px; align-items:center; gap:10px; border-top:1px solid #e9edef;">
+        <img id="upload-img-preview" src="" style="max-height:60px; max-width:80px; border-radius:6px; display:none;">
+        <span id="upload-file-name" style="font-size:.85rem; color:#111b21; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
+        <button onclick="cancelUpload()" style="background:none;border:none;color:#e53e3e;cursor:pointer;font-size:1rem;"><i class="fas fa-times"></i></button>
+        <button onclick="confirmUpload()" style="background:#25d366;border:none;color:white;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:.85rem;"><i class="fas fa-paper-plane"></i> Enviar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Nova Conversa -->
+<div class="delete-modal" id="new-chat-modal">
+  <div class="modal-content" style="min-width:320px">
+    <h5><i class="fas fa-plus-circle" style="color:#25d366;margin-right:8px"></i>Nova Conversa</h5>
+    <p>Digite o número WhatsApp (com DDD e DDI, ex: 5547999999999)</p>
+    <input type="tel" id="new-chat-number" class="form-control mb-2" placeholder="5547999999999" style="border-radius:8px">
+    <input type="text" id="new-chat-name" class="form-control mb-3" placeholder="Nome (opcional)" style="border-radius:8px">
+    <div class="modal-buttons">
+      <button class="btn-cancel" onclick="closeNewChatModal()">Cancelar</button>
+      <button class="btn-delete" style="background:#25d366" onclick="startNewChat()">Iniciar</button>
     </div>
   </div>
 </div>
@@ -633,7 +659,36 @@
     0%, 100% { opacity: 0.3; }
     50% { opacity: 1; }
   }
+  .msg-image {
+    max-width: 240px;
+    max-height: 200px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: block;
+    margin-bottom: 4px;
+  }
+  .msg-doc {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    color: #0d6efd;
+    text-decoration: none;
+    font-size: .9rem;
+  }
+  .msg-doc:hover { text-decoration: underline; }
+  /* Lightbox simples */
+  #img-lightbox {
+    display:none; position:fixed; top:0; left:0; right:0; bottom:0;
+    background:rgba(0,0,0,.85); z-index:99999;
+    align-items:center; justify-content:center;
+  }
+  #img-lightbox.show { display:flex; }
+  #img-lightbox img { max-width:90vw; max-height:90vh; border-radius:8px; }
+  #img-lightbox button { position:absolute; top:20px; right:24px; background:none; border:none; color:white; font-size:2rem; cursor:pointer; }
 </style>
+<!-- Lightbox -->
+<div id="img-lightbox"><button onclick="document.getElementById('img-lightbox').classList.remove('show')">&times;</button><img id="lightbox-img" src=""></div>
 
 <script>
 // ===========================
@@ -662,55 +717,50 @@ document.addEventListener("DOMContentLoaded", () => {
 // SOCKET.IO
 // ===========================
 function initializeSocketIO() {
-  if (!socket && window.io) {
+  // Usa socket já criado pelo base.html ou cria um novo
+  if (!socket) {
+    if (!window.io) return;
     socket = window.io();
-    
-    socket.on('connect', () => {
-      console.log(' Socket conectado');
-    });
-    
-    socket.on('nova_mensagem', (data) => {
-      handleNewMessage(data);
-    });
-    
-    socket.on('disconnect', () => {
-      console.log(' Socket desconectado');
-    });
   }
+
+  // Remove listeners antigos para evitar duplicatas e registra novamente
+  socket.off('nova_mensagem');
+  socket.on('nova_mensagem', (data) => {
+    handleNewMessage(data);
+  });
+
+  socket.off('connect');
+  socket.on('connect', () => {
+    console.log('Socket conectado (canais)');
+  });
+
+  socket.off('disconnect');
+  socket.on('disconnect', () => {
+    console.log('Socket desconectado (canais)');
+  });
 }
 
 // ===========================
-// CARREGAR CONVERSAS
+// CARREGAR CONVERSAS (incremental — sem flash)
 // ===========================
 async function loadConversations() {
   try {
-    if (isSearching) return; // não sobrescrever enquanto o usuário pesquisa
+    if (isSearching) return;
 
     const response = await fetch('/canais/ultimas');
     if (!response.ok) throw new Error('Erro ao carregar conversas');
-    
+
     const data = await response.json();
-    const container = document.getElementById('conversations-list');
-    
-    // Limpar e recriar lista (mantendo seleção)
     const currentActive = activeContact?.numero;
-    container.innerHTML = '';
-    
-    // Usar um Set para evitar duplicação
     const seenNumbers = new Set();
-    const novasConversas = new Map();
-    
+    let changed = false;
+
     data.forEach(conv => {
       const numeroNorm = normalizeNumber(conv.numero);
-      
-      // Se já vimos este número, pular (evita duplicação)
-      if (seenNumbers.has(numeroNorm)) {
-        console.warn(`Número duplicado ignorado: ${numeroNorm}`);
-        return;
-      }
+      if (seenNumbers.has(numeroNorm)) return;
       seenNumbers.add(numeroNorm);
-      
-      const safeConv = {
+
+      const novaConv = {
         numero: numeroNorm,
         nome: conv.nome && conv.nome !== numeroNorm ? conv.nome : (conv.nome || numeroNorm),
         mensagem: conv.mensagem || '',
@@ -718,17 +768,30 @@ async function loadConversations() {
         nao_respondida: conv.nao_respondida || false
       };
 
-      novasConversas.set(numeroNorm, safeConv);
+      const existing = conversations.get(numeroNorm);
+      if (!existing ||
+          existing.mensagem !== novaConv.mensagem ||
+          existing.recebido_em !== novaConv.recebido_em ||
+          existing.nao_respondida !== novaConv.nao_respondida) {
+        conversations.set(numeroNorm, novaConv);
+        changed = true;
+      }
     });
 
-    // Substituir o Map de conversas pelo novo (sem duplicatas)
-    conversations = novasConversas;
-    
-    renderConversationList(container, currentActive);
-    document.getElementById('total-conversas').textContent = conversations.size;
-    
-    console.log(`${conversations.size} conversas únicas carregadas`);
-    
+    // Remover conversas que sumiram do servidor
+    conversations.forEach((_, num) => {
+      if (!seenNumbers.has(num)) {
+        conversations.delete(num);
+        changed = true;
+      }
+    });
+
+    if (changed) {
+      const container = document.getElementById('conversations-list');
+      renderConversationList(container, currentActive);
+      document.getElementById('total-conversas').textContent = conversations.size;
+    }
+
   } catch (error) {
     console.error('Erro ao carregar conversas:', error);
   }
@@ -909,7 +972,7 @@ async function loadMessages(numero) {
     const data = await response.json();
     
     data.mensagens.forEach(msg => {
-      addMessageToUI(msg.remetente, msg.mensagem, msg.hora, msg.id);
+      addMessageToUI(msg.remetente, msg.mensagem, msg.hora, msg.id, msg.tipo_midia || null, msg.arquivo_url || null);
     });
     
     scrollToBottom();
@@ -922,43 +985,60 @@ async function loadMessages(numero) {
 // ===========================
 // ADICIONAR MENSAGEM NA UI
 // ===========================
-function addMessageToUI(sender, text, timestamp, id = null) {
+function addMessageToUI(sender, text, timestamp, id = null, tipoMidia = null, arquivoUrl = null) {
   if (id && seenMessageIds.has(id)) return;
   if (id) seenMessageIds.add(id);
-  
+
   const container = document.getElementById('messages-container');
   const isMe = sender === 'Você';
-  
+
   const wrapper = document.createElement('div');
   wrapper.className = `message-wrapper ${isMe ? 'sent' : 'received'}`;
-  
+
   const bubble = document.createElement('div');
   bubble.className = `message-bubble ${isMe ? 'sent' : 'received'}`;
-  
-  const textDiv = document.createElement('div');
-  textDiv.className = 'message-text';
-  textDiv.textContent = text;
-  
+
+  // --- Conteúdo da mensagem ---
+  if (tipoMidia === 'image' && arquivoUrl) {
+    const img = document.createElement('img');
+    img.src = arquivoUrl;
+    img.className = 'msg-image';
+    img.alt = text;
+    img.onclick = () => {
+      document.getElementById('lightbox-img').src = arquivoUrl;
+      document.getElementById('img-lightbox').classList.add('show');
+    };
+    bubble.appendChild(img);
+  } else if ((tipoMidia === 'document' || tipoMidia === 'video' || tipoMidia === 'audio') && arquivoUrl) {
+    const link = document.createElement('a');
+    link.href = arquivoUrl;
+    link.target = '_blank';
+    link.className = 'msg-doc';
+    link.innerHTML = `<i class="fas fa-${tipoMidia === 'audio' ? 'music' : tipoMidia === 'video' ? 'film' : 'file-alt'}"></i> ${text}`;
+    bubble.appendChild(link);
+  } else {
+    const textDiv = document.createElement('div');
+    textDiv.className = 'message-text';
+    textDiv.textContent = text;
+    bubble.appendChild(textDiv);
+  }
+
+  // --- Meta (hora + status) ---
   const meta = document.createElement('div');
   meta.className = 'message-meta';
-  
   const time = document.createElement('span');
   time.className = 'message-time';
   time.textContent = formatMessageTime(timestamp);
-  
   meta.appendChild(time);
-  
   if (isMe) {
     const status = document.createElement('i');
     status.className = 'fas fa-check-double message-status';
     meta.appendChild(status);
   }
-  
-  bubble.appendChild(textDiv);
+
   bubble.appendChild(meta);
   wrapper.appendChild(bubble);
   container.appendChild(wrapper);
-  
   scrollToBottom();
 }
 
@@ -1016,11 +1096,11 @@ async function sendMessage() {
 // ===========================
 function handleNewMessage(data) {
   const numeroNorm = normalizeNumber(data.numero);
-  const { remetente, mensagem, id } = data;
-  
+  const { remetente, mensagem, id, tipo_midia, arquivo_url } = data;
+
   // Se for do contato ativo, adicionar no chat
   if (activeContact && activeContact.numero === numeroNorm) {
-    addMessageToUI(remetente, mensagem, new Date().toISOString(), id);
+    addMessageToUI(remetente, mensagem, new Date().toISOString(), id, tipo_midia || null, arquivo_url || null);
     // Se foi respondido, remover o indicador de não respondido
     if (remetente === "Você") {
       const conv = conversations.get(numeroNorm);
@@ -1141,7 +1221,7 @@ async function searchContacts(query) {
 function setupEventListeners() {
   // Botão enviar
   document.getElementById('send-button').addEventListener('click', sendMessage);
-  
+
   // Enter para enviar
   document.getElementById('message-input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -1149,13 +1229,36 @@ function setupEventListeners() {
       sendMessage();
     }
   });
-  
+
   // Auto-resize textarea
   document.getElementById('message-input').addEventListener('input', function() {
     this.style.height = 'auto';
     this.style.height = Math.min(this.scrollHeight, 100) + 'px';
   });
+
+  // Botão de anexo
+  document.getElementById('attach-btn').addEventListener('click', () => {
+    if (!activeContact) { showNotification('Selecione uma conversa primeiro', 'error'); return; }
+    document.getElementById('file-input').click();
+  });
+
+  // Arquivo selecionado
+  document.getElementById('file-input').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    showUploadPreview(file);
+    e.target.value = ''; // reset para permitir enviar o mesmo arquivo duas vezes
+  });
   
+  // Modal de nova conversa
+  document.getElementById('new-chat-btn').addEventListener('click', () => {
+    document.getElementById('new-chat-modal').classList.add('show');
+    setTimeout(() => document.getElementById('new-chat-number').focus(), 100);
+  });
+  document.getElementById('new-chat-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'new-chat-modal') closeNewChatModal();
+  });
+
   // Modal de deleção
   document.getElementById('btn-cancel').addEventListener('click', closeDeleteModal);
   document.getElementById('btn-delete-confirm').addEventListener('click', deleteConversation);
@@ -1176,6 +1279,38 @@ function setupEventListeners() {
       openDeleteModal(firstConv);
     }
   });
+}
+
+// ===========================
+// NOVA CONVERSA
+// ===========================
+function closeNewChatModal() {
+  document.getElementById('new-chat-modal').classList.remove('show');
+  document.getElementById('new-chat-number').value = '';
+  document.getElementById('new-chat-name').value = '';
+}
+
+function startNewChat() {
+  const raw = document.getElementById('new-chat-number').value.trim().replace(/\D/g, '');
+  const nome = document.getElementById('new-chat-name').value.trim() || raw;
+
+  if (!raw || raw.length < 10) {
+    showNotification('Número inválido. Use formato: 5547999999999', 'error');
+    return;
+  }
+
+  const conv = {
+    numero: raw,
+    nome: nome,
+    mensagem: 'Conversa iniciada',
+    recebido_em: new Date().toISOString(),
+    nao_respondida: false
+  };
+  conversations.set(raw, conv);
+  closeNewChatModal();
+  renderConversationList(document.getElementById('conversations-list'), raw);
+  document.getElementById('total-conversas').textContent = conversations.size;
+  selectConversation(conv);
 }
 
 // ===========================
@@ -1241,6 +1376,67 @@ function playNotificationSound() {
 // Normaliza número de telefone para apenas dígitos
 function normalizeNumber(numero) {
   return (numero || '').toString().replace(/\D/g, '');
+}
+
+// ===========================
+// ANEXOS / UPLOAD
+// ===========================
+let pendingFile = null;
+
+function showUploadPreview(file) {
+  pendingFile = file;
+  const preview = document.getElementById('upload-preview');
+  const imgPreview = document.getElementById('upload-img-preview');
+  const fileName = document.getElementById('upload-file-name');
+
+  fileName.textContent = file.name;
+
+  if (file.type.startsWith('image/')) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      imgPreview.src = e.target.result;
+      imgPreview.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+  } else {
+    imgPreview.style.display = 'none';
+  }
+
+  preview.style.display = 'flex';
+}
+
+function cancelUpload() {
+  pendingFile = null;
+  document.getElementById('upload-preview').style.display = 'none';
+  document.getElementById('upload-img-preview').src = '';
+}
+
+async function confirmUpload() {
+  if (!pendingFile || !activeContact) return;
+
+  const formData = new FormData();
+  formData.append('file', pendingFile);
+  formData.append('numero', activeContact.numero);
+
+  const fileName = pendingFile.name;
+  const isImage = pendingFile.type.startsWith('image/');
+
+  // Mostrar na UI imediatamente com preview local
+  const localUrl = isImage ? URL.createObjectURL(pendingFile) : null;
+  addMessageToUI('Você', fileName, new Date().toISOString(), null,
+    isImage ? 'image' : 'document', localUrl);
+
+  cancelUpload();
+
+  try {
+    const response = await fetch('/canais/upload', { method: 'POST', body: formData });
+    if (!response.ok) throw new Error('Erro no upload');
+    const data = await response.json();
+    console.log('Upload ok:', data);
+  } catch (err) {
+    console.error('Erro upload:', err);
+    showNotification('Erro ao enviar arquivo', 'error');
+  }
 }
 </script>
 

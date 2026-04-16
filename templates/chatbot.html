@@ -1,40 +1,46 @@
 {% extends "base.html" %}
-{% block title %}Título da Página{% endblock %}
+{% block title %}Configuração Chatbot{% endblock %}
 {% block content %}
-<!doctype html>
-<html lang="pt-br">
-<head>
-  <meta charset="utf-8">
-  <title>Configuração Chatbot</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="p-4">
-  <h1>Regras do Chatbot</h1>
-  <form method="POST" class="mb-4">
-    <div class="mb-3">
-      <label for="palavra_chave" class="form-label">Palavra-chave</label>
-      <input type="text" name="palavra_chave" id="palavra_chave" class="form-control" required>
-    </div>
-    <div class="mb-3">
-      <label for="resposta" class="form-label">Resposta</label>
-      <textarea name="resposta" id="resposta" class="form-control" required></textarea>
-    </div>
-    <button type="submit" class="btn btn-success">Salvar</button>
-  </form>
 
-  <h2>Regras cadastradas</h2>
-  <table class="table table-bordered">
-    <tr>
-      <th>Palavra-chave</th>
-      <th>Resposta</th>
-    </tr>
-    {% for regra in regras %}
-    <tr>
-      <td>{{ regra.palavra_chave }}</td>
-      <td>{{ regra.resposta }}</td>
-    </tr>
-    {% endfor %}
+<h1 class="section-title">Regras do Chatbot</h1>
+
+<div class="card card-accent mb-4">
+  <div class="card-body">
+    <form method="POST" class="mb-0">
+      <div class="row g-3">
+        <div class="col-12 col-md-4">
+          <label for="palavra_chave" class="form-label">Palavra-chave</label>
+          <input type="text" name="palavra_chave" id="palavra_chave" class="form-control" required>
+        </div>
+        <div class="col-12 col-md-6">
+          <label for="resposta" class="form-label">Resposta</label>
+          <textarea name="resposta" id="resposta" class="form-control" rows="2" required></textarea>
+        </div>
+        <div class="col-12 col-md-2 d-flex align-items-end">
+          <button type="submit" class="btn btn-success w-100">Salvar</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<h2 class="mb-3">Regras cadastradas</h2>
+<div class="table-responsive">
+  <table class="table table-bordered table-striped">
+    <thead class="table-dark">
+      <tr>
+        <th>Palavra-chave</th>
+        <th>Resposta</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for regra in regras %}
+      <tr>
+        <td>{{ regra.palavra_chave }}</td>
+        <td>{{ regra.resposta }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
   </table>
-</body>
-</html>
+</div>
 {% endblock %}

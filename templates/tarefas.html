@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}Tarefas{% endblock %}
 
 {% block content %}
@@ -18,7 +18,7 @@
     {% endwith %}
 
     <div class="row g-3 mb-4">
-        <div class="col-md-3">
+        <div class="col-6 col-md-3">
             <div class="card text-center">
                 <div class="card-body">
                     <div class="text-muted">Total</div>
@@ -26,7 +26,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-6 col-md-3">
             <div class="card text-center">
                 <div class="card-body">
                     <div class="text-muted">Pendentes</div>
@@ -34,7 +34,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-6 col-md-3">
             <div class="card text-center">
                 <div class="card-body">
                     <div class="text-muted">Concluídas</div>
@@ -42,7 +42,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-6 col-md-3">
             <div class="card text-center">
                 <div class="card-body">
                     <div class="text-muted">Atrasadas</div>
@@ -64,11 +64,11 @@
             <h5 class="mb-3">Nova tarefa</h5>
             <form method="POST">
                 <div class="row g-3">
-                    <div class="col-md-4">
+                    <div class="col-12 col-md-4">
                         <label class="form-label">Título</label>
                         <input type="text" name="titulo" class="form-control" required>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-12 col-md-4">
                         <label class="form-label">Cliente</label>
                         <select name="cliente_id" class="form-select">
                             <option value="">—</option>
@@ -77,7 +77,7 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-12 col-md-4">
                         <label class="form-label">Mesa de Negócio</label>
                         <select name="mesa_id" class="form-select">
                             <option value="">—</option>
@@ -86,7 +86,7 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-12 col-md-4">
                         <label class="form-label">Prioridade</label>
                         <select name="prioridade" class="form-select">
                             <option value="Baixa">Baixa</option>
@@ -94,15 +94,15 @@
                             <option value="Alta">Alta</option>
                         </select>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-12 col-md-4">
                         <label class="form-label">Vencimento (data)</label>
                         <input type="date" name="data_vencimento" class="form-control">
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-12 col-md-4">
                         <label class="form-label">Vencimento (hora)</label>
                         <input type="time" name="hora_vencimento" class="form-control">
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-12 col-md-4">
                         <label class="form-label">Lembrete</label>
                         <input type="datetime-local" name="lembrete_em" class="form-control">
                     </div>

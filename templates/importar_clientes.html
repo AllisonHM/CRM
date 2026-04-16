@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}Importar Clientes{% endblock %}
 
 {% block content %}
@@ -28,7 +28,8 @@
                 Os demais são opcionais e, se não preenchidos, não interferirão na importação.
             </p>
             <div class="row">
-                <div class="col-md-6">
+                <div class="col-12 col-md-6">
+                    <div class="table-responsive">
                     <table class="table table-sm table-bordered align-middle">
                         <thead class="table-dark">
                             <tr>
@@ -91,8 +92,9 @@
                             </tr>
                         </tbody>
                     </table>
+                    </div>
                 </div>
-                <div class="col-md-6">
+                <div class="col-12 col-md-6">
                     <p class="fw-semibold">Dicas de preenchimento:</p>
                     <ul class="small mb-3">
                         <li>Datas no formato <code>AAAA-MM-DD</code> (ex: <code>1990-01-15</code>)</li>

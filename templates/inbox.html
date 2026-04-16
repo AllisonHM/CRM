@@ -5,6 +5,12 @@
 <style>
 /* ──────────────────────────── Layout ──────────────────────────── */
 #inbox-wrapper         { height: calc(100vh - 130px); overflow: hidden; }
+/* Mobile: empilhar painel de contatos e mensagens */
+@media (max-width: 767px) {
+  #inbox-wrapper         { height: auto; overflow: visible; }
+  #conv-panel            { height: 300px; }
+  #msg-panel             { height: 450px; }
+}
 #conv-panel            { height: 100%; display: flex; flex-direction: column; background: #f8f5fb; border-right: 1px solid #dee2e6; }
 #conv-list             { flex: 1; overflow-y: auto; }
 #msg-panel             { height: 100%; display: flex; flex-direction: column; }
@@ -54,7 +60,7 @@
   <div id="inbox-wrapper" class="row g-0 border rounded shadow-sm overflow-hidden">
 
     <!-- ── LEFT: Conversation list ────────────────────────────── -->
-    <div class="col-md-4 col-lg-3 d-flex flex-column" id="conv-panel">
+    <div class="col-12 col-md-4 col-lg-3 d-flex flex-column" id="conv-panel">
       <div class="p-2 border-bottom bg-white">
         <input class="form-control form-control-sm" id="conv-search"
                placeholder="&#xF52A;  Buscar por contato ou mensagem..." autocomplete="off">
@@ -67,7 +73,7 @@
     </div>
 
     <!-- ── RIGHT: Message panel ───────────────────────────────── -->
-    <div class="col-md-8 col-lg-9 d-flex flex-column" id="msg-panel">
+    <div class="col-12 col-md-8 col-lg-9 d-flex flex-column" id="msg-panel">
 
       <!-- Header -->
       <div id="msg-header" class="px-3 py-2 border-bottom bg-white align-items-center gap-2 d-none" style="flex-shrink:0;">

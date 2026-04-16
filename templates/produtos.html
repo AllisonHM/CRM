@@ -4,42 +4,27 @@
 {% block content %}
 
 <style>
-  /* Impede scroll da página */
-  body { overflow: hidden; }
-
-  /* Layout principal sem scroll de página */
-  .produtos-row {
-    height: calc(100vh - 185px);
-  }
-
-  /* Coluna esquerda: scroll interno se necessário */
-  .col-produtos-left {
-    height: 100%;
-    overflow-y: auto;
-  }
-
-  /* Coluna direita: ocupa toda a altura */
-  .col-produtos-right {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .col-produtos-right .card {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-  }
-
-  /* Scroll do Estoque Atual ocupa espaço restante */
+  /* Mobile-first: layout empilhado, scroll normal */
   .table-scroll-estoque {
-    flex: 1;
+    overflow-x: auto;
     overflow-y: auto;
+    max-height: 400px;
     border-radius: 0 0 8px 8px;
   }
 
   .table-scroll-estoque table {
     margin-bottom: 0;
+    min-width: 480px;
+  }
+
+  /* Desktop (≥768px): layout split com scroll interno */
+  @media (min-width: 768px) {
+    body { overflow: hidden; }
+    .produtos-row { overflow: hidden; }
+    .col-produtos-left { overflow-y: auto; overflow-x: hidden; }
+    .col-produtos-right { display: flex; flex-direction: column; }
+    .col-produtos-right .card { height: 100%; display: flex; flex-direction: column; }
+    .table-scroll-estoque { flex: 1; max-height: none; }
   }
 
   /* Cadastrar produto - compacto */
@@ -99,10 +84,10 @@
 </style>
 
 <div class="container mt-4">
-  <div class="d-flex justify-content-between align-items-center mb-3">
-    <h1>Controle de Produtos</h1>
-    <div class="d-flex gap-2">
-      <input id="searchInput" class="form-control" placeholder="Buscar produto por nome" style="width: 300px;">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <h1 class="mb-0">Controle de Produtos</h1>
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <input id="searchInput" class="form-control" placeholder="Buscar produto por nome" style="max-width: 280px; min-width: 140px; width: 100%;">
       <button id="btnSearch" class="btn btn-secondary">Buscar</button>
       <a href="{{ url_for('fornecedores') }}" class="btn btn-success">
         <i class="bi bi-truck"></i> Fornecedores
@@ -114,7 +99,7 @@
   <div id="alerts"></div>
 
   <div class="row produtos-row">
-    <div class="col-md-4 col-produtos-left">
+    <div class="col-12 col-md-4 col-produtos-left">
       <div class="card card-compact mb-3">
         <div class="card-header">Cadastrar Produto</div>
         <div class="card-body">
@@ -161,7 +146,7 @@
       </div>
     </div>
 
-    <div class="col-md-8 col-produtos-right">
+    <div class="col-12 col-md-8 col-produtos-right">
       <div class="card">
         <div class="card-header">Estoque Atual</div>
         <div class="table-scroll-estoque">
@@ -211,6 +196,22 @@
 </div>
 
 <script>
+  // Ajusta altura da linha de produtos com base na posição real na tela
+  function ajustarAlturaProdutos() {
+    if (window.innerWidth < 768) return;
+    const row = document.querySelector('.produtos-row');
+    if (!row) return;
+    const rect = row.getBoundingClientRect();
+    const disponivel = window.innerHeight - rect.top - 24; // 24px de folga inferior
+    if (disponivel > 100) {
+      row.style.height = disponivel + 'px';
+      document.querySelector('.col-produtos-left').style.height = disponivel + 'px';
+      document.querySelector('.col-produtos-right').style.height = disponivel + 'px';
+    }
+  }
+  window.addEventListener('load', ajustarAlturaProdutos);
+  window.addEventListener('resize', ajustarAlturaProdutos);
+
   // Helpers
   function showAlert(tipo, texto, timeout = 4000) {
     const alerts = document.getElementById('alerts');

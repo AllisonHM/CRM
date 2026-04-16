@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}Parametrizações - CRM{% endblock %}
 
 {% block content %}
@@ -19,7 +19,7 @@
                     </div>
                     <div class="card-body">
                         <div class="row">
-                            <div class="col-md-6 mb-3">
+                            <div class="col-12 col-md-6 mb-3">
                                 <label for="mensagem_boas_vindas" class="form-label">
                                     Mensagem de Boas-Vindas
                                 </label>
@@ -28,7 +28,7 @@
                                 <small class="text-muted">Enviada quando um cliente inicia conversa</small>
                             </div>
                             
-                            <div class="col-md-6 mb-3">
+                            <div class="col-12 col-md-6 mb-3">
                                 <label for="mensagem_ausencia" class="form-label">
                                     Mensagem de Ausência
                                 </label>
@@ -37,7 +37,7 @@
                                 <small class="text-muted">Enviada fora do horário de atendimento</small>
                             </div>
                             
-                            <div class="col-md-6 mb-3">
+                            <div class="col-12 col-md-6 mb-3">
                                 <label for="mensagem_encerramento" class="form-label">
                                     Mensagem de Encerramento
                                 </label>
@@ -46,7 +46,7 @@
                                 <small class="text-muted">Mensagem de despedida ao cliente</small>
                             </div>
                             
-                            <div class="col-md-6 mb-3">
+                            <div class="col-12 col-md-6 mb-3">
                                 <label for="mensagem_nps" class="form-label">
                                     Mensagem de Solicitação NPS
                                 </label>
@@ -60,7 +60,7 @@
             </div>
 
             <!-- Card: Horário de Atendimento -->
-            <div class="col-md-6 mb-4">
+            <div class="col-12 col-md-6 mb-4">
                 <div class="card card-accent">
                     <div class="card-header">
                         <h5 class="mb-0">Horário de Atendimento</h5>
@@ -96,7 +96,7 @@
             </div>
 
             <!-- Card: Configurações Gerais -->
-            <div class="col-md-6 mb-4">
+            <div class="col-12 col-md-6 mb-4">
                 <div class="card card-accent">
                     <div class="card-header">
                         <h5 class="mb-0">Configurações Gerais</h5>
@@ -133,26 +133,26 @@
                     </div>
                     <div class="card-body">
                         <div class="row">
-                            <div class="col-md-6 mb-3">
+                            <div class="col-12 col-md-6 mb-3">
                                 <label for="meta_graph_app_id" class="form-label">Meta App ID</label>
                                 <input type="text" class="form-control" id="meta_graph_app_id" name="meta_graph_app_id"
                                        value="{{ param.meta_graph_app_id or '' }}" placeholder="Ex.: 123456789012345">
                             </div>
 
-                            <div class="col-md-6 mb-3">
+                            <div class="col-12 col-md-6 mb-3">
                                 <label for="meta_graph_phone_number_id" class="form-label">Phone Number ID</label>
                                 <input type="text" class="form-control" id="meta_graph_phone_number_id" name="meta_graph_phone_number_id"
                                        value="{{ param.meta_graph_phone_number_id or '' }}" placeholder="Ex.: 109876543210987">
                             </div>
 
-                            <div class="col-md-6 mb-3">
+                            <div class="col-12 col-md-6 mb-3">
                                 <label for="meta_graph_access_token" class="form-label">Access Token (Meta Graph API)</label>
                                 <input type="password" class="form-control" id="meta_graph_access_token" name="meta_graph_access_token"
                                        placeholder="Deixe em branco para manter o token atual" autocomplete="new-password">
                                 <small class="text-muted">Token sensível. Não é exibido após salvar.</small>
                             </div>
 
-                            <div class="col-md-6 mb-3">
+                            <div class="col-12 col-md-6 mb-3">
                                 <label for="meta_graph_verify_token" class="form-label">Verify Token</label>
                                 <input type="password" class="form-control" id="meta_graph_verify_token" name="meta_graph_verify_token"
                                        placeholder="Deixe em branco para manter o token atual" autocomplete="new-password">

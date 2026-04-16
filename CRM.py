@@ -1594,6 +1594,7 @@ def exportar_relacionamento():
     )
 
 
+@app.route("/cliente/<int:id>")
 @login_required
 @permission_required('clientes')
 def detalhe_cliente(id): 

@@ -78,7 +78,7 @@
 
 <div class="list-group" id="listaClientes">
   {% for c in clientes %}
-  <a href="{{ url_for('detalhe_cliente_novo', id=c.id) }}"
+  <a href="{{ url_for('detalhe_cliente', id=c.id) }}"
      class="list-group-item list-group-item-action cliente-item"
      data-nome="{{ c.nome.lower() }}"
 

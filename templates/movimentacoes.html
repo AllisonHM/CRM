@@ -2,23 +2,29 @@
 {% block title %}Movimentações - {{ produto.nome }}{% endblock %}
 
 {% block content %}
-<h1>Movimentações do Produto: {{ produto.nome }}</h1>
+<h1 class="section-title">Movimentações: {{ produto.nome }}</h1>
 
-<table border="1" cellpadding="8">
-    <tr>
+<div class="table-responsive">
+  <table class="table table-striped table-bordered">
+    <thead class="table-dark">
+      <tr>
         <th>Data</th>
         <th>Tipo</th>
         <th>Quantidade</th>
         <th>Descrição</th>
-    </tr>
-    {% for m in movimentacoes %}
-    <tr>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in movimentacoes %}
+      <tr>
         <td>{{ m.data.strftime('%d/%m/%Y %H:%M') }}</td>
         <td>{{ m.tipo }}</td>
         <td>{{ m.quantidade }}</td>
         <td>{{ m.descricao }}</td>
-    </tr>
-    {% endfor %}
-</table>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 
 {% endblock %}
