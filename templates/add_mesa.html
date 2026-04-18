@@ -144,38 +144,40 @@ const produtosSelecionadosDiv = document.getElementById('produtos-selecionados')
 const produtosTextarea = document.getElementById('produtos');
 const produtosQuantidadesTextarea = document.getElementById('produtos_quantidades');
 
-// Buscar produtos
+// Função centralizada de busca
+function buscarProdutos(query) {
+  fetch(`/api/produtos/busca?q=${encodeURIComponent(query)}`)
+    .then(res => res.json())
+    .then(produtos => {
+      if (produtos.length === 0) {
+        produtoList.innerHTML = '<div style="padding: 12px; color: #999;">Nenhum produto encontrado</div>';
+      } else {
+        produtoList.innerHTML = produtos.map(p => `
+          <div class="produto-item" onclick="selecionarProduto(${p.id}, '${p.nome.replace(/'/g, "\\'")}', '${(p.descricao || '').replace(/'/g, "\\'")}', ${p.quantidade})">
+            <div class="produto-nome">${p.nome}</div>
+            ${p.descricao ? `<div class="produto-descricao">${p.descricao}</div>` : ''}
+            <div class="produto-quantidade">Estoque: ${p.quantidade}</div>
+          </div>
+        `).join('');
+      }
+      produtoDropdown.style.display = 'block';
+    })
+    .catch(err => {
+      console.error('Erro ao buscar produtos:', err);
+      produtoList.innerHTML = '<div style="padding: 12px; color: #d32f2f;">Erro ao buscar produtos</div>';
+    });
+}
+
+// Mostrar todos os produtos ao clicar no campo
+produtoSearch.addEventListener('focus', function() {
+  buscarProdutos(this.value.trim());
+});
+
+// Buscar produtos ao digitar
 produtoSearch.addEventListener('input', function() {
   clearTimeout(timeoutBusca);
   const query = this.value.trim();
-  
-  if (query.length === 0) {
-    produtoDropdown.style.display = 'none';
-    return;
-  }
-  
-  timeoutBusca = setTimeout(() => {
-    fetch(`/api/produtos/busca?q=${encodeURIComponent(query)}`)
-      .then(res => res.json())
-      .then(produtos => {
-        if (produtos.length === 0) {
-          produtoList.innerHTML = '<div style="padding: 12px; color: #999;">Nenhum produto encontrado</div>';
-        } else {
-          produtoList.innerHTML = produtos.map(p => `
-            <div class="produto-item" onclick="selecionarProduto(${p.id}, '${p.nome.replace(/'/g, "\\'")}', '${(p.descricao || '').replace(/'/g, "\\'")}', ${p.quantidade})">
-              <div class="produto-nome">${p.nome}</div>
-              ${p.descricao ? `<div class="produto-descricao">${p.descricao}</div>` : ''}
-              <div class="produto-quantidade">Estoque: ${p.quantidade}</div>
-            </div>
-          `).join('');
-        }
-        produtoDropdown.style.display = 'block';
-      })
-      .catch(err => {
-        console.error('Erro ao buscar produtos:', err);
-        produtoList.innerHTML = '<div style="padding: 12px; color: #d32f2f;">Erro ao buscar produtos</div>';
-      });
-  }, 300);
+  timeoutBusca = setTimeout(() => buscarProdutos(query), 300);
 });
 
 // Fechar dropdown ao clicar fora

@@ -140,6 +140,7 @@ class WhatsAppMensagem(db.Model):
     status = db.Column(db.String(30), nullable=True)   # enviado, entregue, lido, erro
     tipo_midia = db.Column(db.String(30), nullable=True)  # image, audio, video, document
     arquivo_url = db.Column(db.Text, nullable=True)
+    zapi_message_id = db.Column(db.String(255), nullable=True)  # ID da mensagem na Z-API (para reencaminhar)
 
 class ChatbotRegra(db.Model):
     id = db.Column(db.Integer, primary_key=True)

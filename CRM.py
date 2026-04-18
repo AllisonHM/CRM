@@ -122,27 +122,55 @@ token = os.getenv('ZAPI_TOKEN', '')
 client_token = os.getenv('ZAPI_CLIENT_TOKEN', '')
 headers = {'client-token': client_token, 'Content-Type': 'application/json'}
 
-def enviar_whatsapp_zapi(numero, mensagem, instance_id=None, token_id=None):
-    """Envia mensagem via Z-API usando a instância do cliente ou do admin"""
-    # Se não fornecido, usar o número do usuário logado
+def enviar_whatsapp_zapi(numero, mensagem, instance_id=None, token_id=None,
+                        delay_message=None, delay_typing=None, edit_message_id=None):
+    """Envia (ou edita) mensagem de texto via Z-API.
+
+    Args:
+        numero: Telefone destino no formato DDI+DDD+Número (somente dígitos).
+        mensagem: Texto a enviar. Suporta formatação WhatsApp (*negrito*, _itálico_, ~tachado~) e emojis.
+        instance_id / token_id: Credenciais Z-API.
+        delay_message: Delay antes de enviar a próxima mensagem (1-15 s). Padrão Z-API: 1-3 s.
+        delay_typing: Segundos exibindo "Digitando…" antes do envio (1-15 s).
+        edit_message_id: ID Z-API de mensagem já enviada para editá-la.
+    """
     if not instance_id:
         instance_id = instance
     if not token_id:
         token_id = token
-    
+
     url = f"https://api.z-api.io/instances/{instance_id}/token/{token_id}/send-text"
     payload = {"phone": numero, "message": mensagem}
-    
+
+    if delay_message is not None:
+        payload["delayMessage"] = max(1, min(15, int(delay_message)))
+    if delay_typing is not None:
+        payload["delayTyping"] = max(1, min(15, int(delay_typing)))
+    if edit_message_id:
+        payload["editMessageId"] = edit_message_id
+
     print(f"🌐 URL: {url}")
-    print(f"📦 Payload: phone={numero}, message_length={len(mensagem)}")
-    
+    print(f"📦 Payload: phone={numero}, message_length={len(mensagem)}"
+          + (f", delayTyping={payload.get('delayTyping')}" if 'delayTyping' in payload else "")
+          + (f", editMessageId={edit_message_id}" if edit_message_id else ""))
+
     try:
-        response = requests.post(url, json=payload, headers=headers, timeout=10)
+        response = requests.post(url, json=payload, headers=headers, timeout=15)
         print(f"📡 Status Code: {response.status_code}")
-        print(f"📄 Response: {response.text[:200]}...")  # Primeiros 200 caracteres
-        
+        print(f"📄 Response: {response.text[:200]}...")
+
         if response.status_code == 200:
-            return {"status": "Sucesso", "detalhe": response.text}
+            resp_json = {}
+            try:
+                resp_json = response.json()
+            except Exception:
+                pass
+            return {
+                "status": "Sucesso",
+                "detalhe": response.text,
+                "zaapId": resp_json.get("zaapId"),
+                "messageId": resp_json.get("messageId") or resp_json.get("id"),
+            }
         return {"status": "Erro", "detalhe": f"Status {response.status_code}: {response.text}"}
     except Exception as e:
         print(f"❌ EXCEÇÃO ao enviar WhatsApp: {str(e)}")
@@ -2517,6 +2545,16 @@ def receber_mensagem_webhook():
     numero = normalize_phone(phone)
     print(f"📞 Número normalizado: {numero}")
 
+    # Extrair Z-API messageId do payload para possibilitar reencaminhamento
+    zapi_message_id = (
+        data.get('zaapId') or
+        data.get('messageId') or
+        data.get('id') or
+        data.get('msgId')
+    )
+    if zapi_message_id:
+        print(f"🔑 Z-API messageId: {zapi_message_id}")
+
     # Descobrir a qual usuário CRM essa mensagem pertence
     usuario_crm_id = None
 
@@ -2555,7 +2593,8 @@ def receber_mensagem_webhook():
         remetente="Cliente",
         mensagem=text,
         recebido_em=datetime.utcnow(),
-        usuario_crm_id=usuario_crm_id
+        usuario_crm_id=usuario_crm_id,
+        zapi_message_id=zapi_message_id
     )
     db.session.add(msg)
     db.session.commit()
@@ -2649,7 +2688,8 @@ def receber_mensagem_webhook():
         "mensagem": text,
         "hora": datetime.now().strftime("%H:%M"),
         "timestamp": msg.recebido_em.isoformat(),
-        "status": "recebida"
+        "status": "recebida",
+        "zapi_message_id": msg.zapi_message_id or ""
     }
 
     try:
@@ -2680,12 +2720,62 @@ def join_room_event(data):
     join_room(numero_norm)
     print(f"🔵 Usuário entrou na sala: {numero_norm}")
 
+@app.route("/canais/webhook/delivery", methods=["POST", "OPTIONS"])
+def webhook_delivery_zapi():
+    """
+    Recebe o callback de DeliveryCallback da Z-API.
+    Atualiza o status da mensagem para 'entregue' e emite via WebSocket.
+    """
+    if request.method == "OPTIONS":
+        response = jsonify({"status": "ok"})
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type")
+        response.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
+        return response, 200
+
+    data = request.get_json(silent=True) or {}
+    print(f"📦 DELIVERY CALLBACK: {json.dumps(data, ensure_ascii=False)}")
+
+    zapi_message_id = data.get("zaapId") or data.get("messageId")
+    phone = data.get("phone")
+
+    if not zapi_message_id:
+        return {"status": "ignored", "reason": "no_message_id"}, 200
+
+    # Busca a mensagem pelo zapi_message_id
+    msg = WhatsAppMensagem.query.filter_by(zapi_message_id=zapi_message_id).first()
+    if not msg:
+        print(f"⚠️ Delivery: mensagem com zaapId={zapi_message_id} não encontrada no banco")
+        return {"status": "ignored", "reason": "not_found"}, 200
+
+    # Atualiza para 'entregue' apenas se estava em 'enviado'
+    if msg.status in (None, "enviado"):
+        msg.status = "entregue"
+        db.session.commit()
+        print(f"✅ Mensagem ID={msg.id} marcada como entregue")
+
+    # Emite via WebSocket para atualizar UI em tempo real
+    socketio.emit("mensagem_status", {
+        "id": msg.id,
+        "numero": msg.numero,
+        "status": msg.status
+    }, room=msg.numero)
+    socketio.emit("mensagem_status", {
+        "id": msg.id,
+        "numero": msg.numero,
+        "status": msg.status
+    }, broadcast=True)
+
+    return {"status": "ok"}, 200
+
 @app.route("/canais/enviar", methods=["POST"])
 @login_required
 def enviar_mensagem_canais():
     data = request.get_json()
     numero = data.get("numero")
     mensagem = data.get("mensagem")
+    delay_typing = data.get("delayTyping")    # opcional: 1-15 s
+    delay_message = data.get("delayMessage")  # opcional: 1-15 s
 
     if not numero or not mensagem:
         return jsonify({"status": "Erro"}), 400
@@ -2699,16 +2789,26 @@ def enviar_mensagem_canais():
     if not usuario_principal or not usuario_principal.tem_api_configurada():
         return jsonify({"status": "Erro", "mensagem": "API não configurada"}), 400
 
-    resultado = enviar_whatsapp_zapi(numero_norm, mensagem, usuario_principal.api_instance, usuario_principal.api_token)
+    resultado = enviar_whatsapp_zapi(
+        numero_norm, mensagem,
+        usuario_principal.api_instance, usuario_principal.api_token,
+        delay_message=delay_message,
+        delay_typing=delay_typing
+    )
 
     if resultado["status"] == "Sucesso":
+        # Usar zaapId/messageId já extraídos pela função
+        zapi_msg_id = resultado.get("zaapId") or resultado.get("messageId")
+
         # salvar no banco vinculado ao usuario
         msg = WhatsAppMensagem(
             numero=numero_norm,
             remetente="Você",
             mensagem=mensagem,
             recebido_em=datetime.utcnow(),
-            usuario_crm_id=usuario_principal_id
+            usuario_crm_id=usuario_principal_id,
+            zapi_message_id=zapi_msg_id,
+            status="enviado"
         )
         db.session.add(msg)
         db.session.commit()
@@ -2724,7 +2824,9 @@ def enviar_mensagem_canais():
             "nome": nome_cliente,
             "remetente": "Você",
             "mensagem": mensagem,
-            "hora": datetime.now().strftime("%H:%M")
+            "hora": datetime.now().strftime("%H:%M"),
+            "zapi_message_id": zapi_msg_id or "",
+            "status": "enviado"
         }
         try:
             socketio.emit("nova_mensagem", payload, room=numero_norm)
@@ -2732,7 +2834,7 @@ def enviar_mensagem_canais():
         except Exception as e:
             print(f"❌ Erro ao emitir: {e}")
 
-        return jsonify({"status": "Sucesso"})
+        return jsonify({"status": "Sucesso", "id": msg.id, "zapi_message_id": zapi_msg_id or ""})
 
     return jsonify({"status": "Erro"})
 
@@ -2772,20 +2874,41 @@ def atualizar_status_mensagem(msg_id):
 @app.route("/canais/conversa/<string:numero>/marcar_lida", methods=["POST"])
 @login_required
 def marcar_conversa_lida(numero):
-    """Marca todas as mensagens de uma conversa como lida"""
+    """Marca todas as mensagens de uma conversa como lidas no CRM e no WhatsApp (Z-API read-message)."""
     numero_norm = normalize_phone(numero)
-    
-    # Marcar todas as mensagens não lidas como lidas
+    user_id = current_user.get_usuario_principal_id()
+    usuario = UsuarioCRM.query.get(user_id)
+
+    # Busca mensagens não lidas do cliente que tenham zapi_message_id
+    msgs_nao_lidas = WhatsAppMensagem.query.filter_by(
+        numero=numero_norm,
+        remetente="Cliente",
+        lida=False
+    ).filter(WhatsAppMensagem.zapi_message_id.isnot(None)).all()
+
+    # Chama Z-API read-message para cada mensagem não lida
+    if usuario and usuario.api_instance and usuario.api_token and msgs_nao_lidas:
+        url = f"https://api.z-api.io/instances/{usuario.api_instance}/token/{usuario.api_token}/read-message"
+        for msg in msgs_nao_lidas:
+            try:
+                requests.post(url, json={
+                    "phone": numero_norm,
+                    "messageId": msg.zapi_message_id
+                }, headers=headers, timeout=5)
+            except Exception as e:
+                print(f"⚠️ Erro ao marcar lida no Z-API (msgId={msg.zapi_message_id}): {e}")
+
+    # Marcar todas as mensagens do cliente como lidas no banco (com ou sem zapi_message_id)
     WhatsAppMensagem.query.filter_by(
         numero=numero_norm,
         remetente="Cliente"
     ).update({"lida": True})
-    
+
     db.session.commit()
-    
+
     # Emitir evento para atualizar badge
     socketio.emit('conversa_lida', {'numero': numero_norm}, broadcast=True)
-    
+
     return jsonify({"status": "ok"})
 
 @app.route("/canais/conversa/<string:numero>/fixar", methods=["POST"])
@@ -2845,6 +2968,217 @@ def excluir_mensagem(msg_id):
     }, room=numero)
     
     return jsonify({"status": "ok"})
+
+@app.route("/canais/mensagem/<int:msg_id>/reencaminhar", methods=["POST"])
+@login_required
+def reencaminhar_mensagem(msg_id):
+    """Reencaminha uma mensagem para outro contato via Z-API (forward-message)."""
+    data = request.get_json() or {}
+    phone_destino = (data.get("phone") or "").strip()
+    delay_message = data.get("delayMessage")  # opcional: 1-15 s
+
+    if not phone_destino:
+        return jsonify({"erro": "Número de destino obrigatório"}), 400
+
+    msg = WhatsAppMensagem.query.get(msg_id)
+    if not msg:
+        return jsonify({"erro": "Mensagem não encontrada"}), 404
+
+    if not msg.zapi_message_id:
+        return jsonify({"erro": "Esta mensagem não possui ID Z-API — não é possível reencaminhar"}), 400
+
+    user_id = current_user.get_usuario_principal_id()
+    usuario = UsuarioCRM.query.get(user_id)
+
+    if not usuario or not usuario.api_instance or not usuario.api_token:
+        return jsonify({"erro": "API Z-API não configurada"}), 400
+
+    phone_destino_norm = normalize_phone(phone_destino)
+    url = f"https://api.z-api.io/instances/{usuario.api_instance}/token/{usuario.api_token}/forward-message"
+
+    payload = {
+        "phone": phone_destino_norm,
+        "messageId": msg.zapi_message_id,
+        "messagePhone": msg.numero
+    }
+
+    if delay_message is not None:
+        payload["delayMessage"] = max(1, min(15, int(delay_message)))
+
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=10)
+        if resp.status_code == 200:
+            resp_json = {}
+            try:
+                resp_json = resp.json()
+            except Exception:
+                pass
+            return jsonify({"status": "ok", "destino": phone_destino_norm, "zaapId": resp_json.get("zaapId")})
+        return jsonify({"erro": f"Erro Z-API: {resp.text}"}), 400
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
+@app.route("/canais/mensagem/<int:msg_id>/editar", methods=["POST"])
+@login_required
+def editar_mensagem_canais(msg_id):
+    """Edita o texto de uma mensagem enviada via Z-API usando editMessageId."""
+    data = request.get_json() or {}
+    novo_texto = (data.get("mensagem") or "").strip()
+
+    if not novo_texto:
+        return jsonify({"erro": "Novo texto é obrigatório"}), 400
+
+    msg = WhatsAppMensagem.query.get(msg_id)
+    if not msg:
+        return jsonify({"erro": "Mensagem não encontrada"}), 404
+
+    if msg.remetente != "Você":
+        return jsonify({"erro": "Só é possível editar mensagens enviadas por você"}), 400
+
+    if not msg.zapi_message_id:
+        return jsonify({"erro": "Mensagem sem ID Z-API — não é possível editar"}), 400
+
+    user_id = current_user.get_usuario_principal_id()
+    usuario = UsuarioCRM.query.get(user_id)
+
+    if not usuario or not usuario.api_instance or not usuario.api_token:
+        return jsonify({"erro": "API Z-API não configurada"}), 400
+
+    # Envia para Z-API com editMessageId
+    resultado = enviar_whatsapp_zapi(
+        msg.numero, novo_texto,
+        instance_id=usuario.api_instance,
+        token_id=usuario.api_token,
+        edit_message_id=msg.zapi_message_id
+    )
+
+    if resultado["status"] != "Sucesso":
+        return jsonify({"erro": resultado.get("detalhe", "Erro Z-API")}), 400
+
+    # Atualiza no banco
+    msg.mensagem = novo_texto
+    db.session.commit()
+
+    # Emitir edição via WebSocket
+    socketio.emit("mensagem_editada", {
+        "id": msg.id,
+        "numero": msg.numero,
+        "mensagem": novo_texto
+    }, room=msg.numero)
+
+    return jsonify({"status": "ok", "mensagem": novo_texto})
+
+@app.route("/canais/mensagem/<int:msg_id>/reagir", methods=["POST"])
+@login_required
+def reagir_mensagem_canais(msg_id):
+    """Envia uma reação com emoji numa mensagem via Z-API (send-reaction)."""
+    data = request.get_json() or {}
+    reaction = (data.get("reaction") or "").strip()
+    delay_message = data.get("delayMessage")
+
+    if not reaction:
+        return jsonify({"erro": "Emoji de reação é obrigatório"}), 400
+
+    msg = WhatsAppMensagem.query.get(msg_id)
+    if not msg:
+        return jsonify({"erro": "Mensagem não encontrada"}), 404
+
+    if not msg.zapi_message_id:
+        return jsonify({"erro": "Mensagem sem ID Z-API — não é possível reagir"}), 400
+
+    user_id = current_user.get_usuario_principal_id()
+    usuario = UsuarioCRM.query.get(user_id)
+
+    if not usuario or not usuario.api_instance or not usuario.api_token:
+        return jsonify({"erro": "API Z-API não configurada"}), 400
+
+    url = f"https://api.z-api.io/instances/{usuario.api_instance}/token/{usuario.api_token}/send-reaction"
+
+    payload = {
+        "phone": msg.numero,
+        "reaction": reaction,
+        "messageId": msg.zapi_message_id
+    }
+    if delay_message is not None:
+        payload["delayMessage"] = max(1, min(15, int(delay_message)))
+
+    try:
+        resp = requests.post(url, json=payload, headers=headers, timeout=10)
+        if resp.status_code == 200:
+            resp_json = {}
+            try:
+                resp_json = resp.json()
+            except Exception:
+                pass
+            # Emitir via WebSocket para atualizar a UI de todos os usuários na sala
+            socketio.emit("mensagem_reacao", {
+                "id": msg.id,
+                "numero": msg.numero,
+                "reaction": reaction
+            }, room=msg.numero)
+            return jsonify({"status": "ok", "zaapId": resp_json.get("zaapId")})
+        return jsonify({"erro": f"Erro Z-API: {resp.text}"}), 400
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
+@app.route("/canais/atualizar-webhook", methods=["POST"])
+@login_required
+def atualizar_webhook_zapi():
+    """
+    Detecta a URL pública atual (ngrok ou domínio próprio) e atualiza
+    o webhook de mensagens recebidas no Z-API para o usuário logado.
+    """
+    user_id = current_user.get_usuario_principal_id()
+    usuario = UsuarioCRM.query.get(user_id)
+
+    if not usuario or not usuario.api_instance or not usuario.api_token:
+        return jsonify({"erro": "Z-API não configurado para este usuário"}), 400
+
+    # 1) Tenta detectar URL pública via ngrok local
+    public_url = None
+    try:
+        r = requests.get("http://localhost:4040/api/tunnels", timeout=3)
+        tunnels = r.json().get("tunnels", [])
+        public_url = next((t["public_url"] for t in tunnels if t["proto"] == "https"), None)
+    except Exception:
+        pass
+
+    # 2) Se não achou ngrok, usa a URL do próprio request (deploy em produção)
+    if not public_url:
+        public_url = request.host_url.rstrip("/")
+
+    webhook_url = public_url + "/canais/webhook"
+
+    instance = usuario.api_instance.strip()
+    tok = usuario.api_token.strip()
+    zapi_base = f"https://api.z-api.io/instances/{instance}/token/{tok}"
+
+    try:
+        # Configura webhook de mensagens RECEBIDAS
+        resp_recv = requests.put(
+            f"{zapi_base}/update-webhook-received",
+            json={"value": webhook_url},
+            headers=headers,
+            timeout=10
+        )
+        # Configura webhook de DELIVERY (confirmação de entrega)
+        delivery_url = public_url + "/canais/webhook/delivery"
+        resp_deliv = requests.put(
+            f"{zapi_base}/update-webhook-delivery",
+            json={"value": delivery_url},
+            headers=headers,
+            timeout=10
+        )
+        erros = []
+        if resp_recv.status_code != 200:
+            erros.append(f"received: {resp_recv.status_code} {resp_recv.text[:100]}")
+        if resp_deliv.status_code != 200:
+            erros.append(f"delivery: {resp_deliv.status_code} {resp_deliv.text[:100]}")
+        if erros:
+            return jsonify({"erro": " | ".join(erros)}), 400
+        return jsonify({"status": "ok", "webhook_url": webhook_url, "delivery_url": delivery_url})
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
 
 @app.route("/canais/upload", methods=["POST"])
 @login_required
@@ -2924,7 +3258,8 @@ def upload_arquivo_canais():
         remetente="Você",
         mensagem=f"[{file_type.upper()}] {file.filename}",
         recebido_em=datetime.utcnow(),
-        usuario_crm_id=user_id
+        usuario_crm_id=user_id,
+        status="enviado"
     )
     db.session.add(msg)
     db.session.commit()
@@ -3214,7 +3549,7 @@ def ultimas_notificacoes():
             "numero": numero_norm,  # SEMPRE usar número normalizado
             "nome": nome,
             "mensagem": msg.mensagem,
-            "recebido_em": msg.recebido_em.strftime("%Y-%m-%d %H:%M:%S"),
+            "recebido_em": msg.recebido_em.strftime("%Y-%m-%dT%H:%M:%S") + "Z",
             "nao_respondida": nao_respondida
         })
     
@@ -3342,26 +3677,15 @@ def buscar_produtos():
 @app.route("/canais/<string:numero>/mensagens")
 @login_required
 def carregar_mensagens(numero):
-    # normalizar numero (remover espaços/+ e caracteres não numéricos)
     numero_norm = normalize_phone(numero)
-    user_id = get_usuario_filter()
-    
-    # busca por número normalizado e filtrado por usuário (inclui mensagens sem vínculo)
-    if user_id:
-        from sqlalchemy import or_
-        msgs = WhatsAppMensagem.query.filter(
-            db.and_(
-                WhatsAppMensagem.numero == numero_norm,
-                db.or_(
-                    WhatsAppMensagem.usuario_crm_id == user_id,
-                    WhatsAppMensagem.usuario_crm_id == None
-                )
-            )
-        ).order_by(WhatsAppMensagem.recebido_em.asc()).all()
-    else:
-        msgs = WhatsAppMensagem.query.filter_by(numero=numero_norm).order_by(
-            WhatsAppMensagem.recebido_em.asc()
-        ).all()
+
+    # Busca TODAS as mensagens do número, independente de usuario_crm_id.
+    # A isolação por tenant já é feita em /canais/ultimas (lista de conversas).
+    # Filtrar aqui causaria sumiço de mensagens quando webhook atribui a um
+    # usuario_crm_id diferente do logado.
+    msgs = WhatsAppMensagem.query.filter_by(
+        numero=numero_norm
+    ).order_by(WhatsAppMensagem.recebido_em.asc()).all()
     
     mensagens_list = []
     for m in msgs:
@@ -3369,9 +3693,11 @@ def carregar_mensagens(numero):
             "id": m.id,
             "remetente": m.remetente,
             "mensagem": m.mensagem,
-            "hora": m.recebido_em.strftime("%Y-%m-%d %H:%M:%S"),
+            "hora": m.recebido_em.strftime("%Y-%m-%dT%H:%M:%S") + "Z",
             "tipo_midia": getattr(m, 'tipo_midia', None),
             "arquivo_url": getattr(m, 'arquivo_url', None),
+            "zapi_message_id": getattr(m, 'zapi_message_id', None),
+            "status": getattr(m, 'status', None),
         }
         # Infere tipo_midia e arquivo_url a partir do texto quando não há coluna dedicada
         if not entry["tipo_midia"] and m.mensagem and m.mensagem.startswith('['):

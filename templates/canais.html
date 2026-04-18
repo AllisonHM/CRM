@@ -265,6 +265,78 @@
     display: flex;
     margin-bottom: 12px;
     animation: fadeIn 0.3s ease-in;
+    position: relative;
+  }
+
+  /* Botão de ações da mensagem */
+  .msg-actions {
+    display: none;
+    align-items: center;
+    align-self: center;
+    margin: 0 4px;
+  }
+  .message-wrapper:hover .msg-actions {
+    display: flex;
+  }
+  .msg-action-btn {
+    background: #fff;
+    border: none;
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #667781;
+    font-size: 0.8rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    transition: background 0.2s, color 0.2s;
+  }
+  .msg-action-btn:hover {
+    background: #e9edef;
+    color: #111b21;
+  }
+  /* Reações na bolha */
+  .msg-reactions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    margin-top: 4px;
+  }
+  .msg-reaction-badge {
+    background: rgba(0,0,0,0.07);
+    border-radius: 12px;
+    padding: 1px 6px;
+    font-size: 1rem;
+    cursor: default;
+    user-select: none;
+  }
+  /* Emoji picker flutuante */
+  .emoji-picker-popup {
+    position: absolute;
+    background: #fff;
+    border: 1px solid #e9edef;
+    border-radius: 12px;
+    padding: 8px 10px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.18);
+    z-index: 10002;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    max-width: 240px;
+  }
+  .emoji-picker-popup button {
+    background: none;
+    border: none;
+    font-size: 1.35rem;
+    cursor: pointer;
+    border-radius: 6px;
+    padding: 2px 4px;
+    transition: background .15s;
+  }
+  .emoji-picker-popup button:hover {
+    background: #f0f2f5;
   }
   
   @keyframes fadeIn {
@@ -322,7 +394,11 @@
   
   .message-status {
     font-size: 0.8rem;
-    color: #53bdeb;
+    color: #8696a0;   /* cinza = enviado */
+    transition: color 0.3s;
+  }
+  .message-status.entregue {
+    color: #53bdeb;   /* azul = entregue */
   }
   
   /* Input area */
@@ -555,6 +631,9 @@
         <button class="header-btn" id="select-mode-btn" title="Deletar conversas">
           <i class="fas fa-trash"></i>
         </button>
+        <button class="header-btn" id="update-webhook-btn" title="Atualizar webhook Z-API (quando mudar URL do ngrok)" onclick="atualizarWebhook()" style="color:#888">
+          <i class="fas fa-plug"></i>
+        </button>
         <span class="badge bg-primary" id="total-conversas">0</span>
       </div>
     </div>
@@ -642,6 +721,37 @@
   </div>
 </div>
 
+<!-- Modal Editar Mensagem -->
+<div class="delete-modal" id="edit-modal">
+  <div class="modal-content" style="min-width:360px">
+    <h5><i class="fas fa-pencil-alt" style="color:#0d6efd;margin-right:8px"></i>Editar mensagem</h5>
+    <p style="font-size:.85rem;color:#667781;margin-bottom:10px">A mensagem será atualizada no WhatsApp do destinatário.</p>
+    <textarea id="edit-text" class="form-control mb-3" rows="4" style="border-radius:8px;font-size:.95rem;resize:vertical" placeholder="Novo texto da mensagem..."></textarea>
+    <div class="modal-buttons">
+      <button class="btn-cancel" onclick="fecharModalEditar()">Cancelar</button>
+      <button class="btn-delete" style="background:#0d6efd" onclick="confirmarEdicao()"><i class="fas fa-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Reencaminhar Mensagem -->
+<div class="delete-modal" id="forward-modal">
+  <div class="modal-content" style="min-width:340px">
+    <h5><i class="fas fa-share" style="color:#25d366;margin-right:8px"></i>Reencaminhar mensagem</h5>
+    <p style="font-size:.9rem;color:#667781;margin-bottom:12px">Selecione o contato de destino:</p>
+    <div style="position:relative;margin-bottom:8px">
+      <input type="text" id="forward-search" class="form-control" placeholder="Buscar contato..." autocomplete="off" style="border-radius:8px">
+      <div id="forward-results" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #ddd;border-radius:8px;max-height:200px;overflow-y:auto;z-index:10001;box-shadow:0 4px 12px rgba(0,0,0,.15);">
+      </div>
+    </div>
+    <input type="tel" id="forward-number" class="form-control mb-3" placeholder="Ou digite o número (ex: 5547999999999)" style="border-radius:8px">
+    <div class="modal-buttons">
+      <button class="btn-cancel" onclick="fecharModalReencaminhar()">Cancelar</button>
+      <button class="btn-delete" style="background:#25d366" onclick="confirmarReencaminhar()"><i class="fas fa-share"></i> Reencaminhar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal de confirmação de deleção -->
 <div class="delete-modal" id="delete-modal">
   <div class="modal-content">
@@ -699,6 +809,7 @@ let activeContact = null;
 let conversations = new Map();
 let seenMessageIds = new Set();
 let isSearching = false; // evita sobrescrever a lista enquanto busca
+let loadToken = 0;       // token para cancelar loadMessages desatualizados
 let notificationSound = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGGS57OihUQ=='); // Som de notificação básico
 
 // ===========================
@@ -729,6 +840,28 @@ function initializeSocketIO() {
     handleNewMessage(data);
   });
 
+  socket.off('mensagem_editada');
+  socket.on('mensagem_editada', function(data) {
+    const wrapper = document.querySelector(`[data-msg-id='${data.id}']`);
+    if (wrapper) {
+      const textEl = wrapper.querySelector('.message-text');
+      if (textEl) textEl.textContent = data.mensagem;
+    }
+  });
+
+  socket.off('mensagem_reacao');
+  socket.on('mensagem_reacao', function(data) {
+    const wrapper = document.querySelector(`[data-msg-id='${data.id}']`);
+    if (wrapper && data.reaction) {
+      adicionarReacaoNaBolha(wrapper, data.reaction);
+    }
+  });
+
+  socket.off('mensagem_status');
+  socket.on('mensagem_status', function(data) {
+    atualizarTickStatus(data.id, data.status);
+  });
+
   socket.off('connect');
   socket.on('connect', () => {
     console.log('Socket conectado (canais)');
@@ -738,6 +871,31 @@ function initializeSocketIO() {
   socket.on('disconnect', () => {
     console.log('Socket desconectado (canais)');
   });
+}
+
+// ===========================
+// ATUALIZAR WEBHOOK Z-API
+// ===========================
+async function atualizarWebhook() {
+  const btn = document.getElementById('update-webhook-btn');
+  const icon = btn ? btn.querySelector('i') : null;
+  if (icon) icon.className = 'fas fa-spinner fa-spin';
+
+  try {
+    const resp = await fetch('/canais/atualizar-webhook', { method: 'POST' });
+    const data = await resp.json();
+    if (resp.ok) {
+      showNotification(`Webhook atualizado: ${data.webhook_url}`, 'success');
+      if (icon) icon.className = 'fas fa-plug';
+      if (btn) btn.style.color = '#25d366';
+    } else {
+      showNotification(data.erro || 'Erro ao atualizar webhook', 'error');
+      if (icon) icon.className = 'fas fa-plug';
+    }
+  } catch (e) {
+    showNotification('Erro de conexão ao atualizar webhook', 'error');
+    if (icon) icon.className = 'fas fa-plug';
+  }
 }
 
 // ===========================
@@ -779,8 +937,9 @@ async function loadConversations() {
     });
 
     // Remover conversas que sumiram do servidor
+    // Apenas remove se a pessoa não está ativamente visualizando
     conversations.forEach((_, num) => {
-      if (!seenNumbers.has(num)) {
+      if (!seenNumbers.has(num) && num !== activeContact?.numero) {
         conversations.delete(num);
         changed = true;
       }
@@ -951,32 +1110,54 @@ async function selectConversation(contact) {
   // Limpar mensagens antigas
   document.getElementById('messages-container').innerHTML = '';
   seenMessageIds.clear();
-  
+  loadToken++;             // invalida qualquer loadMessages em andamento
+  const myToken = loadToken;
+
   // Entrar na sala do socket
   if (socket) {
     socket.emit('join', { numero: numeroNorm });
   }
-  
+
   // Carregar mensagens
-  await loadMessages(numeroNorm);
+  await loadMessages(numeroNorm, myToken);
+
+  // Marcar conversa como lida no CRM e no WhatsApp (fire-and-forget)
+  fetch(`/canais/conversa/${numeroNorm}/marcar_lida`, { method: 'POST' }).catch(() => {});
 }
 
 // ===========================
 // CARREGAR MENSAGENS
 // ===========================
-async function loadMessages(numero) {
+async function loadMessages(numero, token) {
   try {
-    const response = await fetch(`/canais/${numero}/mensagens`);
+    // Cache-busting para evitar resposta cacheada pelo navegador
+    const response = await fetch(`/canais/${numero}/mensagens?_t=${Date.now()}`);
     if (!response.ok) throw new Error('Erro ao carregar mensagens');
-    
+
+    // Se o usuário navegou para outro contato enquanto aguardava, descarta
+    if (token !== undefined && token !== loadToken) return;
+
     const data = await response.json();
-    
+
+    // Popula seenMessageIds com os IDs do histórico ANTES de renderizar,
+    // para que eventos de socket que já chegaram não criem duplicatas
+    data.mensagens.forEach(msg => { if (msg.id) seenMessageIds.add(msg.id); });
+
+    // Limpa o container e re-renderiza tudo (garante consistência)
+    const container = document.getElementById('messages-container');
+    container.innerHTML = '';
+
     data.mensagens.forEach(msg => {
-      addMessageToUI(msg.remetente, msg.mensagem, msg.hora, msg.id, msg.tipo_midia || null, msg.arquivo_url || null);
+      // Chama versão interna que não verifica seenMessageIds (já populamos acima)
+      _addMessageToContainer(
+        container, msg.remetente, msg.mensagem, msg.hora, msg.id,
+        msg.tipo_midia || null, msg.arquivo_url || null,
+        msg.zapi_message_id || null, msg.status || null
+      );
     });
-    
+
     scrollToBottom();
-    
+
   } catch (error) {
     console.error('Erro ao carregar mensagens:', error);
   }
@@ -985,15 +1166,24 @@ async function loadMessages(numero) {
 // ===========================
 // ADICIONAR MENSAGEM NA UI
 // ===========================
-function addMessageToUI(sender, text, timestamp, id = null, tipoMidia = null, arquivoUrl = null) {
+// Versão pública: chamada por socket / sendMessage (deduplica via seenMessageIds)
+function addMessageToUI(sender, text, timestamp, id = null, tipoMidia = null, arquivoUrl = null, zapiMessageId = null, status = null) {
   if (id && seenMessageIds.has(id)) return;
   if (id) seenMessageIds.add(id);
-
   const container = document.getElementById('messages-container');
+  return _addMessageToContainer(container, sender, text, timestamp, id, tipoMidia, arquivoUrl, zapiMessageId, status);
+}
+
+// Versão interna: não verifica seenMessageIds (usada por loadMessages)
+function _addMessageToContainer(container, sender, text, timestamp, id = null, tipoMidia = null, arquivoUrl = null, zapiMessageId = null, status = null) {
+
   const isMe = sender === 'Você';
 
   const wrapper = document.createElement('div');
   wrapper.className = `message-wrapper ${isMe ? 'sent' : 'received'}`;
+  if (id) wrapper.dataset.msgId = id;
+  if (zapiMessageId) wrapper.dataset.zapiId = zapiMessageId;
+  if (activeContact) wrapper.dataset.msgNumero = activeContact.numero;
 
   const bubble = document.createElement('div');
   bubble.className = `message-bubble ${isMe ? 'sent' : 'received'}`;
@@ -1031,19 +1221,68 @@ function addMessageToUI(sender, text, timestamp, id = null, tipoMidia = null, ar
   time.textContent = formatMessageTime(timestamp);
   meta.appendChild(time);
   if (isMe) {
-    const status = document.createElement('i');
-    status.className = 'fas fa-check-double message-status';
-    meta.appendChild(status);
+    const statusIcon = document.createElement('i');
+    statusIcon.className = 'fas fa-check message-status-icon message-status';
+    // Se o status já vem definido, aplica imediatamente
+    if (status === 'entregue') {
+      statusIcon.classList.add('fa-check-double', 'entregue');
+      statusIcon.classList.remove('fa-check');
+    } else {
+      statusIcon.classList.add('fa-check');
+    }
+    meta.appendChild(statusIcon);
   }
 
   bubble.appendChild(meta);
-  wrapper.appendChild(bubble);
+
+  // --- Botão de ações (reagir + reencaminhar + editar) ---
+  const actionsDiv = document.createElement('div');
+  actionsDiv.className = 'msg-actions';
+
+  // Botão reagir (todas as mensagens)
+  const reactBtn = document.createElement('button');
+  reactBtn.className = 'msg-action-btn';
+  reactBtn.title = 'Reagir';
+  reactBtn.innerHTML = '🙂';
+  reactBtn.style.fontSize = '0.95rem';
+  reactBtn.onclick = (e) => { e.stopPropagation(); abrirEmojiPicker(e, wrapper); };
+  actionsDiv.appendChild(reactBtn);
+
+  // Botão reencaminhar (todas as mensagens)
+  const fwdBtn = document.createElement('button');
+  fwdBtn.className = 'msg-action-btn';
+  fwdBtn.title = 'Reencaminhar mensagem';
+  fwdBtn.innerHTML = '<i class="fas fa-share"></i>';
+  fwdBtn.onclick = () => abrirModalReencaminhar(wrapper);
+  actionsDiv.appendChild(fwdBtn);
+
+  // Botão editar (somente mensagens enviadas por mim)
+  if (isMe) {
+    const editBtn = document.createElement('button');
+    editBtn.className = 'msg-action-btn';
+    editBtn.title = 'Editar mensagem';
+    editBtn.innerHTML = '<i class="fas fa-pencil-alt"></i>';
+    editBtn.onclick = () => abrirModalEditar(wrapper);
+    actionsDiv.appendChild(editBtn);
+  }
+
+  // Container de reações embaixo do conteúdo
+  const reactionsDiv = document.createElement('div');
+  reactionsDiv.className = 'msg-reactions';
+  bubble.appendChild(reactionsDiv);
+
+  if (isMe) {
+    wrapper.appendChild(actionsDiv);
+    wrapper.appendChild(bubble);
+  } else {
+    wrapper.appendChild(bubble);
+    wrapper.appendChild(actionsDiv);
+  }
+
   container.appendChild(wrapper);
   scrollToBottom();
+  return wrapper;
 }
-
-// ===========================
-// ENVIAR MENSAGEM
 // ===========================
 async function sendMessage() {
   const input = document.getElementById('message-input');
@@ -1056,8 +1295,8 @@ async function sendMessage() {
   input.value = '';
   input.style.height = 'auto';
   
-  // Adicionar na UI imediatamente
-  addMessageToUI('Você', text, new Date().toISOString());
+  // Adicionar na UI imediatamente (bolha pendente sem ID ainda)
+  const pendingWrapper = addMessageToUI('Você', text, new Date().toISOString(), null, null, null, null, 'enviado');
 
   // Atualizar a lista local imediatamente para evitar duplicidade e mostrar preview
   const nowIso = new Date().toISOString();
@@ -1081,8 +1320,18 @@ async function sendMessage() {
       })
     });
     
-    if (!response.ok) {
-      throw new Error('Erro ao enviar mensagem');
+    if (!response.ok) throw new Error('Erro ao enviar mensagem');
+
+    const respData = await response.json();
+
+    // Atualizar a bolha pendente com os IDs reais retornados pelo servidor
+    if (pendingWrapper && respData.id) {
+      pendingWrapper.dataset.msgId = respData.id;
+      if (respData.zapi_message_id) {
+        pendingWrapper.dataset.zapiId = respData.zapi_message_id;
+      }
+      // Registrar o ID para que o evento socket não crie uma bolha duplicada
+      seenMessageIds.add(respData.id);
     }
     
   } catch (error) {
@@ -1100,7 +1349,13 @@ function handleNewMessage(data) {
 
   // Se for do contato ativo, adicionar no chat
   if (activeContact && activeContact.numero === numeroNorm) {
-    addMessageToUI(remetente, mensagem, new Date().toISOString(), id, tipo_midia || null, arquivo_url || null);
+    addMessageToUI(remetente, mensagem, new Date().toISOString(), id, tipo_midia || null, arquivo_url || null, data.zapi_message_id || null, data.status || null);
+
+    // Se é mensagem do cliente, marcar como lida imediatamente (usuário está vendo)
+    if (remetente === "Cliente") {
+      fetch(`/canais/conversa/${numeroNorm}/marcar_lida`, { method: 'POST' }).catch(() => {});
+    }
+
     // Se foi respondido, remover o indicador de não respondido
     if (remetente === "Você") {
       const conv = conversations.get(numeroNorm);
@@ -1436,6 +1691,311 @@ async function confirmUpload() {
   } catch (err) {
     console.error('Erro upload:', err);
     showNotification('Erro ao enviar arquivo', 'error');
+  }
+}
+
+// ===========================
+// REENCAMINHAR MENSAGEM
+// ===========================
+let forwardTargetWrapper = null;
+let forwardSearchTimeout = null;
+
+function abrirModalReencaminhar(wrapper) {
+  forwardTargetWrapper = wrapper;
+  document.getElementById('forward-search').value = '';
+  document.getElementById('forward-number').value = '';
+  document.getElementById('forward-results').style.display = 'none';
+  document.getElementById('forward-results').innerHTML = '';
+  document.getElementById('forward-modal').classList.add('show');
+  setTimeout(() => document.getElementById('forward-search').focus(), 100);
+}
+
+function fecharModalReencaminhar() {
+  forwardTargetWrapper = null;
+  document.getElementById('forward-modal').classList.remove('show');
+}
+
+// Busca de contatos para reencaminhar
+document.getElementById('forward-search').addEventListener('input', function () {
+  clearTimeout(forwardSearchTimeout);
+  const q = this.value.trim();
+  const results = document.getElementById('forward-results');
+  if (q.length < 2) {
+    results.style.display = 'none';
+    return;
+  }
+  forwardSearchTimeout = setTimeout(async () => {
+    try {
+      const resp = await fetch(`/api/clientes/busca?q=${encodeURIComponent(q)}`);
+      const clientes = await resp.json();
+      if (!clientes.length) {
+        results.innerHTML = '<div style="padding:10px;color:#999;font-size:.85rem">Nenhum contato encontrado</div>';
+      } else {
+        results.innerHTML = clientes.map(c => `
+          <div onclick="selecionarDestinoReencaminhar('${c.telefone}', '${(c.nome || '').replace(/'/g,"\\'")}', this)"
+               style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:.9rem;transition:background .15s"
+               onmouseover="this.style.background='#f5f6f6'" onmouseout="this.style.background='#fff'">
+            <div style="font-weight:600;color:#111b21">${c.nome}</div>
+            <div style="font-size:.78rem;color:#667781">${c.telefone}</div>
+          </div>
+        `).join('');
+      }
+      results.style.display = 'block';
+    } catch (e) {
+      console.error(e);
+    }
+  }, 300);
+});
+
+function selecionarDestinoReencaminhar(telefone, nome, el) {
+  document.getElementById('forward-search').value = nome || telefone;
+  document.getElementById('forward-number').value = telefone;
+  document.getElementById('forward-results').style.display = 'none';
+}
+
+async function confirmarReencaminhar() {
+  if (!forwardTargetWrapper) return;
+
+  const msgId = forwardTargetWrapper.dataset.msgId;
+  const zapiId = forwardTargetWrapper.dataset.zapiId;
+  const phone = document.getElementById('forward-number').value.trim();
+
+  if (!phone) {
+    showNotification('Informe o número de destino', 'error');
+    return;
+  }
+  if (!msgId) {
+    showNotification('Mensagem sem ID — não é possível reencaminhar', 'error');
+    return;
+  }
+  if (!zapiId) {
+    showNotification('Esta mensagem não possui ID Z-API — só mensagens recebidas/enviadas pelo sistema podem ser reencaminhadas', 'error');
+    return;
+  }
+
+  try {
+    const resp = await fetch(`/canais/mensagem/${msgId}/reencaminhar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone })
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      showNotification('Mensagem reencaminhada com sucesso!', 'success');
+      fecharModalReencaminhar();
+    } else {
+      showNotification(data.erro || 'Erro ao reencaminhar', 'error');
+    }
+  } catch (e) {
+    showNotification('Erro de conexão', 'error');
+  }
+}
+
+// Fechar modal ao clicar fora
+document.getElementById('forward-modal').addEventListener('click', function(e) {
+  if (e.target === this) fecharModalReencaminhar();
+});
+
+// ===========================
+// EDITAR MENSAGEM
+// ===========================
+let editTargetWrapper = null;
+
+function abrirModalEditar(wrapper) {
+  editTargetWrapper = wrapper;
+  // Pré-preenche com o texto atual da mensagem
+  const currentText = wrapper.querySelector('.message-text')?.textContent || '';
+  document.getElementById('edit-text').value = currentText;
+  document.getElementById('edit-modal').classList.add('show');
+  setTimeout(() => document.getElementById('edit-text').focus(), 100);
+}
+
+function fecharModalEditar() {
+  editTargetWrapper = null;
+  document.getElementById('edit-modal').classList.remove('show');
+}
+
+async function confirmarEdicao() {
+  if (!editTargetWrapper) return;
+  const msgId = editTargetWrapper.dataset.msgId;
+  const novoTexto = document.getElementById('edit-text').value.trim();
+
+  if (!novoTexto) {
+    showNotification('Digite o novo texto', 'error');
+    return;
+  }
+  if (!msgId) {
+    showNotification('Mensagem sem ID — não é possível editar', 'error');
+    return;
+  }
+  if (!editTargetWrapper.dataset.zapiId) {
+    showNotification('Mensagem sem ID Z-API — só mensagens novas podem ser editadas', 'error');
+    return;
+  }
+
+  try {
+    const resp = await fetch(`/canais/mensagem/${msgId}/editar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mensagem: novoTexto })
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      // Atualizar o texto na UI local
+      const textEl = editTargetWrapper.querySelector('.message-text');
+      if (textEl) textEl.textContent = novoTexto;
+      showNotification('Mensagem editada!', 'success');
+      fecharModalEditar();
+    } else {
+      showNotification(data.erro || 'Erro ao editar', 'error');
+    }
+  } catch (e) {
+    showNotification('Erro de conexão', 'error');
+  }
+}
+
+document.getElementById('edit-modal').addEventListener('click', function(e) {
+  if (e.target === this) fecharModalEditar();
+});
+
+// ===========================
+// REACÃO COM EMOJI
+// ===========================
+const EMOJIS_RAPIDOS = ['❤️','😂','😮','😢','🙏','👍','👎','🙌',
+  '🔥','🎉','💩','😍','🤔','😱','🤣','👏','✅','🚀'];
+
+let emojiPickerEl = null;
+let emojiPickerWrapper = null;
+
+function abrirEmojiPicker(event, wrapper) {
+  // Fechar picker anterior se existir
+  if (emojiPickerEl) {
+    emojiPickerEl.remove();
+    if (emojiPickerWrapper === wrapper) {
+      emojiPickerEl = null;
+      emojiPickerWrapper = null;
+      return;
+    }
+  }
+
+  emojiPickerWrapper = wrapper;
+
+  const picker = document.createElement('div');
+  picker.className = 'emoji-picker-popup';
+
+  EMOJIS_RAPIDOS.forEach(emoji => {
+    const btn = document.createElement('button');
+    btn.textContent = emoji;
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      enviarReacao(wrapper, emoji);
+      fecharEmojiPicker();
+    };
+    picker.appendChild(btn);
+  });
+
+  // Posicionar relativo ao botão clicado
+  const rect = event.target.closest('.msg-action-btn').getBoundingClientRect();
+  picker.style.position = 'fixed';
+  picker.style.top = (rect.bottom + 4) + 'px';
+  // Ajusta para não sair pela direita
+  const leftPos = Math.min(rect.left, window.innerWidth - 260);
+  picker.style.left = leftPos + 'px';
+
+  document.body.appendChild(picker);
+  emojiPickerEl = picker;
+}
+
+function fecharEmojiPicker() {
+  if (emojiPickerEl) {
+    emojiPickerEl.remove();
+    emojiPickerEl = null;
+    emojiPickerWrapper = null;
+  }
+}
+
+// Fecha picker ao clicar fora
+document.addEventListener('click', function(e) {
+  if (emojiPickerEl && !emojiPickerEl.contains(e.target)) {
+    fecharEmojiPicker();
+  }
+});
+
+async function enviarReacao(wrapper, emoji) {
+  const msgId = wrapper.dataset.msgId;
+  const zapiId = wrapper.dataset.zapiId;
+
+  if (!msgId) {
+    showNotification('Mensagem sem ID — não é possível reagir', 'error');
+    return;
+  }
+  if (!zapiId) {
+    showNotification('Mensagem sem ID Z-API — só mensagens recentes podem receber reações', 'error');
+    return;
+  }
+
+  // Feedback imediato na UI
+  adicionarReacaoNaBolha(wrapper, emoji);
+
+  try {
+    const resp = await fetch(`/canais/mensagem/${msgId}/reagir`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reaction: emoji })
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      // Reverter badge se falhou
+      removerReacaoNaBolha(wrapper, emoji);
+      showNotification(data.erro || 'Erro ao enviar reação', 'error');
+    }
+  } catch (e) {
+    removerReacaoNaBolha(wrapper, emoji);
+    showNotification('Erro de conexão', 'error');
+  }
+}
+
+function adicionarReacaoNaBolha(wrapper, emoji) {
+  const bubble = wrapper.querySelector('.message-bubble');
+  if (!bubble) return;
+  let reactionsDiv = bubble.querySelector('.msg-reactions');
+  if (!reactionsDiv) {
+    reactionsDiv = document.createElement('div');
+    reactionsDiv.className = 'msg-reactions';
+    bubble.appendChild(reactionsDiv);
+  }
+  // Evita duplicar o mesmo emoji
+  const existing = Array.from(reactionsDiv.querySelectorAll('.msg-reaction-badge'))
+    .find(b => b.dataset.emoji === emoji);
+  if (!existing) {
+    const badge = document.createElement('span');
+    badge.className = 'msg-reaction-badge';
+    badge.dataset.emoji = emoji;
+    badge.textContent = emoji;
+    reactionsDiv.appendChild(badge);
+  }
+}
+
+function removerReacaoNaBolha(wrapper, emoji) {
+  const badge = wrapper.querySelector(`.msg-reaction-badge[data-emoji='${emoji}']`);
+  if (badge) badge.remove();
+}
+
+// ===========================
+// TICKS DE STATUS (✓ enviado / ✓✓ entregue)
+// ===========================
+function atualizarTickStatus(msgId, status) {
+  const wrapper = document.querySelector(`[data-msg-id='${msgId}']`);
+  if (!wrapper) return;
+  const icon = wrapper.querySelector('.message-status-icon');
+  if (!icon) return;
+
+  if (status === 'entregue') {
+    icon.classList.remove('fa-check');
+    icon.classList.add('fa-check-double', 'entregue');
+  } else if (status === 'enviado') {
+    icon.classList.remove('fa-check-double', 'entregue');
+    icon.classList.add('fa-check');
   }
 }
 </script>
