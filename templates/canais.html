@@ -14,7 +14,7 @@
   /* Container principal */
   .messages-container-main {
     display: flex;
-    height: 92vh;
+    height: 78vh;
     background: #f0f2f5;
     overflow: hidden;
   }
@@ -236,6 +236,14 @@
     color: white;
     font-weight: 600;
     margin-right: 15px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .chat-header-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
   }
   
   .chat-header-info {
@@ -634,6 +642,9 @@
         <button class="header-btn" id="update-webhook-btn" title="Atualizar webhook Z-API (quando mudar URL do ngrok)" onclick="atualizarWebhook()" style="color:#888">
           <i class="fas fa-plug"></i>
         </button>
+        <button class="header-btn" id="privacy-btn" title="Configurações de Privacidade" onclick="abrirModalPrivacidade()" style="color:#888">
+          <i class="fas fa-shield-alt"></i>
+        </button>
         <span class="badge bg-primary" id="total-conversas">0</span>
       </div>
     </div>
@@ -666,6 +677,18 @@
         <div class="chat-header-info">
           <div class="chat-header-name" id="chat-name"></div>
           <div class="chat-header-status" id="chat-status">online</div>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
+          <button id="btn-block-contact" title="Bloquear contato" onclick="toggleBloquearContato()"
+            style="background:none;border:none;cursor:pointer;color:#aaa;font-size:1.1rem;padding:4px 6px;border-radius:6px;transition:color .2s"
+            onmouseover="this.style.color='#e53e3e'" onmouseout="this.style.color=bloqueado?'#e53e3e':'#aaa'">
+            <i class="fas fa-ban"></i>
+          </button>
+          <button title="Denunciar contato" onclick="denunciarContato()"
+            style="background:none;border:none;cursor:pointer;color:#aaa;font-size:1.1rem;padding:4px 6px;border-radius:6px;transition:color .2s"
+            onmouseover="this.style.color='#dd6b20'" onmouseout="this.style.color='#aaa'">
+            <i class="fas fa-flag"></i>
+          </button>
         </div>
       </div>
       
@@ -703,6 +726,39 @@
         <button onclick="cancelUpload()" style="background:none;border:none;color:#e53e3e;cursor:pointer;font-size:1rem;"><i class="fas fa-times"></i></button>
         <button onclick="confirmUpload()" style="background:#25d366;border:none;color:white;border-radius:6px;padding:6px 14px;cursor:pointer;font-size:.85rem;"><i class="fas fa-paper-plane"></i> Enviar</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Configurações de Privacidade -->
+<div class="delete-modal" id="privacy-modal">
+  <div class="modal-content" style="min-width:340px">
+    <h5><i class="fas fa-shield-alt" style="color:#667781;margin-right:8px"></i>Configurações de Privacidade</h5>
+    <p style="font-size:.85rem;color:#667781;margin-bottom:16px">Defina quem pode visualizar suas informações no WhatsApp.</p>
+
+    <label style="font-size:.88rem;font-weight:600;margin-bottom:4px;display:block">
+      <i class="fas fa-clock" style="color:#aaa;margin-right:5px"></i>Visto por Último
+    </label>
+    <select id="privacy-last-seen" class="form-select mb-3" style="border-radius:8px">
+      <option value="ALL">Todos</option>
+      <option value="CONTACTS">Apenas meus contatos</option>
+      <option value="CONTACT_BLACKLIST">Todos exceto lista negra</option>
+      <option value="NONE">Ninguém</option>
+    </select>
+
+    <label style="font-size:.88rem;font-weight:600;margin-bottom:4px;display:block">
+      <i class="fas fa-user-circle" style="color:#aaa;margin-right:5px"></i>Foto do Perfil
+    </label>
+    <select id="privacy-photo" class="form-select mb-3" style="border-radius:8px">
+      <option value="ALL">Todos</option>
+      <option value="CONTACTS">Apenas meus contatos</option>
+      <option value="CONTACT_BLACKLIST">Todos exceto lista negra</option>
+      <option value="NONE">Ninguém</option>
+    </select>
+
+    <div class="modal-buttons">
+      <button class="btn-cancel" onclick="fecharModalPrivacidade()">Cancelar</button>
+      <button class="btn-delete" style="background:#25d366" onclick="salvarPrivacidade()"><i class="fas fa-check"></i> Salvar</button>
     </div>
   </div>
 </div>
@@ -806,6 +862,7 @@
 // ===========================
 let socket = window.socket || null;
 let activeContact = null;
+let bloqueado = false;
 let conversations = new Map();
 let seenMessageIds = new Set();
 let isSearching = false; // evita sobrescrever a lista enquanto busca
@@ -1100,12 +1157,30 @@ async function selectConversation(contact) {
   // Mostrar chat
   document.getElementById('empty-state').style.display = 'none';
   document.getElementById('active-chat').style.display = 'flex';
+
+  // Resetar estado de bloqueio ao trocar de conversa
+  bloqueado = false;
+  const btnBlock = document.getElementById('btn-block-contact');
+  if (btnBlock) { btnBlock.style.color = '#aaa'; btnBlock.title = 'Bloquear contato'; }
   
   // Atualizar header
   const initials = contact.nome.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-  document.getElementById('chat-avatar').textContent = initials;
+  const avatarEl = document.getElementById('chat-avatar');
+  avatarEl.textContent = initials;
+  avatarEl.style.backgroundImage = '';
   document.getElementById('chat-name').textContent = contact.nome;
   document.getElementById('chat-status').textContent = numeroNorm;
+
+  // Buscar foto do contato em background
+  fetch(`/canais/contato/foto?phone=${encodeURIComponent(numeroNorm)}`)
+    .then(r => r.json())
+    .then(d => {
+      if (d.link && activeContact?.numero === numeroNorm) {
+        avatarEl.textContent = '';
+        avatarEl.innerHTML = `<img src="${d.link}" alt="foto" onerror="this.parentElement.textContent='${initials}'">`;
+      }
+    })
+    .catch(() => {});
   
   // Limpar mensagens antigas
   document.getElementById('messages-container').innerHTML = '';
@@ -1544,6 +1619,106 @@ function closeNewChatModal() {
   document.getElementById('new-chat-number').value = '';
   document.getElementById('new-chat-name').value = '';
 }
+
+// ===========================
+// BLOQUEAR / DESBLOQUEAR CONTATO
+// ===========================
+async function toggleBloquearContato() {
+  if (!activeContact) return;
+  const action = bloqueado ? 'unblock' : 'block';
+  const label  = bloqueado ? 'Desbloquear' : 'Bloquear';
+  if (!confirm(`${label} o contato ${activeContact.nome}?`)) return;
+
+  try {
+    const resp = await fetch('/canais/contato/bloquear', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: activeContact.numero, action })
+    });
+    const data = await resp.json();
+    if (resp.ok && data.success) {
+      bloqueado = !bloqueado;
+      const btn = document.getElementById('btn-block-contact');
+      btn.title = bloqueado ? 'Desbloquear contato' : 'Bloquear contato';
+      btn.style.color = bloqueado ? '#e53e3e' : '#aaa';
+      showNotification(bloqueado ? 'Contato bloqueado' : 'Contato desbloqueado', bloqueado ? 'error' : 'success');
+    } else {
+      showNotification(data.erro || 'Erro ao executar ação', 'error');
+    }
+  } catch (e) {
+    showNotification('Erro ao conectar com o servidor', 'error');
+  }
+}
+
+async function denunciarContato() {
+  if (!activeContact) return;
+  if (!confirm(`Denunciar o contato ${activeContact.nome}? Esta ação será enviada ao WhatsApp.`)) return;
+
+  try {
+    const resp = await fetch('/canais/contato/denunciar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: activeContact.numero })
+    });
+    const data = await resp.json();
+    if (resp.ok && data.success) {
+      showNotification('Contato denunciado com sucesso', 'success');
+    } else {
+      showNotification(data.erro || 'Erro ao denunciar contato', 'error');
+    }
+  } catch (e) {
+    showNotification('Erro ao conectar com o servidor', 'error');
+  }
+}
+
+// ===========================
+// PRIVACIDADE
+// ===========================
+function abrirModalPrivacidade() {
+  document.getElementById('privacy-modal').classList.add('show');
+}
+
+function fecharModalPrivacidade() {
+  document.getElementById('privacy-modal').classList.remove('show');
+}
+
+async function salvarPrivacidade() {
+  const tipoLastSeen = document.getElementById('privacy-last-seen').value;
+  const tipoPhoto    = document.getElementById('privacy-photo').value;
+
+  const erros = [];
+
+  try {
+    const r1 = await fetch('/canais/privacy/last-seen', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visualizationType: tipoLastSeen })
+    });
+    const d1 = await r1.json();
+    if (!r1.ok || !d1.success) erros.push('Visto por último: ' + (d1.erro || 'erro'));
+  } catch (e) { erros.push('Visto por último: erro de rede'); }
+
+  try {
+    const r2 = await fetch('/canais/privacy/photo-visualization', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visualizationType: tipoPhoto })
+    });
+    const d2 = await r2.json();
+    if (!r2.ok || !d2.success) erros.push('Foto do perfil: ' + (d2.erro || 'erro'));
+  } catch (e) { erros.push('Foto do perfil: erro de rede'); }
+
+  if (erros.length === 0) {
+    showNotification('Configurações de privacidade salvas!', 'success');
+    fecharModalPrivacidade();
+  } else {
+    showNotification(erros.join(' | '), 'error');
+  }
+}
+
+document.getElementById('privacy-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'privacy-modal') fecharModalPrivacidade();
+});
 
 function startNewChat() {
   const raw = document.getElementById('new-chat-number').value.trim().replace(/\D/g, '');

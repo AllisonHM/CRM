@@ -54,16 +54,15 @@
             <input type="text" name="nome" id="nome" class="form-control" required>
         </div>
 
-        <div class="mb-3">
-            <label for="email" class="form-label">Email</label>
-            <input type="email" name="email" id="email" class="form-control" required
-                   pattern="[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}"
-                   title="Informe um email válido com @ e domínio. Ex: nome@email.com">
-        </div>
-
-        <div class="mb-3">
-            <label for="telefone" class="form-label">Telefone</label>
-            <div class="input-group">
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <label for="email" class="form-label">Email</label>
+                <input type="email" name="email" id="email" class="form-control" required
+                       pattern="[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}"
+                       title="Informe um email válido com @ e domínio. Ex: nome@email.com">
+            </div>
+            <div class="col-md-4">
+                <label for="telefone" class="form-label">Telefone</label>
                 <input
                     type="text"
                     name="telefone"
@@ -74,18 +73,17 @@
                     placeholder="(47) 99999-9999"
                     inputmode="numeric"
                 >
+                <div id="telefone-feedback"></div>
+                <div class="form-text text-muted">Com DDD. Ex: <code>(47) 99999-9999</code></div>
             </div>
-            <div id="telefone-feedback"></div>
-            <div class="form-text text-muted">Digite somente os dígitos com DDD. Ex: <code>(47) 99999-9999</code> ou com código <code>+55 (47) 99999-9999</code></div>
-        </div>
-
-        <div class="mb-3">
-            <label for="tipo_pessoa" class="form-label">Tipo de Pessoa</label>
-            <select name="tipo_pessoa" id="tipo_pessoa" class="form-select" required>
-                <option value="">Selecione</option>
-                <option value="Física">Física</option>
-                <option value="Jurídica">Jurídica</option>
-            </select>
+            <div class="col-md-4">
+                <label for="tipo_pessoa" class="form-label">Tipo de Pessoa</label>
+                <select name="tipo_pessoa" id="tipo_pessoa" class="form-select" required>
+                    <option value="">Selecione</option>
+                    <option value="Física">Física</option>
+                    <option value="Jurídica">Jurídica</option>
+                </select>
+            </div>
         </div>
 
         <button type="submit" class="btn btn-success">Salvar</button>
@@ -289,6 +287,22 @@ function filtrarClientes() {
         if (validarDigitos(d)) {
             this.value = formatarCompleto(d);
             exibirFeedback(true);
+
+            // Verificar se tem WhatsApp
+            const div = document.getElementById('telefone-feedback');
+            div.innerHTML = '<span class="text-muted" style="font-size:.82rem">🔎 Verificando WhatsApp...</span>';
+            fetch(`/api/whatsapp/phone-exists?phone=${encodeURIComponent(d)}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.exists) {
+                        div.innerHTML = '<span style="color:#25d366;font-size:.82rem">✅ Número possui WhatsApp</span>';
+                    } else if (data.exists === false) {
+                        div.innerHTML = '<span class="text-warning" style="font-size:.82rem">⚠️ Número sem WhatsApp</span>';
+                    } else {
+                        div.innerHTML = '';
+                    }
+                })
+                .catch(() => { div.innerHTML = ''; });
         } else if (this.value.length > 0) {
             exibirFeedback(false);
         }

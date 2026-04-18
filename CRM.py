@@ -3121,6 +3121,198 @@ def reagir_mensagem_canais(msg_id):
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
 
+@app.route("/canais/contato/bloquear", methods=["POST"])
+@login_required
+def canais_bloquear_contato():
+    """Bloqueia ou desbloqueia um contato via Z-API."""
+    data = request.get_json() or {}
+    phone = data.get("phone", "").strip()
+    action = data.get("action", "").strip()
+
+    if not phone or action not in ("block", "unblock"):
+        return jsonify({"erro": "Par\u00e2metros inv\u00e1lidos"}), 400
+
+    user_id = current_user.get_usuario_principal_id()
+    usuario = UsuarioCRM.query.get(user_id)
+
+    if not usuario or not usuario.api_instance or not usuario.api_token:
+        return jsonify({"erro": "Z-API n\u00e3o configurado"}), 400
+
+    inst = usuario.api_instance.strip()
+    tok  = usuario.api_token.strip()
+    ct   = usuario.api_client_token.strip() if usuario.api_client_token else client_token
+
+    url  = f"https://api.z-api.io/instances/{inst}/token/{tok}/contacts/modify-blocked"
+    hdrs = {"client-token": ct, "Content-Type": "application/json"}
+
+    try:
+        resp = requests.post(url, json={"phone": phone, "action": action}, headers=hdrs, timeout=10)
+        if resp.status_code == 200:
+            return jsonify({"success": True})
+        return jsonify({"erro": f"Z-API retornou {resp.status_code}: {resp.text[:200]}"}), 400
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
+@app.route("/canais/contato/denunciar", methods=["POST"])
+@login_required
+def canais_denunciar_contato():
+    """Denuncia um contato via Z-API."""
+    data = request.get_json() or {}
+    phone = data.get("phone", "").strip()
+
+    if not phone:
+        return jsonify({"erro": "Par\u00e2metro phone obrigat\u00f3rio"}), 400
+
+    user_id = current_user.get_usuario_principal_id()
+    usuario = UsuarioCRM.query.get(user_id)
+
+    if not usuario or not usuario.api_instance or not usuario.api_token:
+        return jsonify({"erro": "Z-API n\u00e3o configurado"}), 400
+
+    inst = usuario.api_instance.strip()
+    tok  = usuario.api_token.strip()
+    ct   = usuario.api_client_token.strip() if usuario.api_client_token else client_token
+
+    url  = f"https://api.z-api.io/instances/{inst}/token/{tok}/contacts/{phone}/report"
+    hdrs = {"client-token": ct, "Content-Type": "application/json"}
+
+    try:
+        resp = requests.post(url, headers=hdrs, timeout=10)
+        if resp.status_code == 200:
+            return jsonify({"success": True})
+        return jsonify({"erro": f"Z-API retornou {resp.status_code}: {resp.text[:200]}"}), 400
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
+@app.route("/api/whatsapp/phone-exists")
+@login_required
+def api_phone_exists():
+    """Verifica se um número possui WhatsApp via Z-API."""
+    phone = request.args.get("phone", "").strip()
+    if not phone:
+        return jsonify({"erro": "Parâmetro phone obrigatório"}), 400
+
+    user_id = current_user.get_usuario_principal_id()
+    usuario = UsuarioCRM.query.get(user_id)
+
+    if not usuario or not usuario.api_instance or not usuario.api_token:
+        return jsonify({"erro": "Z-API não configurado"}), 400
+
+    inst = usuario.api_instance.strip()
+    tok  = usuario.api_token.strip()
+    ct   = usuario.api_client_token.strip() if usuario.api_client_token else client_token
+
+    url  = f"https://api.z-api.io/instances/{inst}/token/{tok}/phone-exists"
+    hdrs = {"client-token": ct, "Content-Type": "application/json"}
+
+    try:
+        resp = requests.get(url, params={"phone": phone}, headers=hdrs, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            # A API retorna uma lista
+            if isinstance(data, list) and data:
+                return jsonify(data[0])
+            return jsonify(data)
+        return jsonify({"exists": False})
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
+@app.route("/canais/contato/foto")
+@login_required
+def canais_foto_contato():
+    """Retorna a URL da foto de perfil de um contato via Z-API."""
+    phone = request.args.get("phone", "").strip()
+    if not phone:
+        return jsonify({"erro": "Parâmetro phone obrigatório"}), 400
+
+    user_id = current_user.get_usuario_principal_id()
+    usuario = UsuarioCRM.query.get(user_id)
+
+    if not usuario or not usuario.api_instance or not usuario.api_token:
+        return jsonify({"erro": "Z-API não configurado"}), 400
+
+    inst = usuario.api_instance.strip()
+    tok  = usuario.api_token.strip()
+    ct   = usuario.api_client_token.strip() if usuario.api_client_token else client_token
+
+    url = f"https://api.z-api.io/instances/{inst}/token/{tok}/profile-picture"
+    hdrs = {"client-token": ct, "Content-Type": "application/json"}
+
+    try:
+        resp = requests.get(url, params={"phone": phone}, headers=hdrs, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            return jsonify({"link": data.get("link", "")})
+        return jsonify({"link": ""})
+    except Exception:
+        return jsonify({"link": ""})
+
+@app.route("/canais/privacy/last-seen", methods=["POST"])
+@login_required
+def canais_privacy_last_seen():
+    """Configura quem pode ver o 'visto por último' via Z-API."""
+    data = request.get_json() or {}
+    visualization_type = data.get("visualizationType")
+
+    tipos_validos = {"ALL", "NONE", "CONTACTS", "CONTACT_BLACKLIST"}
+    if visualization_type not in tipos_validos:
+        return jsonify({"erro": "visualizationType inválido"}), 400
+
+    user_id = current_user.get_usuario_principal_id()
+    usuario = UsuarioCRM.query.get(user_id)
+
+    if not usuario or not usuario.api_instance or not usuario.api_token:
+        return jsonify({"erro": "Z-API não configurado para este usuário"}), 400
+
+    inst = usuario.api_instance.strip()
+    tok = usuario.api_token.strip()
+    ct = usuario.api_client_token.strip() if usuario.api_client_token else client_token
+
+    url = f"https://api.z-api.io/instances/{inst}/token/{tok}/privacy/last-seen"
+    payload = {"visualizationType": visualization_type}
+    hdrs = {"client-token": ct, "Content-Type": "application/json"}
+
+    try:
+        resp = requests.post(url, json=payload, headers=hdrs, timeout=10)
+        if resp.status_code == 200:
+            return jsonify({"success": True})
+        return jsonify({"erro": f"Z-API retornou {resp.status_code}: {resp.text[:200]}"}), 400
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
+@app.route("/canais/privacy/photo-visualization", methods=["POST"])
+@login_required
+def canais_privacy_photo():
+    """Configura quem pode ver a foto do perfil via Z-API."""
+    data = request.get_json() or {}
+    visualization_type = data.get("visualizationType")
+
+    tipos_validos = {"ALL", "NONE", "CONTACTS", "CONTACT_BLACKLIST"}
+    if visualization_type not in tipos_validos:
+        return jsonify({"erro": "visualizationType inválido"}), 400
+
+    user_id = current_user.get_usuario_principal_id()
+    usuario = UsuarioCRM.query.get(user_id)
+
+    if not usuario or not usuario.api_instance or not usuario.api_token:
+        return jsonify({"erro": "Z-API não configurado para este usuário"}), 400
+
+    inst = usuario.api_instance.strip()
+    tok = usuario.api_token.strip()
+    ct = usuario.api_client_token.strip() if usuario.api_client_token else client_token
+
+    url = f"https://api.z-api.io/instances/{inst}/token/{tok}/privacy/photo-visualization"
+    payload = {"visualizationType": visualization_type}
+    hdrs = {"client-token": ct, "Content-Type": "application/json"}
+
+    try:
+        resp = requests.post(url, json=payload, headers=hdrs, timeout=10)
+        if resp.status_code == 200:
+            return jsonify({"success": True})
+        return jsonify({"erro": f"Z-API retornou {resp.status_code}: {resp.text[:200]}"}), 400
+    except Exception as e:
+        return jsonify({"erro": str(e)}), 500
+
 @app.route("/canais/atualizar-webhook", methods=["POST"])
 @login_required
 def atualizar_webhook_zapi():
@@ -3732,12 +3924,15 @@ def deletar_conversa(numero):
         if s6:
             filters.append(WhatsAppMensagem.numero.like(f"%{s6}"))
         
-        # Filtrar por usuário também
+        # Filtrar por usuário também (inclui mensagens sem usuario_crm_id atribuído)
         if user_id:
             query = WhatsAppMensagem.query.filter(
                 and_(
                     or_(*filters),
-                    WhatsAppMensagem.usuario_crm_id == user_id
+                    or_(
+                        WhatsAppMensagem.usuario_crm_id == user_id,
+                        WhatsAppMensagem.usuario_crm_id == None
+                    )
                 )
             )
         else:
