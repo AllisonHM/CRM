@@ -159,6 +159,291 @@
         </div>
     </div>
     {% endif %}
+
+    <!-- Card: Importar do WhatsApp (Z-API) -->
+    <div class="card mb-4">
+        <div class="card-header d-flex align-items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="#25D366" viewBox="0 0 16 16">
+                <path d="M13.601 2.326A7.854 7.854 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.933 7.933 0 0 0 3.79.965h.004c4.368 0 7.926-3.558 7.93-7.93A7.898 7.898 0 0 0 13.6 2.326zM7.994 14.521a6.573 6.573 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.56 6.56 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.557 6.557 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592z"/>
+            </svg>
+            <h5 class="mb-0">Importar contatos do WhatsApp (Z-API)</h5>
+        </div>
+        <div class="card-body">
+            <p class="text-muted small mb-3">
+                Busca os contatos diretamente da sua instância Z-API conectada. Selecione os contatos desejados e importe-os para o CRM.
+            </p>
+
+            <div class="d-flex align-items-center gap-3 flex-wrap mb-3">
+                <div class="d-flex align-items-center gap-2">
+                    <label class="form-label mb-0 small">Por página:</label>
+                    <select id="zapiPageSize" class="form-select form-select-sm" style="width:90px">
+                        <option value="25">25</option>
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <label class="form-label mb-0 small">Duplicados:</label>
+                    <select id="zapiModo" class="form-select form-select-sm" style="width:130px">
+                        <option value="pular" selected>Pular</option>
+                        <option value="atualizar">Atualizar nome</option>
+                    </select>
+                </div>
+                <button class="btn btn-outline-success btn-sm" id="btnBuscarZapi">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="me-1" viewBox="0 0 16 16">
+                        <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.099zm-5.442 1.656a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"/>
+                    </svg>
+                    Buscar contatos
+                </button>
+                <button class="btn btn-success btn-sm d-none" id="btnImportarZapi">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" class="me-1" viewBox="0 0 16 16">
+                        <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                        <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 0-.708-.708l3-3z"/>
+                    </svg>
+                    Importar selecionados (<span id="zapiQtdSelecionados">0</span>)
+                </button>
+            </div>
+
+            <!-- Alert de feedback -->
+            <div id="zapiAlert" class="alert d-none mb-3" role="alert"></div>
+            <div id="zapiSpinner" class="text-center d-none py-3">
+                <div class="spinner-border text-success" role="status"><span class="visually-hidden">Carregando...</span></div>
+                <p class="text-muted small mt-2">Buscando contatos na Z-API…</p>
+            </div>
+
+            <!-- Tabela de contatos -->
+            <div id="zapiTableWrapper" class="d-none">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div>
+                        <button class="btn btn-outline-secondary btn-sm me-1" id="btnZapiSelecionarTodos">Selecionar todos</button>
+                        <button class="btn btn-outline-secondary btn-sm" id="btnZapiDesmarcarTodos">Desmarcar todos</button>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-outline-secondary btn-sm" id="btnZapiAnterior" disabled>&#8592; Anterior</button>
+                        <span class="small align-self-center" id="zapiPaginaInfo"></span>
+                        <button class="btn btn-outline-secondary btn-sm" id="btnZapiProximo">Próximo &#8594;</button>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="width:40px"><input type="checkbox" id="zapiCheckAll" title="Selecionar página"></th>
+                                <th>Nome</th>
+                                <th>Telefone</th>
+                                <th>Nome no WhatsApp</th>
+                            </tr>
+                        </thead>
+                        <tbody id="zapiTbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
+
+<script>
+(function () {
+    let zapiPagina = 1;
+    let zapiContatos = [];        // contatos da página atual
+    const selecionados = {};      // phone -> objeto contato (acumulado entre páginas)
+
+    const btnBuscar     = document.getElementById('btnBuscarZapi');
+    const btnImportar   = document.getElementById('btnImportarZapi');
+    const btnAnterior   = document.getElementById('btnZapiAnterior');
+    const btnProximo    = document.getElementById('btnZapiProximo');
+    const btnSelTodos   = document.getElementById('btnZapiSelecionarTodos');
+    const btnDesTodos   = document.getElementById('btnZapiDesmarcarTodos');
+    const checkAll      = document.getElementById('zapiCheckAll');
+    const tbody         = document.getElementById('zapiTbody');
+    const tableWrapper  = document.getElementById('zapiTableWrapper');
+    const spinner       = document.getElementById('zapiSpinner');
+    const alertEl       = document.getElementById('zapiAlert');
+    const qtdEl         = document.getElementById('zapiQtdSelecionados');
+    const paginaInfo    = document.getElementById('zapiPaginaInfo');
+
+    function showAlert(msg, tipo) {
+        alertEl.className = `alert alert-${tipo}`;
+        alertEl.textContent = msg;
+        alertEl.classList.remove('d-none');
+    }
+
+    function hideAlert() { alertEl.classList.add('d-none'); }
+
+    function atualizarBotaoImportar() {
+        const n = Object.keys(selecionados).length;
+        qtdEl.textContent = n;
+        if (n > 0) {
+            btnImportar.classList.remove('d-none');
+        } else {
+            btnImportar.classList.add('d-none');
+        }
+    }
+
+    function renderTabela(contacts) {
+        tbody.innerHTML = '';
+        contacts.forEach(c => {
+            const phone = c.phone || '';
+            const nome  = c.name || c.short || c.notify || c.vname || '';
+            const notif = c.notify || '';
+            const checked = selecionados[phone] ? 'checked' : '';
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><input type="checkbox" class="zapi-check" data-phone="${phone}" ${checked}></td>
+                <td>${escHtml(nome) || '<span class="text-muted">—</span>'}</td>
+                <td><code>${escHtml(phone)}</code></td>
+                <td>${escHtml(notif) || '<span class="text-muted">—</span>'}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        // Sincronizar checkAll com a seleção da página
+        const todosChecados = contacts.length > 0 && contacts.every(c => selecionados[c.phone]);
+        checkAll.checked = todosChecados;
+        checkAll.indeterminate = !todosChecados && contacts.some(c => selecionados[c.phone]);
+
+        // Eventos dos checkboxes individuais
+        tbody.querySelectorAll('.zapi-check').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const phone = cb.dataset.phone;
+                const contato = contacts.find(c => c.phone === phone);
+                if (cb.checked) {
+                    if (contato) selecionados[phone] = contato;
+                } else {
+                    delete selecionados[phone];
+                }
+                atualizarBotaoImportar();
+                // Sincronizar checkAll
+                const todos = contacts.every(c => selecionados[c.phone]);
+                checkAll.checked = todos;
+                checkAll.indeterminate = !todos && contacts.some(c => selecionados[c.phone]);
+            });
+        });
+    }
+
+    function escHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    async function buscarContatos() {
+        const pageSize = parseInt(document.getElementById('zapiPageSize').value) || 50;
+        hideAlert();
+        spinner.classList.remove('d-none');
+        tableWrapper.classList.add('d-none');
+        btnBuscar.disabled = true;
+
+        try {
+            const res  = await fetch(`/api/zapi/contacts?page=${zapiPagina}&pageSize=${pageSize}`);
+            const data = await res.json();
+            spinner.classList.add('d-none');
+            btnBuscar.disabled = false;
+
+            if (!res.ok) {
+                showAlert(data.erro || 'Erro ao buscar contatos.', 'danger');
+                return;
+            }
+
+            zapiContatos = data.contacts || [];
+            if (zapiContatos.length === 0 && zapiPagina === 1) {
+                showAlert('Nenhum contato encontrado na instância Z-API.', 'warning');
+                return;
+            }
+
+            tableWrapper.classList.remove('d-none');
+            paginaInfo.textContent = `Página ${zapiPagina} · ${zapiContatos.length} contato(s)`;
+            btnAnterior.disabled = zapiPagina <= 1;
+            btnProximo.disabled  = zapiContatos.length < pageSize;
+            renderTabela(zapiContatos);
+            atualizarBotaoImportar();
+
+        } catch (err) {
+            spinner.classList.add('d-none');
+            btnBuscar.disabled = false;
+            showAlert('Falha na comunicação com o servidor.', 'danger');
+        }
+    }
+
+    // Buscar ao clicar
+    btnBuscar.addEventListener('click', () => {
+        zapiPagina = 1;
+        buscarContatos();
+    });
+
+    // Paginação
+    btnAnterior.addEventListener('click', () => {
+        if (zapiPagina > 1) { zapiPagina--; buscarContatos(); }
+    });
+    btnProximo.addEventListener('click', () => {
+        zapiPagina++;
+        buscarContatos();
+    });
+
+    // Selecionar/desmarcar todos na página
+    checkAll.addEventListener('change', () => {
+        zapiContatos.forEach(c => {
+            if (checkAll.checked) {
+                selecionados[c.phone] = c;
+            } else {
+                delete selecionados[c.phone];
+            }
+        });
+        renderTabela(zapiContatos);
+        atualizarBotaoImportar();
+    });
+    btnSelTodos.addEventListener('click', () => {
+        zapiContatos.forEach(c => { selecionados[c.phone] = c; });
+        renderTabela(zapiContatos);
+        atualizarBotaoImportar();
+    });
+    btnDesTodos.addEventListener('click', () => {
+        zapiContatos.forEach(c => { delete selecionados[c.phone]; });
+        renderTabela(zapiContatos);
+        atualizarBotaoImportar();
+    });
+
+    // Importar selecionados
+    btnImportar.addEventListener('click', async () => {
+        const lista = Object.values(selecionados);
+        if (lista.length === 0) return;
+
+        const modo = document.getElementById('zapiModo').value;
+        btnImportar.disabled = true;
+        hideAlert();
+
+        try {
+            const res  = await fetch('/api/zapi/contacts/importar', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({ contacts: lista, modo }),
+            });
+            const data = await res.json();
+            btnImportar.disabled = false;
+
+            if (!res.ok) {
+                showAlert(data.erro || 'Erro ao importar contatos.', 'danger');
+                return;
+            }
+
+            showAlert(
+                `Importação concluída! ` +
+                `Inseridos: ${data.inseridos} · ` +
+                `Atualizados: ${data.atualizados} · ` +
+                `Duplicados: ${data.duplicados} · ` +
+                `Ignorados: ${data.ignorados}.`,
+                'success'
+            );
+            // Limpar seleção após importar
+            Object.keys(selecionados).forEach(k => delete selecionados[k]);
+            renderTabela(zapiContatos);
+            atualizarBotaoImportar();
+
+        } catch (err) {
+            btnImportar.disabled = false;
+            showAlert('Falha na comunicação com o servidor.', 'danger');
+        }
+    });
+})();
+</script>
 {% endblock %}
 

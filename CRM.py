@@ -2198,6 +2198,176 @@ def importar_clientes():
     return render_template("importar_clientes.html", erros=erros)
 
 
+# ------------------- Z-API: BUSCAR CONTATOS -------------------
+@app.route("/api/zapi/contacts")
+@login_required
+@permission_required('clientes')
+def zapi_contacts():
+    """Retorna contatos do WhatsApp via Z-API com paginação."""
+    usuario_principal_id = current_user.get_usuario_principal_id()
+    usuario = UsuarioCRM.query.get(usuario_principal_id)
+
+    inst = (usuario.api_instance if usuario else None) or instance
+    tok  = (usuario.api_token   if usuario else None) or token
+    cli_tok = client_token
+
+    if not inst or not tok:
+        return jsonify({"erro": "Instância ou token Z-API não configurados."}), 400
+
+    page      = request.args.get("page", 1, type=int)
+    page_size = request.args.get("pageSize", 50, type=int)
+    page_size = min(page_size, 100)  # limite de segurança
+
+    url = f"https://api.z-api.io/instances/{inst}/token/{tok}/contacts"
+    params = {"page": page, "pageSize": page_size}
+    req_headers = {"client-token": cli_tok, "Content-Type": "application/json"}
+
+    try:
+        resp = requests.get(url, headers=req_headers, params=params, timeout=15)
+        if resp.status_code == 200:
+            data = resp.json()
+            # Normaliza para sempre devolver lista
+            contacts = data if isinstance(data, list) else data.get("contacts", data.get("data", []))
+            return jsonify({"contacts": contacts, "page": page, "pageSize": page_size})
+        return jsonify({"erro": f"Z-API retornou status {resp.status_code}", "detalhe": resp.text[:200]}), resp.status_code
+    except requests.exceptions.RequestException as e:
+        return jsonify({"erro": f"Falha ao conectar com Z-API: {str(e)}"}), 502
+
+
+@app.route("/api/zapi/contacts/importar", methods=["POST"])
+@login_required
+@permission_required('clientes')
+def zapi_importar_contacts():
+    """Importa contatos selecionados da Z-API como Clientes no CRM."""
+    data = request.get_json(silent=True)
+    if not data or "contacts" not in data:
+        return jsonify({"erro": "Payload inválido. Envie {contacts: [...]}"}), 400
+
+    contacts  = data["contacts"]
+    modo      = data.get("modo", "pular")  # "pular" ou "atualizar"
+    user_id   = current_user.get_usuario_principal_id()
+
+    inseridos = atualizados = duplicados = ignorados = 0
+
+    for c in contacts:
+        phone_raw = c.get("phone", "")
+        tel = normalize_phone(phone_raw)
+        if not tel:
+            ignorados += 1
+            continue
+
+        # Determina nome: prioridade name > short > notify > vname > telefone
+        nome = (
+            c.get("name") or
+            c.get("short") or
+            c.get("notify") or
+            c.get("vname") or
+            tel
+        ).strip()
+
+        existente = Cliente.query.filter_by(telefone=tel, usuario_crm_id=user_id).first()
+        if existente:
+            if modo == "atualizar":
+                if nome and nome != tel:
+                    existente.nome = nome
+                atualizados += 1
+            else:
+                duplicados += 1
+            continue
+
+        novo = Cliente(
+            usuario_crm_id=user_id,
+            nome=nome,
+            telefone=tel,
+            email=f"{tel}@importado.zapi",
+            tipo_pessoa="Física",
+        )
+        db.session.add(novo)
+        inseridos += 1
+
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"erro": f"Erro ao salvar no banco: {str(e)}"}), 500
+
+    return jsonify({
+        "inseridos":  inseridos,
+        "atualizados": atualizados,
+        "duplicados":  duplicados,
+        "ignorados":   ignorados,
+    })
+
+
+@app.route("/api/zapi/contacts/add", methods=["POST"])
+@login_required
+@permission_required('clientes')
+def zapi_add_contacts():
+    """Salva contatos na agenda do celular via Z-API.
+
+    Body JSON: { "contacts": [{"firstName": "...", "lastName": "...", "phone": "..."}] }
+    Aceita também { "cliente_id": <int> } para enviar um único cliente do CRM.
+    """
+    usuario_principal_id = current_user.get_usuario_principal_id()
+    usuario = UsuarioCRM.query.get(usuario_principal_id)
+
+    inst    = (usuario.api_instance if usuario else None) or instance
+    tok     = (usuario.api_token    if usuario else None) or token
+    cli_tok = client_token
+
+    if not inst or not tok:
+        return jsonify({"erro": "Instância ou token Z-API não configurados."}), 400
+
+    data = request.get_json(silent=True) or {}
+
+    # Atalho: enviar um único cliente do CRM pelo ID
+    if "cliente_id" in data:
+        cliente = Cliente.query.filter_by(
+            id=data["cliente_id"],
+            usuario_crm_id=usuario_principal_id
+        ).first()
+        if not cliente:
+            return jsonify({"erro": "Cliente não encontrado."}), 404
+
+        partes = (cliente.nome or "").split(" ", 1)
+        contacts_payload = [{
+            "firstName": partes[0],
+            "lastName":  partes[1] if len(partes) > 1 else "",
+            "phone":     normalize_phone(cliente.telefone) or cliente.telefone or "",
+        }]
+    else:
+        contacts_payload = data.get("contacts")
+        if not contacts_payload or not isinstance(contacts_payload, list):
+            return jsonify({"erro": "Envie {contacts: [{firstName, phone, ...}]} ou {cliente_id: <id>}."}), 400
+
+        # Validação mínima
+        for c in contacts_payload:
+            if not c.get("firstName") or not c.get("phone"):
+                return jsonify({"erro": "Cada contato precisa de 'firstName' e 'phone'."}), 400
+
+    url = f"https://api.z-api.io/instances/{inst}/token/{tok}/contacts/add"
+    req_headers = {"client-token": cli_tok, "Content-Type": "application/json"}
+
+    try:
+        resp = requests.post(url, json=contacts_payload, headers=req_headers, timeout=15)
+        try:
+            resp_json = resp.json()
+        except Exception:
+            resp_json = {"raw": resp.text[:500]}
+
+        if resp.status_code == 200:
+            return jsonify({
+                "success": resp_json.get("success", True),
+                "errors":  resp_json.get("errors", []),
+            })
+        return jsonify({
+            "erro":    f"Z-API retornou status {resp.status_code}",
+            "detalhe": resp_json,
+        }), resp.status_code
+    except requests.exceptions.RequestException as e:
+        return jsonify({"erro": f"Falha ao conectar com Z-API: {str(e)}"}), 502
+
+
 @app.route("/cliente/<int:id>/excluir", methods=["POST"])
 @login_required
 @permission_required('clientes')
