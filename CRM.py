@@ -1,3 +1,11 @@
+import sys, io
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
 from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, session, g, send_file
 from flask_socketio import SocketIO, join_room
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
@@ -372,7 +380,7 @@ def _worker_disparo(campaign_id: int):
                 'falhos':      camp.falhos   or 0,
                 'total':       camp.total    or 0,
                 'status':      camp.status,
-            }, broadcast=True)
+            })
 
             time.sleep(camp.delay_segundos or 2.0)
 
@@ -426,7 +434,7 @@ def verificar_tarefas_proximas():
                     "prioridade": tarefa.prioridade,
                     "usuario_crm_id": tarefa.usuario_crm_id
                 }
-                socketio.emit('notificacao_tarefa', payload, broadcast=True)
+                socketio.emit('notificacao_tarefa', payload)
                 tarefa.lembrete_enviado = True
 
             if tarefas:
@@ -742,8 +750,15 @@ def parametrizacoes():
         # Atualizar mensagens automáticas
         param.mensagem_boas_vindas = request.form.get('mensagem_boas_vindas', '')
         param.mensagem_ausencia = request.form.get('mensagem_ausencia', '')
-        param.mensagem_encerramento = request.form.get('mensagem_encerramento', '')
         param.mensagem_nps = request.form.get('mensagem_nps', '')
+        param.mensagem_followup = request.form.get('mensagem_followup', '').strip() or None
+        dias_followup_str = request.form.get('dias_followup', '').strip()
+        param.dias_followup = int(dias_followup_str) if dias_followup_str.isdigit() and int(dias_followup_str) > 0 else None
+        horario_followup_str = request.form.get('horario_followup', '').strip()
+        if horario_followup_str:
+            param.horario_followup = datetime.strptime(horario_followup_str, '%H:%M').time()
+        else:
+            param.horario_followup = None
         
         # Atualizar configurações
         param.resposta_automatica_ativa = 'resposta_automatica_ativa' in request.form
@@ -1142,8 +1157,9 @@ def enviar_pesquisa_nps(cliente):
     print(f"\n🔍 === INICIANDO ENVIO DE NPS ===")
     print(f"📋 Cliente: {cliente.nome}")
     print(f"📞 Telefone original: {cliente.telefone}")
-    
-    mensagem = f"""Olá {cliente.nome}! 👋
+
+    # Usar mensagem_nps da parametrização do usuário dono, se configurada
+    _mensagem_nps_padrao = f"""Olá {cliente.nome}! 👋
 
 Obrigado por fechar negócio conosco! 🎉
 
@@ -1154,11 +1170,25 @@ Em uma escala de 0 a 10, o quanto você recomendaria nossa empresa para um amigo
 
 Por favor, responda apenas com um número de 0 a 10."""
 
+    _param_nps = None
+    if cliente.usuario_crm_id:
+        _param_nps = Parametrizacao.query.filter_by(usuario_crm_id=cliente.usuario_crm_id).first()
+
+    if _param_nps and _param_nps.mensagem_nps:
+        mensagem = _param_nps.mensagem_nps.replace('{nome}', cliente.nome)
+    else:
+        mensagem = _mensagem_nps_padrao
+
     numero_norm = normalize_phone(cliente.telefone)
     print(f"📞 Telefone normalizado: {numero_norm}")
-    
+
+    # Usar credenciais Z-API do usuário dono do cliente
+    _usuario_dono_nps = UsuarioCRM.query.get(cliente.usuario_crm_id) if cliente.usuario_crm_id else None
+    _inst_nps = (_usuario_dono_nps.api_instance if _usuario_dono_nps and _usuario_dono_nps.api_instance else None)
+    _tok_nps = (_usuario_dono_nps.api_token if _usuario_dono_nps and _usuario_dono_nps.api_token else None)
+
     print(f"📤 Enviando mensagem via Z-API...")
-    resultado = enviar_whatsapp_zapi(numero_norm, mensagem)
+    resultado = enviar_whatsapp_zapi(numero_norm, mensagem, instance_id=_inst_nps, token_id=_tok_nps)
     
     print(f"📥 Resultado do envio: {resultado}")
     
@@ -2728,20 +2758,20 @@ def receber_mensagem_webhook():
     # Descobrir a qual usuário CRM essa mensagem pertence
     usuario_crm_id = None
 
-    # 1ª tentativa: pelo cliente cadastrado
-    cliente_temp = find_cliente_by_phone(numero)
-    if cliente_temp and cliente_temp.usuario_crm_id:
-        usuario_crm_id = cliente_temp.usuario_crm_id
-        print(f"✅ Mensagem associada ao usuário CRM ID: {usuario_crm_id} (via cliente)")
+    # 1ª tentativa: pelo instanceId da Z-API no payload (mais confiável — indica qual conta recebeu)
+    instance_id_payload = data.get("instanceId") or data.get("instance_id") or data.get("instanceid")
+    if instance_id_payload:
+        usuario_por_instancia = UsuarioCRM.query.filter_by(api_instance=str(instance_id_payload)).first()
+        if usuario_por_instancia:
+            usuario_crm_id = usuario_por_instancia.id
+            print(f"✅ Mensagem associada ao usuário CRM ID: {usuario_crm_id} (via instanceId: {instance_id_payload})")
 
-    # 2ª tentativa: pelo instanceId da Z-API no payload
+    # 2ª tentativa: pelo cliente cadastrado (somente se instanceId não identificou)
     if not usuario_crm_id:
-        instance_id_payload = data.get("instanceId") or data.get("instance_id") or data.get("instanceid")
-        if instance_id_payload:
-            usuario_por_instancia = UsuarioCRM.query.filter_by(api_instance=str(instance_id_payload)).first()
-            if usuario_por_instancia:
-                usuario_crm_id = usuario_por_instancia.id
-                print(f"✅ Mensagem associada ao usuário CRM ID: {usuario_crm_id} (via instanceId: {instance_id_payload})")
+        cliente_temp = find_cliente_by_phone(numero)
+        if cliente_temp and cliente_temp.usuario_crm_id:
+            usuario_crm_id = cliente_temp.usuario_crm_id
+            print(f"✅ Mensagem associada ao usuário CRM ID: {usuario_crm_id} (via cliente)")
 
     # 3ª tentativa: pelo contato de disparo (caso seja resposta a um disparo)
     if not usuario_crm_id:
@@ -2812,26 +2842,49 @@ def receber_mensagem_webhook():
                 mensagem_auto = None
                 tipo_resposta = None
 
-                if fora_do_horario and param_auto.mensagem_ausencia:
-                    # Fora do horário configurado → mensagem de ausência
-                    mensagem_auto = param_auto.mensagem_ausencia
-                    tipo_resposta = "ausência"
-                    print(f"⏰ Fora do horário de atendimento - preparando mensagem de ausência")
-                elif not horario_configurado and param_auto.mensagem_ausencia:
-                    # Sem horário definido e mensagem de ausência configurada → sempre envia ausência
-                    mensagem_auto = param_auto.mensagem_ausencia
-                    tipo_resposta = "ausência (sem horário definido)"
-                    print(f"⏰ Sem horário configurado - preparando mensagem de ausência")
-                elif horario_configurado and not fora_do_horario and param_auto.mensagem_boas_vindas:
-                    # Dentro do horário → mensagem de boas-vindas na primeira mensagem do cliente
-                    qtd_msgs_anteriores = WhatsAppMensagem.query.filter(
-                        WhatsAppMensagem.numero == numero,
-                        WhatsAppMensagem.id != msg.id
-                    ).count()
-                    if qtd_msgs_anteriores == 0:
-                        mensagem_auto = param_auto.mensagem_boas_vindas
-                        tipo_resposta = "boas-vindas"
-                        print(f"👋 Primeira mensagem do cliente - preparando mensagem de boas-vindas")
+                if horario_configurado:
+                    if fora_do_horario:
+                        # Fora do horário → ausência apenas na primeira mensagem
+                        if param_auto.mensagem_ausencia:
+                            qtd_msgs_anteriores = WhatsAppMensagem.query.filter(
+                                WhatsAppMensagem.numero == numero,
+                                WhatsAppMensagem.id != msg.id
+                            ).count()
+                            if qtd_msgs_anteriores == 0:
+                                mensagem_auto = param_auto.mensagem_ausencia
+                                tipo_resposta = "ausência"
+                                print(f"Fora do horario de atendimento - preparando mensagem de ausencia")
+                    else:
+                        # Dentro do horário → boas-vindas na primeira mensagem
+                        if param_auto.mensagem_boas_vindas:
+                            qtd_msgs_anteriores = WhatsAppMensagem.query.filter(
+                                WhatsAppMensagem.numero == numero,
+                                WhatsAppMensagem.id != msg.id
+                            ).count()
+                            if qtd_msgs_anteriores == 0:
+                                mensagem_auto = param_auto.mensagem_boas_vindas
+                                tipo_resposta = "boas-vindas"
+                                print(f"Primeira mensagem do cliente (dentro do horario) - preparando boas-vindas")
+                else:
+                    # Sem horário configurado → boas-vindas na primeira mensagem
+                    if param_auto.mensagem_boas_vindas:
+                        qtd_msgs_anteriores = WhatsAppMensagem.query.filter(
+                            WhatsAppMensagem.numero == numero,
+                            WhatsAppMensagem.id != msg.id
+                        ).count()
+                        if qtd_msgs_anteriores == 0:
+                            mensagem_auto = param_auto.mensagem_boas_vindas
+                            tipo_resposta = "boas-vindas"
+                            print(f"👋 Primeira mensagem do cliente (sem horário configurado) - preparando boas-vindas")
+                    elif param_auto.mensagem_ausencia:
+                        qtd_msgs_anteriores = WhatsAppMensagem.query.filter(
+                            WhatsAppMensagem.numero == numero,
+                            WhatsAppMensagem.id != msg.id
+                        ).count()
+                        if qtd_msgs_anteriores == 0:
+                            mensagem_auto = param_auto.mensagem_ausencia
+                            tipo_resposta = "ausência (sem horário definido)"
+                            print(f"⏰ Sem horário configurado - preparando mensagem de ausência")
 
                 if mensagem_auto:
                     if usuario_dono and usuario_dono.api_instance and usuario_dono.api_token:
@@ -2864,7 +2917,7 @@ def receber_mensagem_webhook():
 
     try:
         socketio.emit("nova_mensagem", payload, room=numero)
-        socketio.emit("nova_mensagem", payload, broadcast=True)
+        socketio.emit("nova_mensagem", payload)
         print(f"✅ Mensagem emitida via WebSocket para sala: {numero}")
         print(f"✅ Mensagem emitida via broadcast para todos")
     except Exception as e:
@@ -2934,7 +2987,7 @@ def webhook_delivery_zapi():
         "id": msg.id,
         "numero": msg.numero,
         "status": msg.status
-    }, broadcast=True)
+    })
 
     return {"status": "ok"}, 200
 
@@ -3077,7 +3130,7 @@ def marcar_conversa_lida(numero):
     db.session.commit()
 
     # Emitir evento para atualizar badge
-    socketio.emit('conversa_lida', {'numero': numero_norm}, broadcast=True)
+    socketio.emit('conversa_lida', {'numero': numero_norm})
 
     return jsonify({"status": "ok"})
 
@@ -3114,6 +3167,34 @@ def arquivar_conversa(numero):
         db.session.add(config)
     config.arquivada = arquivada
     db.session.commit()
+
+    # Ao arquivar (encerrar) a conversa, disparar mensagem de encerramento parametrizada
+    if arquivada:
+        try:
+            param_enc = Parametrizacao.query.filter_by(usuario_crm_id=user_id).first()
+            if param_enc and param_enc.mensagem_encerramento:
+                usuario_dono_enc = UsuarioCRM.query.get(user_id)
+                inst_enc = usuario_dono_enc.api_instance if usuario_dono_enc else None
+                tok_enc = usuario_dono_enc.api_token if usuario_dono_enc else None
+                resultado_enc = enviar_whatsapp_zapi(
+                    numero_norm, param_enc.mensagem_encerramento,
+                    instance_id=inst_enc, token_id=tok_enc
+                )
+                if resultado_enc.get('status') == 'Sucesso':
+                    msg_enc = WhatsAppMensagem(
+                        numero=numero_norm,
+                        remetente="Você",
+                        mensagem=param_enc.mensagem_encerramento,
+                        recebido_em=datetime.utcnow(),
+                        usuario_crm_id=user_id
+                    )
+                    db.session.add(msg_enc)
+                    db.session.commit()
+                    print(f"✅ Mensagem de encerramento enviada para {numero_norm}")
+                else:
+                    print(f"⚠️ Falha ao enviar encerramento: {resultado_enc.get('detalhe')}")
+        except Exception as e:
+            print(f"❌ Erro ao enviar mensagem de encerramento: {e}")
 
     return jsonify({"status": "ok", "arquivada": arquivada})
 
@@ -3870,14 +3951,33 @@ def ultimas_notificacoes():
     
     user_id = get_usuario_filter()
     
-    # Obter todas as mensagens filtradas por usuário (inclui as sem vínculo de usuário)
     if user_id:
-        all_msgs = db.session.query(WhatsAppMensagem).filter(
-            db.or_(
-                WhatsAppMensagem.usuario_crm_id == user_id,
-                WhatsAppMensagem.usuario_crm_id == None
-            )
-        ).order_by(WhatsAppMensagem.recebido_em.desc()).all()
+        # Descobrir todos os números com quem o usuário já trocou mensagens (enviadas por ele)
+        numeros_do_usuario = db.session.query(WhatsAppMensagem.numero).filter(
+            WhatsAppMensagem.usuario_crm_id == user_id
+        ).distinct().all()
+        numeros_do_usuario = [normalize_phone(r[0]) for r in numeros_do_usuario if r[0]]
+
+        # Buscar mensagens que:
+        # - pertencem diretamente ao usuário, OU
+        # - são de números com quem o usuário já conversou (inclui respostas de clientes),OU
+        # - não têm usuário vinculado (orphans)
+        from sqlalchemy import or_, and_
+        if numeros_do_usuario:
+            all_msgs = db.session.query(WhatsAppMensagem).filter(
+                or_(
+                    WhatsAppMensagem.usuario_crm_id == user_id,
+                    WhatsAppMensagem.usuario_crm_id == None,
+                    WhatsAppMensagem.numero.in_(numeros_do_usuario)
+                )
+            ).order_by(WhatsAppMensagem.recebido_em.desc()).all()
+        else:
+            all_msgs = db.session.query(WhatsAppMensagem).filter(
+                or_(
+                    WhatsAppMensagem.usuario_crm_id == user_id,
+                    WhatsAppMensagem.usuario_crm_id == None
+                )
+            ).order_by(WhatsAppMensagem.recebido_em.desc()).all()
     else:
         all_msgs = db.session.query(WhatsAppMensagem).order_by(
             WhatsAppMensagem.recebido_em.desc()
@@ -3920,7 +4020,7 @@ def ultimas_notificacoes():
     
     print(f"📤 Retornando {len(resultado)} conversas únicas para o frontend")
     
-    return jsonify(resultado[:20])  # Limitar a 20 conversas
+    return jsonify(resultado[:50])  # Limite aumentado para 50 conversas
 
 
 @app.route("/api/clientes/busca")
@@ -4041,12 +4141,20 @@ def buscar_produtos():
 def carregar_mensagens(numero):
     numero_norm = normalize_phone(numero)
 
-    # Busca TODAS as mensagens do número, independente de usuario_crm_id.
-    # A isolação por tenant já é feita em /canais/ultimas (lista de conversas).
-    # Filtrar aqui causaria sumiço de mensagens quando webhook atribui a um
-    # usuario_crm_id diferente do logado.
-    msgs = WhatsAppMensagem.query.filter_by(
-        numero=numero_norm
+    # Busca todas as mensagens do número.
+    # Inclui sufixos variantes (11 e 9 dígitos) para cobrir variações de formato.
+    from sqlalchemy import or_
+    sufixo_11 = numero_norm[-11:] if len(numero_norm) >= 11 else None
+    sufixo_9  = numero_norm[-9:]  if len(numero_norm) >= 9  else None
+
+    filtros = [WhatsAppMensagem.numero == numero_norm]
+    if sufixo_11:
+        filtros.append(WhatsAppMensagem.numero.like(f"%{sufixo_11}"))
+    if sufixo_9:
+        filtros.append(WhatsAppMensagem.numero.like(f"%{sufixo_9}"))
+
+    msgs = WhatsAppMensagem.query.filter(
+        or_(*filtros)
     ).order_by(WhatsAppMensagem.recebido_em.asc()).all()
     
     mensagens_list = []
@@ -4145,8 +4253,7 @@ def send_message(ticket_id):
 
     socketio.emit(
         "ticket_update",
-        {"ticket_id": ticket.id},
-        broadcast=True
+        {"ticket_id": ticket.id}
     )
 
     return {"sent": True}
@@ -4883,7 +4990,7 @@ def emitir_novo_contato(cliente):
         'id': cliente.id,
         'nome': cliente.nome,
         'telefone': cliente.telefone
-    }, broadcast=True)
+    })
 
 
 # ==================== DISPAROS DE WHATSAPP ====================
@@ -5206,12 +5313,18 @@ def webhook_zapi_disparo():
 
 
 if __name__ == '__main__':
-    # Ao iniciar, campanhas em_envio interrompidas viram pausadas
+    # Ao iniciar, campanhas em_envio interrompidas: se sem pendentes -> concluido, senão -> pausado
     with app.app_context():
         try:
             interrompidas = DisparoWpp.query.filter_by(status='em_envio').all()
             for c in interrompidas:
-                c.status = 'pausado'
+                pendentes = DisparoWppContato.query.filter_by(disparo_id=c.id, status='pendente').count()
+                if pendentes == 0:
+                    c.status = 'concluido'
+                    if not c.concluido_em:
+                        c.concluido_em = datetime.utcnow()
+                else:
+                    c.status = 'pausado'
             if interrompidas:
                 db.session.commit()
         except Exception:
@@ -5227,12 +5340,113 @@ if __name__ == '__main__':
             logger.error(f"❌ Erro ao inicializar banco: {e}")
 
     print("=" * 60)
-    print("✅ CRM Multi-Tenant com RLS Ativo")
-    print("✅ Servidor rodando em: http://127.0.0.1:5000")
+    print("CRM Multi-Tenant com RLS Ativo")
+    print("Servidor rodando em: http://127.0.0.1:5000")
     print("=" * 60)
 
+    # Auto-atualiza webhook do Z-API se ngrok estiver rodando
+    def auto_update_webhooks_startup():
+        import time, threading
+        time.sleep(4)
+        with app.app_context():
+            try:
+                r = requests.get("http://localhost:4040/api/tunnels", timeout=3)
+                tunnels = r.json().get("tunnels", [])
+                public_url = next((t["public_url"] for t in tunnels if t["proto"] == "https"), None)
+                if not public_url:
+                    return
+                webhook_url  = public_url + "/canais/webhook"
+                delivery_url = public_url + "/canais/webhook/delivery"
+                usuarios = UsuarioCRM.query.filter(
+                    UsuarioCRM.api_instance.isnot(None),
+                    UsuarioCRM.api_token.isnot(None)
+                ).all()
+                for u in usuarios:
+                    if not u.api_instance or not u.api_token:
+                        continue
+                    base = f"https://api.z-api.io/instances/{u.api_instance.strip()}/token/{u.api_token.strip()}"
+                    try:
+                        requests.put(f"{base}/update-webhook-received",  json={"value": webhook_url},  headers=headers, timeout=10)
+                        requests.put(f"{base}/update-webhook-delivery",  json={"value": delivery_url}, headers=headers, timeout=10)
+                        print(f"Webhook atualizado para usuario {u.id}: {webhook_url}")
+                    except Exception as e:
+                        print(f"Erro ao atualizar webhook usuario {u.id}: {e}")
+            except Exception:
+                pass
+
+    import threading
+    threading.Thread(target=auto_update_webhooks_startup, daemon=True).start()
+
+    # Thread de follow-up automático pós-venda
+    def followup_worker():
+        import time as time_mod
+        while True:
+            time_mod.sleep(3600)  # Verifica a cada 1 hora
+            try:
+                with app.app_context():
+                    from datetime import date as date_type
+                    hoje = date_type.today()
+                    # Para cada usuário com follow-up configurado
+                    params_followup = Parametrizacao.query.filter(
+                        Parametrizacao.mensagem_followup.isnot(None),
+                        Parametrizacao.dias_followup.isnot(None)
+                    ).all()
+                    for param_f in params_followup:
+                        if not param_f.mensagem_followup or not param_f.dias_followup:
+                            continue
+                        usuario_dono = UsuarioCRM.query.get(param_f.usuario_crm_id)
+                        if not usuario_dono or not usuario_dono.api_instance or not usuario_dono.api_token:
+                            continue
+                        # Mesas ganhas cujo follow-up ainda não foi enviado
+                        mesas_pendentes = MesaNegocio.query.filter(
+                            MesaNegocio.usuario_crm_id == param_f.usuario_crm_id,
+                            MesaNegocio.situacao == 'Ganho',
+                            MesaNegocio.data_fechamento.isnot(None),
+                            MesaNegocio.followup_enviado == False
+                        ).all()
+                        agora_time = datetime.now().time()
+                        for mesa in mesas_pendentes:
+                            dias_passados = (hoje - mesa.data_fechamento).days
+                            if dias_passados < param_f.dias_followup:
+                                continue
+                            # Verificar horário do disparo, se configurado
+                            if param_f.horario_followup:
+                                from datetime import timedelta as td_followup
+                                h = param_f.horario_followup
+                                fim_janela_dt = datetime.combine(datetime.today().date(), h) + td_followup(hours=1)
+                                if not (h <= agora_time <= fim_janela_dt.time()):
+                                    continue
+                            if True:
+                                if not mesa.cliente or not mesa.cliente.telefone:
+                                    continue
+                                numero_dest = normalize_phone(mesa.cliente.telefone)
+                                resultado = enviar_whatsapp_zapi(
+                                    numero_dest,
+                                    param_f.mensagem_followup,
+                                    instance_id=usuario_dono.api_instance,
+                                    token_id=usuario_dono.api_token
+                                )
+                                mesa.followup_enviado = True
+                                mesa.followup_enviado_em = datetime.utcnow()
+                                # Registrar no banco de mensagens
+                                msg_reg = WhatsAppMensagem(
+                                    usuario_crm_id=param_f.usuario_crm_id,
+                                    numero=numero_dest,
+                                    remetente='CRM',
+                                    mensagem=param_f.mensagem_followup,
+                                    recebido_em=datetime.utcnow(),
+                                    status='enviado'
+                                )
+                                db.session.add(msg_reg)
+                                print(f"Follow-up enviado para {mesa.cliente.nome} (mesa #{mesa.id}): {resultado.get('status')}")
+                        db.session.commit()
+            except Exception as e:
+                print(f"Erro na thread de follow-up: {e}")
+
+    threading.Thread(target=followup_worker, daemon=True).start()
+
     # Use socketio.run para suportar corretamente socket.io
-    socketio.run(app, debug=True, host='127.0.0.1', port=5000)
+    socketio.run(app, debug=True, host='127.0.0.1', port=5000, use_reloader=False)
 
 
 

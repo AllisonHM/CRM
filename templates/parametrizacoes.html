@@ -38,12 +38,31 @@
                             </div>
                             
                             <div class="col-12 col-md-6 mb-3">
-                                <label for="mensagem_encerramento" class="form-label">
-                                    Mensagem de Encerramento
+                                <label for="mensagem_followup" class="form-label">
+                                    Mensagem de Follow-up
                                 </label>
-                                <textarea class="form-control" id="mensagem_encerramento" name="mensagem_encerramento" 
-                                          rows="3" placeholder="Mensagem de despedida">{{ param.mensagem_encerramento }}</textarea>
-                                <small class="text-muted">Mensagem de despedida ao cliente</small>
+                                <textarea class="form-control" id="mensagem_followup" name="mensagem_followup"
+                                          rows="3" placeholder="Ex: Olá! Tudo bem? Queremos saber se ficou satisfeito com sua compra!">{{ param.mensagem_followup or '' }}</textarea>
+                                <small class="text-muted">Enviada automaticamente X dias após o fechamento de uma venda (situação "Ganho")</small>
+                            </div>
+
+                            <div class="col-12 col-md-6 mb-3">
+                                <label for="dias_followup" class="form-label">
+                                    Tempo de Follow-up (dias)
+                                </label>
+                                <input type="number" class="form-control" id="dias_followup" name="dias_followup"
+                                       min="1" max="365" placeholder="Ex: 7"
+                                       value="{{ param.dias_followup or '' }}">
+                                <small class="text-muted">Número de dias após a venda para enviar o follow-up</small>
+                            </div>
+
+                            <div class="col-12 col-md-6 mb-3">
+                                <label for="horario_followup" class="form-label">
+                                    Horário do Disparo
+                                </label>
+                                <input type="time" class="form-control" id="horario_followup" name="horario_followup"
+                                       value="{{ param.horario_followup.strftime('%H:%M') if param.horario_followup else '' }}">
+                                <small class="text-muted">Horário em que o follow-up será disparado (deixe em branco para enviar a qualquer hora)</small>
                             </div>
                             
                             <div class="col-12 col-md-6 mb-3">

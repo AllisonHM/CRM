@@ -1424,7 +1424,36 @@ function handleNewMessage(data) {
 
   // Se for do contato ativo, adicionar no chat
   if (activeContact && activeContact.numero === numeroNorm) {
-    addMessageToUI(remetente, mensagem, new Date().toISOString(), id, tipo_midia || null, arquivo_url || null, data.zapi_message_id || null, data.status || null);
+
+    if (remetente === "Você" && id) {
+      // Evitar duplicata: tentar reaproveitar a bolha otimista já adicionada pelo sendMessage
+      if (seenMessageIds.has(id)) {
+        // ID já registrado — não faz nada (já deduplicado)
+      } else {
+        const container = document.getElementById('messages-container');
+        let claimed = false;
+        if (container) {
+          // Procura bolha enviada sem ID ainda (adicionada otimisticamente) com mesmo texto
+          const candidates = Array.from(container.querySelectorAll('.message-wrapper.sent')).reverse();
+          for (const w of candidates) {
+            if (w.dataset.msgId) continue;
+            const textEl = w.querySelector('.message-text');
+            if (textEl && textEl.textContent === mensagem) {
+              w.dataset.msgId = id;
+              if (data.zapi_message_id) w.dataset.zapiId = data.zapi_message_id;
+              seenMessageIds.add(id);
+              claimed = true;
+              break;
+            }
+          }
+        }
+        if (!claimed) {
+          addMessageToUI(remetente, mensagem, new Date().toISOString(), id, tipo_midia || null, arquivo_url || null, data.zapi_message_id || null, data.status || null);
+        }
+      }
+    } else {
+      addMessageToUI(remetente, mensagem, new Date().toISOString(), id, tipo_midia || null, arquivo_url || null, data.zapi_message_id || null, data.status || null);
+    }
 
     // Se é mensagem do cliente, marcar como lida imediatamente (usuário está vendo)
     if (remetente === "Cliente") {

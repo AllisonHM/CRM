@@ -16,6 +16,7 @@ class UsuarioCRM(UserMixin, db.Model):
     # Credenciais da API Z-API (configuradas pelo super_admin)
     api_instance = db.Column(db.String(255), nullable=True)  # Instance ID da Z-API
     api_token = db.Column(db.String(255), nullable=True)  # Token da API de WhatsApp
+    api_client_token = db.Column(db.String(255), nullable=True)  # Client token da Z-API
     
     dias_quarentena_nps = db.Column(db.Integer, default=30)  # Intervalo mínimo em dias para envio de NPS
     
@@ -115,6 +116,8 @@ class MesaNegocio(db.Model):
     data_registro = db.Column(db.Date, nullable=False)
     hora_registro = db.Column(db.Time, nullable=False)
     data_fechamento = db.Column(db.Date, nullable=True)
+    followup_enviado = db.Column(db.Boolean, default=False)
+    followup_enviado_em = db.Column(db.DateTime, nullable=True)
 
 class Ocorrencia(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -254,6 +257,11 @@ class Parametrizacao(db.Model):
     mensagem_ausencia = db.Column(db.Text, default='No momento estamos ausentes. Retornaremos em breve!')
     mensagem_encerramento = db.Column(db.Text, default='Obrigado pelo contato! Até breve.')
     mensagem_nps = db.Column(db.Text, default='Em uma escala de 0 a 10, o quanto você recomendaria nossos serviços?')
+
+    # Follow-up automático pós-venda
+    mensagem_followup = db.Column(db.Text, nullable=True)
+    dias_followup = db.Column(db.Integer, nullable=True, default=7)
+    horario_followup = db.Column(db.Time, nullable=True)  # Horário do disparo (ex: 09:00)
     
     # Configurações gerais
     horario_atendimento_inicio = db.Column(db.Time, nullable=True)
