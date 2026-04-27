@@ -534,3 +534,127 @@ class DisparoWppContato(db.Model):
     entregue_em      = db.Column(db.DateTime, nullable=True)
     opt_in           = db.Column(db.Boolean, default=True)  # LGPD
 
+
+class Campanha(db.Model):
+    """Representa uma campanha de marketing/vendas."""
+    __tablename__ = 'campanha'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    usuario_crm_id = db.Column(db.Integer, db.ForeignKey('usuario_crm.id'), nullable=False)
+    
+    # Informações Básicas
+    nome = db.Column(db.String(200), nullable=False)
+    descricao = db.Column(db.Text, nullable=True)
+    tipo = db.Column(db.String(50), nullable=False)  # vendas, marketing, relacionamento, nps
+    status = db.Column(db.String(50), default='Ativa')  # Ativa, Pausada, Concluída, Cancelada
+    
+    # Período
+    data_inicio = db.Column(db.Date, nullable=False)
+    data_fim = db.Column(db.Date, nullable=True)
+    
+    # Metas
+    meta_leads = db.Column(db.Integer, nullable=True)  # Quantidade de leads esperados
+    meta_conversao = db.Column(db.Float, nullable=True)  # % de conversão esperada
+    meta_receita = db.Column(db.Float, nullable=True)  # Receita esperada
+    
+    # Produto/Oferta (opcional)
+    produto_principal = db.Column(db.String(200), nullable=True)
+    valor_oferta = db.Column(db.Float, nullable=True)
+    desconto_percentual = db.Column(db.Float, nullable=True)
+    
+    # WhatsApp (automação)
+    mensagem_template = db.Column(db.Text, nullable=True)  # Template para envio
+    envio_automatico = db.Column(db.Boolean, default=False)
+    
+    # Estatísticas (calculadas)
+    total_leads = db.Column(db.Integer, default=0)
+    leads_contatados = db.Column(db.Integer, default=0)
+    leads_convertidos = db.Column(db.Integer, default=0)
+    receita_gerada = db.Column(db.Float, default=0.0)
+    
+    # Timestamps
+    data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
+    data_atualizacao = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    
+    # Relacionamentos
+    leads = db.relationship('LeadCampanha', backref='campanha', lazy=True, cascade='all, delete-orphan')
+    
+    # Propriedades calculadas
+    @property
+    def taxa_conversao(self):
+        """Calcula taxa de conversão da campanha."""
+        if self.total_leads > 0:
+            return round((self.leads_convertidos / self.total_leads) * 100, 2)
+        return 0.0
+    
+    @property
+    def dias_restantes(self):
+        """Calcula dias restantes até o fim da campanha."""
+        if self.data_fim:
+            delta = self.data_fim - datetime.today().date()
+            return max(0, delta.days)
+        return None
+    
+    # Índices para performance
+    __table_args__ = (
+        db.Index('idx_campanha_usuario', 'usuario_crm_id'),
+        db.Index('idx_campanha_status', 'status'),
+    )
+
+
+class LeadCampanha(db.Model):
+    """Representa um lead dentro de uma campanha."""
+    __tablename__ = 'lead_campanha'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    campanha_id = db.Column(db.Integer, db.ForeignKey('campanha.id'), nullable=False)
+    usuario_crm_id = db.Column(db.Integer, db.ForeignKey('usuario_crm.id'), nullable=False)
+    cliente_id = db.Column(db.Integer, db.ForeignKey('cliente.id'), nullable=True)  # Se já existe no CRM
+    
+    # Informações do Lead (importado do CSV/Excel)
+    nome = db.Column(db.String(200), nullable=False)
+    telefone = db.Column(db.String(20), nullable=True)
+    email = db.Column(db.String(200), nullable=True)
+    empresa = db.Column(db.String(200), nullable=True)
+    cargo = db.Column(db.String(100), nullable=True)
+    origem = db.Column(db.String(100), nullable=True)  # CSV, Manual, Site, etc.
+    
+    # Funil de Vendas (Estágios da Campanha)
+    estagio = db.Column(db.String(50), default='Novo')  
+    # Estágios: Novo → Contatado → Qualificado → Proposta → Negociação → Ganho/Perdido
+    
+    # Informações de Contato
+    data_contato = db.Column(db.DateTime, nullable=True)
+    canal_contato = db.Column(db.String(50), nullable=True)  # WhatsApp, Email, Telefone, Presencial
+    responsavel = db.Column(db.String(100), nullable=True)  # Nome do colaborador responsável
+    
+    # Negociação
+    produto_interesse = db.Column(db.String(200), nullable=True)
+    valor_proposta = db.Column(db.Float, nullable=True)
+    valor_fechado = db.Column(db.Float, nullable=True)
+    
+    # Status Final
+    resultado = db.Column(db.String(50), nullable=True)  # Ganho, Perdido, Em andamento
+    motivo_perda = db.Column(db.String(200), nullable=True)  # Se perdido, qual motivo?
+    data_fechamento = db.Column(db.Date, nullable=True)
+    
+    # Observações e Histórico
+    observacoes = db.Column(db.Text, nullable=True)
+    historico_interacoes = db.Column(db.JSON, nullable=True)  
+    # Exemplo: [{"data": "2026-04-26", "tipo": "whatsapp", "texto": "Enviado proposta"}]
+    
+    # Tags personalizadas
+    tags = db.Column(db.JSON, nullable=True)  # ["quente", "decisor", "orçamento-alto"]
+    
+    # Timestamps
+    data_criacao = db.Column(db.DateTime, default=datetime.utcnow)
+    data_atualizacao = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    
+    # Índices para performance
+    __table_args__ = (
+        db.Index('idx_campanha_estagio', 'campanha_id', 'estagio'),
+        db.Index('idx_campanha_resultado', 'campanha_id', 'resultado'),
+        db.Index('idx_lead_telefone', 'telefone'),
+        db.Index('idx_lead_usuario', 'usuario_crm_id'),
+    )
+

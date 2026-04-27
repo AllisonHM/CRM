@@ -15,7 +15,7 @@
   .messages-container-main {
     display: flex;
     height: 78vh;
-    background: #f0f2f5;
+    background: #ecf0f1;
     overflow: hidden;
   }
   
@@ -29,7 +29,7 @@
   }
   
   .sidebar-header {
-    background: #f0f2f5;
+    background: #ecf0f1;
     padding: 15px 20px;
     display: flex;
     justify-content: space-between;
@@ -65,7 +65,7 @@
   
   .search-box {
     padding: 10px 15px;
-    background: #f0f2f5;
+    background: #ecf0f1;
   }
   
   .search-input {
@@ -90,7 +90,7 @@
     align-items: center;
     padding: 12px 15px;
     cursor: pointer;
-    border-bottom: 1px solid #f0f2f5;
+    border-bottom: 1px solid #ecf0f1;
     transition: background 0.2s;
     position: relative;
   }
@@ -104,7 +104,7 @@
   }
   
   .conversation-item.active {
-    background: #f0f2f5;
+    background: #ecf0f1;
   }
   
   .delete-chat-btn {
@@ -218,7 +218,7 @@
   }
   
   .chat-header {
-    background: #f0f2f5;
+    background: #ecf0f1;
     padding: 12px 20px;
     display: flex;
     align-items: center;
@@ -344,7 +344,7 @@
     transition: background .15s;
   }
   .emoji-picker-popup button:hover {
-    background: #f0f2f5;
+    background: #ecf0f1;
   }
   
   @keyframes fadeIn {
@@ -411,7 +411,7 @@
   
   /* Input area */
   .input-area {
-    background: #f0f2f5;
+    background: #ecf0f1;
     padding: 10px 20px;
     display: flex;
     align-items: center;
@@ -451,6 +451,24 @@
   .send-button:disabled {
     background: #ccc;
     cursor: not-allowed;
+  }
+  
+  /* Botões de emoji e anexo */
+  .emoji-btn, .attach-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: transform 0.2s, color 0.2s;
+    font-size: 1.2rem;
+  }
+  
+  .emoji-btn:hover, .attach-btn:hover {
+    transform: scale(1.1);
+    color: #25d366 !important;
+  }
+  
+  .emoji-btn:active, .attach-btn:active {
+    transform: scale(0.95);
   }
   
   /* Empty state */
@@ -709,6 +727,9 @@
         <button class="btn btn-link attach-btn" id="attach-btn" title="Enviar arquivo" style="color:#667781;padding:0 6px">
           <i class="fas fa-paperclip fa-lg"></i>
         </button>
+        <button class="btn btn-link emoji-btn" id="emoji-btn" title="Adicionar emoji" style="color:#667781;padding:0 6px;font-size:1.2rem">
+          😊
+        </button>
         <textarea 
           class="input-box" 
           id="message-input" 
@@ -720,7 +741,7 @@
         </button>
       </div>
       <!-- Preview de upload -->
-      <div id="upload-preview" style="display:none; background:#f0f2f5; padding:8px 20px; align-items:center; gap:10px; border-top:1px solid #e9edef;">
+      <div id="upload-preview" style="display:none; background:#ecf0f1; padding:8px 20px; align-items:center; gap:10px; border-top:1px solid #e9edef;">
         <img id="upload-img-preview" src="" style="max-height:60px; max-width:80px; border-radius:6px; display:none;">
         <span id="upload-file-name" style="font-size:.85rem; color:#111b21; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
         <button onclick="cancelUpload()" style="background:none;border:none;color:#e53e3e;cursor:pointer;font-size:1rem;"><i class="fas fa-times"></i></button>
@@ -843,6 +864,45 @@
     font-size: .9rem;
   }
   .msg-doc:hover { text-decoration: underline; }
+  
+  /* Players de áudio e vídeo */
+  .msg-audio-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.03);
+    border-radius: 8px;
+    margin-bottom: 4px;
+  }
+  .message-bubble.sent .msg-audio-container {
+    background: rgba(255, 255, 255, 0.15);
+  }
+  .msg-audio-player {
+    width: 250px;
+    height: 32px;
+    outline: none;
+  }
+  .msg-audio-download {
+    color: #25d366;
+    font-size: 1.1rem;
+    cursor: pointer;
+    text-decoration: none;
+    padding: 4px 8px;
+    transition: transform 0.2s;
+  }
+  .msg-audio-download:hover {
+    transform: scale(1.2);
+    color: #128c7e;
+  }
+  .msg-video-player {
+    max-width: 280px;
+    max-height: 250px;
+    border-radius: 8px;
+    display: block;
+    margin-bottom: 4px;
+  }
+  
   /* Lightbox simples */
   #img-lightbox {
     display:none; position:fixed; top:0; left:0; right:0; bottom:0;
@@ -1274,12 +1334,46 @@ function _addMessageToContainer(container, sender, text, timestamp, id = null, t
       document.getElementById('img-lightbox').classList.add('show');
     };
     bubble.appendChild(img);
-  } else if ((tipoMidia === 'document' || tipoMidia === 'video' || tipoMidia === 'audio') && arquivoUrl) {
+  } else if (tipoMidia === 'audio' && arquivoUrl) {
+    // Player de áudio HTML5
+    const audioContainer = document.createElement('div');
+    audioContainer.className = 'msg-audio-container';
+    
+    const audioPlayer = document.createElement('audio');
+    audioPlayer.controls = true;
+    audioPlayer.className = 'msg-audio-player';
+    audioPlayer.src = arquivoUrl;
+    audioPlayer.preload = 'metadata';
+    
+    audioContainer.appendChild(audioPlayer);
+    
+    // Link de download alternativo
+    const downloadLink = document.createElement('a');
+    downloadLink.href = arquivoUrl;
+    downloadLink.download = text || 'audio';
+    downloadLink.target = '_blank';
+    downloadLink.className = 'msg-audio-download';
+    downloadLink.innerHTML = '<i class="fas fa-download"></i>';
+    downloadLink.title = 'Baixar áudio';
+    audioContainer.appendChild(downloadLink);
+    
+    bubble.appendChild(audioContainer);
+  } else if (tipoMidia === 'video' && arquivoUrl) {
+    // Player de vídeo HTML5
+    const videoPlayer = document.createElement('video');
+    videoPlayer.controls = true;
+    videoPlayer.className = 'msg-video-player';
+    videoPlayer.src = arquivoUrl;
+    videoPlayer.preload = 'metadata';
+    
+    bubble.appendChild(videoPlayer);
+  } else if (tipoMidia === 'document' && arquivoUrl) {
+    // Link para documento
     const link = document.createElement('a');
     link.href = arquivoUrl;
     link.target = '_blank';
     link.className = 'msg-doc';
-    link.innerHTML = `<i class="fas fa-${tipoMidia === 'audio' ? 'music' : tipoMidia === 'video' ? 'film' : 'file-alt'}"></i> ${text}`;
+    link.innerHTML = `<i class="fas fa-file-alt"></i> ${text}`;
     bubble.appendChild(link);
   } else {
     const textDiv = document.createElement('div');
@@ -1601,6 +1695,12 @@ function setupEventListeners() {
     document.getElementById('file-input').click();
   });
 
+  // Botão de emoji
+  document.getElementById('emoji-btn').addEventListener('click', (e) => {
+    if (!activeContact) { showNotification('Selecione uma conversa primeiro', 'error'); return; }
+    abrirEmojiPickerParaInput(e);
+  });
+
   // Arquivo selecionado
   document.getElementById('file-input').addEventListener('change', (e) => {
     const file = e.target.files[0];
@@ -1871,30 +1971,134 @@ function cancelUpload() {
 }
 
 async function confirmUpload() {
-  if (!pendingFile || !activeContact) return;
+  if (!pendingFile || !activeContact) {
+    console.error('❌ Erro: pendingFile ou activeContact não definido');
+    return;
+  }
+
+  console.log('📤 Iniciando upload de arquivo:', pendingFile.name);
+  console.log('📞 Número destino:', activeContact.numero);
 
   const formData = new FormData();
   formData.append('file', pendingFile);
   formData.append('numero', activeContact.numero);
 
   const fileName = pendingFile.name;
-  const isImage = pendingFile.type.startsWith('image/');
+  const fileType = pendingFile.type;
+  
+  // Detectar tipo de mídia
+  let tipoMidia = 'document';
+  let localUrl = null;
+  
+  if (fileType.startsWith('image/')) {
+    tipoMidia = 'image';
+    localUrl = URL.createObjectURL(pendingFile);
+  } else if (fileType.startsWith('audio/')) {
+    tipoMidia = 'audio';
+    localUrl = URL.createObjectURL(pendingFile);
+  } else if (fileType.startsWith('video/')) {
+    tipoMidia = 'video';
+    localUrl = URL.createObjectURL(pendingFile);
+  }
+
+  console.log('📋 Tipo de mídia detectado:', tipoMidia);
 
   // Mostrar na UI imediatamente com preview local
-  const localUrl = isImage ? URL.createObjectURL(pendingFile) : null;
-  addMessageToUI('Você', fileName, new Date().toISOString(), null,
-    isImage ? 'image' : 'document', localUrl);
+  const wrapper = addMessageToUI('Você', fileName, new Date().toISOString(), null, tipoMidia, localUrl);
+  
+  // Adicionar indicador de envio
+  if (wrapper) {
+    const statusIcon = wrapper.querySelector('.message-status-icon');
+    if (statusIcon) {
+      statusIcon.className = 'fas fa-clock message-status-icon';
+      statusIcon.title = 'Enviando...';
+    }
+  }
 
   cancelUpload();
 
   try {
+    console.log('🌐 Enviando para /canais/upload...');
     const response = await fetch('/canais/upload', { method: 'POST', body: formData });
-    if (!response.ok) throw new Error('Erro no upload');
+    console.log('📥 Status da resposta:', response.status);
+    
     const data = await response.json();
-    console.log('Upload ok:', data);
+    console.log('📦 Resposta completa:', data);
+    
+    if (!response.ok) {
+      throw new Error(data.erro || 'Erro no upload');
+    }
+    
+    if (data.status === 'ok') {
+      console.log('✅ Upload concluído com sucesso!');
+      console.log('🔍 Z-API status:', data.zapi);
+      console.log('📁 URL do arquivo:', data.file_url);
+      
+      // Atualizar URL do arquivo na mensagem (corrigir preview local)
+      if (wrapper && data.file_url) {
+        const link = wrapper.querySelector('.msg-doc');
+        const img = wrapper.querySelector('.msg-image');
+        const audio = wrapper.querySelector('.msg-audio-player');
+        const video = wrapper.querySelector('.msg-video-player');
+        const audioDownload = wrapper.querySelector('.msg-audio-download');
+        
+        if (link) {
+          link.href = data.file_url;
+          console.log('🔗 Link do documento atualizado para:', data.file_url);
+        }
+        
+        if (img) {
+          img.src = data.file_url;
+          console.log('🖼️ Imagem atualizada para:', data.file_url);
+        }
+        
+        if (audio) {
+          audio.src = data.file_url;
+          console.log('🎵 Áudio atualizado para:', data.file_url);
+        }
+        
+        if (video) {
+          video.src = data.file_url;
+          console.log('🎬 Vídeo atualizado para:', data.file_url);
+        }
+        
+        if (audioDownload) {
+          audioDownload.href = data.file_url;
+        }
+      }
+      
+      // Atualizar ícone de status
+      if (wrapper) {
+        const statusIcon = wrapper.querySelector('.message-status-icon');
+        if (statusIcon) {
+          if (data.zapi === 'Sucesso') {
+            statusIcon.className = 'fas fa-check message-status-icon';
+            statusIcon.title = 'Enviado';
+            showNotification('Arquivo enviado com sucesso!', 'success');
+          } else {
+            statusIcon.className = 'fas fa-exclamation-triangle message-status-icon';
+            statusIcon.title = 'Salvo mas não enviado via WhatsApp';
+            showNotification('Arquivo salvo, mas não foi possível enviar via WhatsApp', 'error');
+          }
+        }
+      }
+    } else {
+      throw new Error('Resposta inválida do servidor');
+    }
   } catch (err) {
-    console.error('Erro upload:', err);
-    showNotification('Erro ao enviar arquivo', 'error');
+    console.error('❌ Erro no upload:', err);
+    
+    // Marcar mensagem como erro
+    if (wrapper) {
+      const statusIcon = wrapper.querySelector('.message-status-icon');
+      if (statusIcon) {
+        statusIcon.className = 'fas fa-times message-status-icon';
+        statusIcon.title = 'Falha no envio';
+        statusIcon.style.color = '#e53e3e';
+      }
+    }
+    
+    showNotification('Erro ao enviar arquivo: ' + err.message, 'error');
   }
 }
 
@@ -2068,8 +2272,55 @@ document.getElementById('edit-modal').addEventListener('click', function(e) {
 const EMOJIS_RAPIDOS = ['❤️','😂','😮','😢','🙏','👍','👎','🙌',
   '🔥','🎉','💩','😍','🤔','😱','🤣','👏','✅','🚀'];
 
+// Emojis para o input de mensagem (categorias expandidas)
+const EMOJIS_MENSAGEM = [
+  // Rostos e emoções
+  '😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇',
+  '🥰','😍','🤩','😘','😗','😚','😙','🥲','😋','😛','😜','🤪','😝',
+  '🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑','😶','😏','😒','🙄',
+  '😬','🤥','😌','😔','😪','🤤','😴','😷','🤒','🤕','🤢','🤮','🤧',
+  '🥵','🥶','😶‍🌫️','😵','😵‍💫','🤯','🤠','🥳','🥸','😎','🤓','🧐',
+  '😕','😟','🙁','☹️','😮','😯','😲','😳','🥺','😦','😧','😨','😰',
+  '😥','😢','😭','😱','😖','😣','😞','😓','😩','😫','🥱','😤','😡',
+  '😠','🤬','😈','👿','💀','☠️','💩','🤡','👹','👺','👻','👽','👾',
+  '🤖','😺','😸','😹','😻','😼','😽','🙀','😿','😾',
+  // Gestos e mãos
+  '👋','🤚','🖐️','✋','🖖','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙',
+  '👈','👉','👆','🖕','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏',
+  '🙌','👐','🤲','🤝','🙏','✍️','💅','🤳','💪','🦾','🦿','🦵','🦶',
+  // Corações e símbolos
+  '❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❤️‍🔥','❤️‍🩹',
+  '❣️','💕','💞','💓','💗','💖','💘','💝','💟','☮️','✝️','☪️','🕉️',
+  '☸️','✡️','🔯','🕎','☯️','☦️','🛐','⛎','♈','♉','♊','♋','♌','♍',
+  '♎','♏','♐','♑','♒','♓','🆔','⚛️','🉑','☢️','☣️','📴','📳','🈶',
+  // Objetos e atividades
+  '⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🥏','🎱','🪀','🏓','🏸',
+  '🏒','🏑','🥍','🏏','🪃','🥅','⛳','🪁','🏹','🎣','🤿','🥊','🥋',
+  '🎽','🛹','🛼','🛷','⛸️','🥌','🎿','⛷️','🏂','🪂','🏋️','🤼','🤸',
+  '⛹️','🤺','🤾','🏌️','🏇','🧘','🏊','🤽','🚣','🧗','🚵','🚴','🏆',
+  '🥇','🥈','🥉','🏅','🎖️','🏵️','🎗️','🎫','🎟️','🎪','🤹','🎭','🩰',
+  '🎨','🎬','🎤','🎧','🎼','🎹','🥁','🪘','🎷','🎺','🪗','🎸','🪕',
+  '🎻','🎲','♟️','🎯','🎳','🎮','🎰','🧩',
+  // Natureza
+  '🌍','🌎','🌏','🌐','🗺️','🗾','🧭','🏔️','⛰️','🌋','🗻','🏕️','🏖️',
+  '🏜️','🏝️','🏞️','🏟️','🏛️','🏗️','🧱','🪨','🪵','🛖','🏘️','🏚️',
+  '🔥','💧','🌊','🌈','☀️','🌤️','⛅','🌥️','☁️','🌦️','🌧️','⛈️','🌩️',
+  '🌨️','❄️','☃️','⛄','🌬️','💨','💫','⭐','🌟','✨','⚡','☄️','💥',
+  // Comida
+  '🍏','🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍈','🍒','🍑',
+  '🥭','🍍','🥥','🥝','🍅','🍆','🥑','🥦','🥬','🥒','🌶️','🫑','🌽',
+  '🥕','🫒','🧄','🧅','🥔','🍠','🥐','🥯','🍞','🥖','🥨','🧀','🥚',
+  '🍳','🧈','🥞','🧇','🥓','🥩','🍗','🍖','🦴','🌭','🍔','🍟','🍕',
+  '🫓','🥪','🥙','🧆','🌮','🌯','🫔','🥗','🥘','🫕','🥫','🍝','🍜',
+  '🍲','🍛','🍣','🍱','🥟','🦪','🍤','🍙','🍚','🍘','🍥','🥠','🥮',
+  '🍢','🍡','🍧','🍨','🍦','🥧','🧁','🍰','🎂','🍮','🍭','🍬','🍫',
+  '🍿','🍩','🍪','🌰','🥜','🍯','🥛','🍼','🫖','☕','🍵','🧃','🥤',
+  '🧋','🍶','🍺','🍻','🥂','🍷','🥃','🍸','🍹','🧉','🍾','🧊'
+];
+
 let emojiPickerEl = null;
 let emojiPickerWrapper = null;
+let emojiPickerType = null; // 'reaction' ou 'input'
 
 function abrirEmojiPicker(event, wrapper) {
   // Fechar picker anterior se existir
@@ -2083,6 +2334,7 @@ function abrirEmojiPicker(event, wrapper) {
   }
 
   emojiPickerWrapper = wrapper;
+  emojiPickerType = 'reaction';
 
   const picker = document.createElement('div');
   picker.className = 'emoji-picker-popup';
@@ -2110,17 +2362,81 @@ function abrirEmojiPicker(event, wrapper) {
   emojiPickerEl = picker;
 }
 
+// Nova função para abrir emoji picker no input de mensagem
+function abrirEmojiPickerParaInput(event) {
+  // Fechar picker anterior se existir
+  if (emojiPickerEl && emojiPickerType === 'input') {
+    fecharEmojiPicker();
+    return;
+  }
+  if (emojiPickerEl) {
+    emojiPickerEl.remove();
+  }
+
+  emojiPickerType = 'input';
+
+  const picker = document.createElement('div');
+  picker.className = 'emoji-picker-popup';
+  picker.style.maxWidth = '320px';
+  picker.style.maxHeight = '300px';
+  picker.style.overflowY = 'auto';
+
+  EMOJIS_MENSAGEM.forEach(emoji => {
+    const btn = document.createElement('button');
+    btn.textContent = emoji;
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      inserirEmojiNoInput(emoji);
+    };
+    picker.appendChild(btn);
+  });
+
+  // Posicionar relativo ao botão de emoji
+  const rect = event.target.closest('#emoji-btn').getBoundingClientRect();
+  picker.style.position = 'fixed';
+  picker.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+  const leftPos = Math.max(10, Math.min(rect.left, window.innerWidth - 330));
+  picker.style.left = leftPos + 'px';
+
+  document.body.appendChild(picker);
+  emojiPickerEl = picker;
+}
+
+// Inserir emoji no campo de input
+function inserirEmojiNoInput(emoji) {
+  const input = document.getElementById('message-input');
+  const start = input.selectionStart;
+  const end = input.selectionEnd;
+  const text = input.value;
+  
+  // Inserir emoji na posição do cursor
+  input.value = text.substring(0, start) + emoji + text.substring(end);
+  
+  // Restaurar posição do cursor após o emoji
+  const newPos = start + emoji.length;
+  input.setSelectionRange(newPos, newPos);
+  
+  // Manter foco no input
+  input.focus();
+  
+  // Ajustar altura do textarea se necessário
+  input.style.height = 'auto';
+  input.style.height = Math.min(input.scrollHeight, 100) + 'px';
+}
+
 function fecharEmojiPicker() {
   if (emojiPickerEl) {
     emojiPickerEl.remove();
     emojiPickerEl = null;
     emojiPickerWrapper = null;
+    emojiPickerType = null;
   }
 }
 
 // Fecha picker ao clicar fora
 document.addEventListener('click', function(e) {
-  if (emojiPickerEl && !emojiPickerEl.contains(e.target)) {
+  if (emojiPickerEl && !emojiPickerEl.contains(e.target) && 
+      !e.target.closest('#emoji-btn') && !e.target.closest('.msg-action-btn')) {
     fecharEmojiPicker();
   }
 });

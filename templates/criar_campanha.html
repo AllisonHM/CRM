@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block title %}Nova Campanha{% endblock %}
+
+{% block content %}
+
+<style>
+  .form-campanha {
+    max-width: 800px;
+    margin: 0 auto;
+    background: white;
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  }
+
+  .form-group {
+    margin-bottom: 1.5rem;
+  }
+
+  .form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: var(--primary-purple);
+  }
+
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    font-size: 1rem;
+  }
+
+  .form-group textarea {
+    resize: vertical;
+    min-height: 100px;
+  }
+
+  .form-group small {
+    display: block;
+    margin-top: 0.25rem;
+    color: #6c757d;
+    font-size: 0.875rem;
+  }
+
+  .section-title-form {
+    color: var(--primary-purple);
+    border-bottom: 2px solid var(--primary-purple);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1.5rem;
+    margin-top: 2rem;
+  }
+
+  .section-title-form:first-child {
+    margin-top: 0;
+  }
+
+  .btn-submit {
+    background: var(--gradient-primary);
+    color: white;
+    border: none;
+    padding: 0.75rem 2rem;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.3s;
+  }
+
+  .btn-submit:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(74, 35, 90, 0.3);
+  }
+
+  .btn-cancel {
+    background: #6c757d;
+    color: white;
+    border: none;
+    padding: 0.75rem 2rem;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.3s;
+    margin-right: 1rem;
+  }
+
+  .btn-cancel:hover {
+    background: #5a6268;
+  }
+
+  .row {
+    display: flex;
+    gap: 1rem;
+  }
+
+  .col-6 {
+    flex: 1;
+  }
+</style>
+
+<div class="form-campanha">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="section-title">Nova Campanha</h1>
+    <a href="{{ url_for('mesas_negocio') }}#tab-campanhas" class="btn btn-secondary">
+      <i class="fas fa-arrow-left"></i> Voltar
+    </a>
+  </div>
+
+  <form method="POST">
+    <!-- Informações Básicas -->
+    <h3 class="section-title-form">Informações Básicas</h3>
+
+    <div class="form-group">
+      <label for="nome">Nome da Campanha *</label>
+      <input type="text" id="nome" name="nome" required placeholder="Ex: Black Friday 2026">
+      <small>Escolha um nome descritivo e fácil de identificar</small>
+    </div>
+
+    <div class="form-group">
+      <label for="descricao">Descrição</label>
+      <textarea id="descricao" name="descricao" placeholder="Descreva os objetivos e detalhes desta campanha..."></textarea>
+    </div>
+
+    <div class="row">
+      <div class="col-6">
+        <div class="form-group">
+          <label for="tipo">Tipo de Campanha *</label>
+          <select id="tipo" name="tipo" required>
+            <option value="vendas">Vendas</option>
+            <option value="marketing">Marketing</option>
+            <option value="relacionamento">Relacionamento</option>
+            <option value="nps">NPS / Satisfação</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="col-6">
+        <div class="form-group">
+          <label for="produto_principal">Produto Principal</label>
+          <input type="text" id="produto_principal" name="produto_principal" placeholder="Ex: Pacote Premium">
+        </div>
+      </div>
+    </div>
+
+    <!-- Período -->
+    <h3 class="section-title-form">Período</h3>
+
+    <div class="row">
+      <div class="col-6">
+        <div class="form-group">
+          <label for="data_inicio">Data de Início *</label>
+          <input type="date" id="data_inicio" name="data_inicio" required>
+        </div>
+      </div>
+
+      <div class="col-6">
+        <div class="form-group">
+          <label for="data_fim">Data de Término</label>
+          <input type="date" id="data_fim" name="data_fim">
+          <small>Deixe em branco para campanhas sem prazo definido</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- Metas -->
+    <h3 class="section-title-form">Metas (Opcional)</h3>
+
+    <div class="row">
+      <div class="col-6">
+        <div class="form-group">
+          <label for="meta_leads">Meta de Leads</label>
+          <input type="number" id="meta_leads" name="meta_leads" min="0" placeholder="Ex: 200">
+          <small>Quantos leads você espera captar?</small>
+        </div>
+      </div>
+
+      <div class="col-6">
+        <div class="form-group">
+          <label for="meta_conversao">Meta de Conversão (%)</label>
+          <input type="number" id="meta_conversao" name="meta_conversao" min="0" max="100" step="0.1" placeholder="Ex: 15.5">
+          <small>Qual % de conversão você espera?</small>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="meta_receita">Meta de Receita (R$)</label>
+      <input type="number" id="meta_receita" name="meta_receita" min="0" step="0.01" placeholder="Ex: 100000.00">
+      <small>Quanto você espera faturar com esta campanha?</small>
+    </div>
+
+    <!-- Oferta -->
+    <h3 class="section-title-form">Oferta (Opcional)</h3>
+
+    <div class="row">
+      <div class="col-6">
+        <div class="form-group">
+          <label for="valor_oferta">Valor da Oferta (R$)</label>
+          <input type="number" id="valor_oferta" name="valor_oferta" min="0" step="0.01" placeholder="Ex: 2500.00">
+        </div>
+      </div>
+
+      <div class="col-6">
+        <div class="form-group">
+          <label for="desconto_percentual">Desconto (%)</label>
+          <input type="number" id="desconto_percentual" name="desconto_percentual" min="0" max="100" step="0.1" placeholder="Ex: 30">
+        </div>
+      </div>
+    </div>
+
+    <!-- WhatsApp -->
+    <h3 class="section-title-form">Template WhatsApp (Opcional)</h3>
+
+    <div class="form-group">
+      <label for="mensagem_template">Mensagem Padrão</label>
+      <textarea id="mensagem_template" name="mensagem_template" placeholder="Olá {nome}!&#10;&#10;Vi que você tem interesse em {produto}.&#10;&#10;Temos uma oferta especial!&#10;&#10;Quer saber mais?"></textarea>
+      <small>Variáveis disponíveis: {nome}, {empresa}, {produto}</small>
+    </div>
+
+    <!-- Botões -->
+    <div class="mt-4">
+      <a href="{{ url_for('mesas_negocio') }}#tab-campanhas" class="btn-cancel">Cancelar</a>
+      <button type="submit" class="btn-submit">
+        <i class="fas fa-check"></i> Criar Campanha
+      </button>
+    </div>
+  </form>
+</div>
+
+<script>
+  // Define data de início como hoje por padrão
+  document.addEventListener('DOMContentLoaded', function() {
+    const hoje = new Date().toISOString().split('T')[0];
+    document.getElementById('data_inicio').value = hoje;
+  });
+</script>
+
+{% endblock %}

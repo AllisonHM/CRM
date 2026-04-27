@@ -20,9 +20,11 @@ import io
 import os
 import secrets
 from dotenv import load_dotenv
+import openpyxl
+from werkzeug.utils import secure_filename
 from flask_migrate import Migrate
 from database_rls import db, tenant_db, init_db
-from models import Cliente, MesaNegocio, Ocorrencia, WhatsAppMensagem, ChatbotRegra, Produto, Movimentacao, PlannerEvento, UsuarioCRM, ConfiguracaoUsuario, Parametrizacao, Tarefa, Fornecedor, FacebookPage, Conversation, Message, ConversaConfig, DisparoWpp, DisparoWppContato
+from models import Cliente, MesaNegocio, Ocorrencia, WhatsAppMensagem, ChatbotRegra, Produto, Movimentacao, PlannerEvento, UsuarioCRM, ConfiguracaoUsuario, Parametrizacao, Tarefa, Fornecedor, FacebookPage, Conversation, Message, ConversaConfig, DisparoWpp, DisparoWppContato, Campanha, LeadCampanha
 from sqlalchemy import or_, and_
 
 # Carrega variáveis do arquivo .env (se existir)
@@ -1843,9 +1845,11 @@ def mesas_negocio():
     user_id = get_usuario_filter()
     if user_id:
         mesas = MesaNegocio.query.filter_by(usuario_crm_id=user_id).all()
+        campanhas = Campanha.query.filter_by(usuario_crm_id=user_id).order_by(Campanha.data_criacao.desc()).all()
     else:
         mesas = MesaNegocio.query.all()
-    return render_template("mesas_negocio.html", mesas=mesas)
+        campanhas = Campanha.query.order_by(Campanha.data_criacao.desc()).all()
+    return render_template("mesas_negocio.html", mesas=mesas, campanhas=campanhas)
 
 @app.route("/mesas/<int:id>")
 @login_required
@@ -1853,6 +1857,211 @@ def mesas_negocio():
 def detalhe_mesa(id):
     mesa = MesaNegocio.query.get_or_404(id)
     return render_template("detalhe_mesa.html", mesa=mesa)
+
+# --- CAMPANHAS ---
+@app.route("/campanhas/criar", methods=['GET', 'POST'])
+@login_required
+@permission_required('mesas')  # Usa a mesma permissão de negócios
+def criar_campanha():
+    if request.method == 'POST':
+        usuario_principal_id = current_user.get_usuario_principal_id()
+        
+        campanha = Campanha(
+            usuario_crm_id=usuario_principal_id,
+            nome=request.form.get('nome'),
+            descricao=request.form.get('descricao'),
+            tipo=request.form.get('tipo', 'vendas'),
+            status='Ativa',
+            data_inicio=datetime.strptime(request.form.get('data_inicio'), '%Y-%m-%d').date(),
+            data_fim=datetime.strptime(request.form.get('data_fim'), '%Y-%m-%d').date() if request.form.get('data_fim') else None,
+            meta_leads=int(request.form.get('meta_leads')) if request.form.get('meta_leads') else None,
+            meta_conversao=float(request.form.get('meta_conversao')) if request.form.get('meta_conversao') else None,
+            meta_receita=float(request.form.get('meta_receita')) if request.form.get('meta_receita') else None,
+            produto_principal=request.form.get('produto_principal'),
+            valor_oferta=float(request.form.get('valor_oferta')) if request.form.get('valor_oferta') else None,
+            desconto_percentual=float(request.form.get('desconto_percentual')) if request.form.get('desconto_percentual') else None,
+            mensagem_template=request.form.get('mensagem_template'),
+        )
+        
+        db.session.add(campanha)
+        db.session.commit()
+        
+        flash('Campanha criada com sucesso!', 'success')
+        return redirect(url_for('mesas_negocio') + '#tab-campanhas')
+    
+    return render_template('criar_campanha.html')
+
+@app.route("/campanhas/<int:id>")
+@login_required
+@permission_required('mesas')
+def ver_campanha(id):
+    campanha = Campanha.query.get_or_404(id)
+    
+    # Buscar todos os leads da campanha
+    leads = LeadCampanha.query.filter_by(campanha_id=id).all()
+    
+    # Organizar leads por estágio
+    leads_por_estagio = {
+        'Novo': [],
+        'Contatado': [],
+        'Qualificado': [],
+        'Proposta': [],
+        'Negociação': [],
+        'Ganho': [],
+        'Perdido': []
+    }
+    
+    for lead in leads:
+        if lead.resultado == 'Ganho':
+            leads_por_estagio['Ganho'].append(lead)
+        elif lead.resultado == 'Perdido':
+            leads_por_estagio['Perdido'].append(lead)
+        elif lead.estagio in leads_por_estagio:
+            leads_por_estagio[lead.estagio].append(lead)
+    
+    return render_template('funil_campanha.html', campanha=campanha, leads_por_estagio=leads_por_estagio)
+
+@app.route("/campanhas/<int:campanha_id>/importar", methods=['GET', 'POST'])
+@login_required
+@permission_required('mesas')
+def importar_leads(campanha_id):
+    campanha = Campanha.query.get_or_404(campanha_id)
+    
+    if request.method == 'POST':
+        # Verifica se arquivo foi enviado
+        if 'file' not in request.files:
+            flash('Nenhum arquivo selecionado!', 'error')
+            return redirect(request.url)
+        
+        file = request.files['file']
+        
+        if file.filename == '':
+            flash('Nenhum arquivo selecionado!', 'error')
+            return redirect(request.url)
+        
+        # Verifica extensão
+        filename = secure_filename(file.filename)
+        ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+        
+        if ext not in ['csv', 'xlsx', 'xls']:
+            flash('Formato inválido! Use .csv, .xlsx ou .xls', 'error')
+            return redirect(request.url)
+        
+        try:
+            leads_data = []
+            
+            # Processar CSV
+            if ext == 'csv':
+                stream = io.StringIO(file.stream.read().decode('utf-8', errors='replace'), newline=None)
+                csv_reader = csv.DictReader(stream)
+                leads_data = list(csv_reader)
+            
+            # Processar Excel
+            elif ext in ['xlsx', 'xls']:
+                wb = openpyxl.load_workbook(file.stream)
+                ws = wb.active
+                
+                # Primeira linha como cabeçalho
+                headers = [cell.value for cell in ws[1]]
+                
+                for row in ws.iter_rows(min_row=2, values_only=True):
+                    lead_dict = {}
+                    for idx, value in enumerate(row):
+                        if idx < len(headers) and headers[idx]:
+                            lead_dict[headers[idx]] = value
+                    if any(lead_dict.values()):  # Ignora linhas vazias
+                        leads_data.append(lead_dict)
+            
+            # Validar e importar leads
+            importados = 0
+            duplicados = 0
+            erros = 0
+            
+            for lead_data in leads_data:
+                try:
+                    # Normalizar keys (lowercase)
+                    lead_data = {k.lower().strip(): v for k, v in lead_data.items() if v}
+                    
+                    # Campo obrigatório: nome
+                    nome = lead_data.get('nome', '').strip()
+                    if not nome:
+                        erros += 1
+                        continue
+                    
+                    # Verificar duplicata por telefone (se houver)
+                    telefone = str(lead_data.get('telefone', '')).strip()
+                    if telefone:
+                        existe = LeadCampanha.query.filter_by(
+                            campanha_id=campanha_id,
+                            telefone=telefone
+                        ).first()
+                        
+                        if existe:
+                            duplicados += 1
+                            continue
+                    
+                    # Criar lead
+                    novo_lead = LeadCampanha(
+                        campanha_id=campanha_id,
+                        usuario_crm_id=current_user.id,
+                        nome=nome,
+                        telefone=telefone if telefone else None,
+                        email=lead_data.get('email', '').strip() or None,
+                        empresa=lead_data.get('empresa', '').strip() or None,
+                        cargo=lead_data.get('cargo', '').strip() or None,
+                        origem=lead_data.get('origem', 'Importação') or 'Importação',
+                        estagio='Novo',
+                        produto_interesse=campanha.produto_principal,
+                        data_criacao=datetime.now(),
+                        data_atualizacao=datetime.now()
+                    )
+                    
+                    db.session.add(novo_lead)
+                    importados += 1
+                    
+                except Exception as e:
+                    logger.error(f"Erro ao importar lead: {e}")
+                    erros += 1
+                    continue
+            
+            # Atualizar contadores da campanha
+            if importados > 0:
+                campanha.total_leads = (campanha.total_leads or 0) + importados
+                campanha.data_atualizacao = datetime.now()
+            
+            db.session.commit()
+            
+            # Feedback detalhado
+            if importados > 0:
+                flash(f'✅ {importados} leads importados com sucesso!', 'success')
+            if duplicados > 0:
+                flash(f'⚠️ {duplicados} leads duplicados foram ignorados.', 'warning')
+            if erros > 0:
+                flash(f'❌ {erros} leads com erro (verifique o formato).', 'error')
+            
+            return redirect(url_for('ver_campanha', id=campanha_id))
+            
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erro na importação: {e}")
+            flash(f'Erro ao processar arquivo: {str(e)}', 'error')
+            return redirect(request.url)
+    
+    return render_template('importar_leads.html', campanha=campanha)
+
+@app.route("/campanhas/template-leads-csv")
+@login_required
+@permission_required('mesas')
+def template_leads_csv():
+    """Retorna um arquivo CSV modelo para importação de leads."""
+    conteudo = "nome,telefone,email,empresa,cargo,origem\nJoão Silva,11999999999,joao@empresa.com,Empresa X,Diretor,Site\nMaria Santos,11988888888,maria@empresa.com,Empresa Y,Gerente,Indicação\n"
+    buf = io.BytesIO(conteudo.encode('utf-8-sig'))
+    return send_file(
+        buf,
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name='template_leads.csv'
+    )
 
 # --- OCORRÊNCIAS
 @app.route("/cliente/<int:id>/add_ocorrencia", methods=["GET", "POST"])
@@ -2741,6 +2950,68 @@ def receber_mensagem_webhook():
         print(f"⚠️ Webhook ignorado: texto inválido ou muito longo")
         return {"status": "ignored", "reason": "invalid_text"}, 200
 
+    # ========== ETAPA 3.5: EXTRAIR MÍDIA (ÁUDIO, IMAGEM, VÍDEO, DOCUMENTO) ==========
+    tipo_midia = None
+    arquivo_url = None
+    
+    # Detectar tipo de mensagem baseado no messageType da Z-API
+    message_type = data.get("messageType", "").lower()
+    
+    if "audio" in message_type:
+        tipo_midia = "audio"
+        # Tentar extrair URL do áudio
+        audio_data = data.get("audio") or data.get("audioMessage")
+        if isinstance(audio_data, dict):
+            arquivo_url = audio_data.get("audioUrl") or audio_data.get("url") or audio_data.get("link")
+        if not arquivo_url and "url" in data:
+            arquivo_url = data.get("url")
+        if arquivo_url:
+            print(f"🎵 Áudio detectado: {arquivo_url[:80]}...")
+            if not text or text == "Audio":
+                text = "🎵 Áudio"
+                
+    elif "image" in message_type:
+        tipo_midia = "image"
+        # Tentar extrair URL da imagem
+        image_data = data.get("image") or data.get("imageMessage")
+        if isinstance(image_data, dict):
+            arquivo_url = image_data.get("imageUrl") or image_data.get("url") or image_data.get("link")
+        if not arquivo_url and "url" in data:
+            arquivo_url = data.get("url")
+        if arquivo_url:
+            print(f"🖼️ Imagem detectada: {arquivo_url[:80]}...")
+            if not text or text == "Image":
+                text = "📷 Imagem"
+                
+    elif "video" in message_type:
+        tipo_midia = "video"
+        # Tentar extrair URL do vídeo
+        video_data = data.get("video") or data.get("videoMessage")
+        if isinstance(video_data, dict):
+            arquivo_url = video_data.get("videoUrl") or video_data.get("url") or video_data.get("link")
+        if not arquivo_url and "url" in data:
+            arquivo_url = data.get("url")
+        if arquivo_url:
+            print(f"🎬 Vídeo detectado: {arquivo_url[:80]}...")
+            if not text or text == "Video":
+                text = "🎬 Vídeo"
+                
+    elif "document" in message_type or "ptt" in message_type:
+        tipo_midia = "document"
+        # Tentar extrair URL do documento
+        doc_data = data.get("document") or data.get("documentMessage")
+        if isinstance(doc_data, dict):
+            arquivo_url = doc_data.get("documentUrl") or doc_data.get("url") or doc_data.get("link")
+            # Nome do arquivo como texto se disponível
+            if not text and doc_data.get("fileName"):
+                text = f"📄 {doc_data.get('fileName')}"
+        if not arquivo_url and "url" in data:
+            arquivo_url = data.get("url")
+        if arquivo_url:
+            print(f"📄 Documento detectado: {arquivo_url[:80]}...")
+            if not text or text == "Document":
+                text = "📄 Documento"
+
     # ========== ETAPA 4: NORMALIZAR E SALVAR ==========
     numero = normalize_phone(phone)
     print(f"📞 Número normalizado: {numero}")
@@ -2787,18 +3058,24 @@ def receber_mensagem_webhook():
     if not usuario_crm_id:
         print(f"⚠️ Usuário CRM não identificado - mensagem salva sem vínculo de usuário")
 
-    # Salvar no banco
+    # Salvar no banco (incluindo tipo_midia e arquivo_url)
     msg = WhatsAppMensagem(
         numero=numero,
         remetente="Cliente",
         mensagem=text,
         recebido_em=datetime.utcnow(),
         usuario_crm_id=usuario_crm_id,
-        zapi_message_id=zapi_message_id
+        zapi_message_id=zapi_message_id,
+        tipo_midia=tipo_midia,
+        arquivo_url=arquivo_url
     )
     db.session.add(msg)
     db.session.commit()
-    print(f"💾 Mensagem salva no banco (ID: {msg.id})")
+    
+    if tipo_midia:
+        print(f"💾 Mensagem salva no banco (ID: {msg.id}) - Tipo: {tipo_midia}")
+    else:
+        print(f"💾 Mensagem salva no banco (ID: {msg.id})")
 
     # ========== ETAPA 5: VERIFICAR NPS ==========
     cliente = find_cliente_by_phone(numero)
@@ -2912,7 +3189,9 @@ def receber_mensagem_webhook():
         "hora": datetime.now().strftime("%H:%M"),
         "timestamp": msg.recebido_em.isoformat(),
         "status": "recebida",
-        "zapi_message_id": msg.zapi_message_id or ""
+        "zapi_message_id": msg.zapi_message_id or "",
+        "tipo_midia": tipo_midia,
+        "arquivo_url": arquivo_url
     }
 
     try:
@@ -3627,16 +3906,24 @@ def atualizar_webhook_zapi():
 @login_required
 def upload_arquivo_canais():
     """Upload de arquivo (imagem, documento, áudio) e envio via Z-API."""
+    print("\n📂 === INICIANDO UPLOAD DE ARQUIVO ===")
+    
     if 'file' not in request.files:
+        print("❌ Erro: Nenhum arquivo enviado")
         return jsonify({"erro": "Nenhum arquivo enviado"}), 400
     
     file = request.files['file']
     numero = request.form.get('numero')
     
+    print(f"📄 Arquivo recebido: {file.filename}")
+    print(f"📞 Número destino: {numero}")
+    
     if file.filename == '':
+        print("❌ Erro: Nome de arquivo inválido")
         return jsonify({"erro": "Nome de arquivo inválido"}), 400
     
     if not numero:
+        print("❌ Erro: Número não fornecido")
         return jsonify({"erro": "Número não fornecido"}), 400
 
     # Validação básica de extensão (segurança)
@@ -3648,7 +3935,10 @@ def upload_arquivo_canais():
     }
     import uuid
     file_ext = os.path.splitext(file.filename)[1].lower()
+    print(f"🔍 Extensão detectada: {file_ext}")
+    
     if file_ext not in EXTENSOES_PERMITIDAS:
+        print(f"❌ Erro: Extensão {file_ext} não permitida")
         return jsonify({"erro": "Tipo de arquivo não permitido"}), 400
 
     # Criar diretório se não existir
@@ -3676,24 +3966,99 @@ def upload_arquivo_canais():
     elif file_ext in ['.mp4', '.webm', '.mov']:
         file_type = 'video'
     
+    print(f"📋 Tipo de arquivo: {file_type}")
+    print(f"💾 Arquivo salvo em: {file_path}")
+    
     numero_norm = normalize_phone(numero)
+    print(f"📞 Número normalizado: {numero_norm}")
 
-    # --- Enviar via Z-API ---
+# --- Enviar via Z-API usando URL pública ---
     user_id = current_user.get_usuario_principal_id()
     usuario_dono = UsuarioCRM.query.get(user_id)
     zapi_resultado = {"status": "sem_api"}
+    
+    print(f"👤 Usuário ID: {user_id}")
+    
     if usuario_dono and usuario_dono.api_instance and usuario_dono.api_token:
+        inst = usuario_dono.api_instance
+        tok = usuario_dono.api_token
+        
+        print(f"🔑 Credenciais Z-API encontradas (Instance: {inst[:10]}...)")
+
         # Monta URL pública (necessária para Z-API buscar o arquivo)
         base_url = request.host_url.rstrip('/')
         url_publica = f"{base_url}{file_url}"
-        zapi_resultado = enviar_midia_zapi(
-            numero_norm, url_publica,
-            caption=file.filename,
-            tipo=file_type,
-            instance_id=usuario_dono.api_instance,
-            token_id=usuario_dono.api_token
-        )
-        print(f"📤 Z-API mídia: {zapi_resultado}")
+        
+        print(f"🌐 URL pública do arquivo: {url_publica}")
+        
+        # IMPORTANTE: Se estiver em localhost, a Z-API não consegue acessar
+        # Você precisa usar ngrok ou similar para expor o servidor
+        if 'localhost' in url_publica or '127.0.0.1' in url_publica:
+            print(f"⚠️ ATENÇÃO: Servidor em localhost. A Z-API não consegue acessar URLs locais!")
+            print(f"💡 Solução: Use ngrok para criar uma URL pública:")
+            print(f"   1. Instale ngrok: https://ngrok.com/download")
+            print(f"   2. Execute: ngrok http 5000")
+            print(f"   3. Use a URL fornecida pelo ngrok")
+            zapi_resultado = {"status": "Erro", "detalhe": "Servidor em localhost - Z-API não consegue acessar. Use ngrok ou hospede em servidor público."}
+        else:
+            if file_type == 'image':
+                zapi_endpoint = 'send-link-file'
+                zapi_payload = {
+                    "phone": numero_norm,
+                    "link": url_publica,
+                    "caption": file.filename
+                }
+            else:  # document, audio, video
+                zapi_endpoint = 'send-link-file'
+                zapi_payload = {
+                    "phone": numero_norm,
+                    "link": url_publica,
+                    "caption": file.filename
+                }
+
+            zapi_url = f"https://api.z-api.io/instances/{inst}/token/{tok}/{zapi_endpoint}"
+            print(f"🌐 Endpoint Z-API: {zapi_endpoint}")
+            print(f"📋 Payload keys: {list(zapi_payload.keys())}")
+            print(f"📄 link: {url_publica}")
+            
+            try:
+                print(f"📤 Enviando requisição para Z-API...")
+                zapi_resp = requests.post(zapi_url, json=zapi_payload, headers=headers, timeout=30)
+                print(f"📥 Status Code: {zapi_resp.status_code}")
+                print(f"📥 Response COMPLETO:")
+                print(zapi_resp.text)
+                print("=" * 60)
+                
+                # Tentar parsear JSON da resposta
+                try:
+                    resp_json = zapi_resp.json()
+                    print(f"📋 Response JSON: {resp_json}")
+                    
+                    # Verificar se a resposta indica erro mesmo com status 200
+                    if 'error' in resp_json or not resp_json.get('success', True):
+                        print(f"⚠️ Z-API retornou erro: {resp_json}")
+                        zapi_resultado = {"status": "Erro", "detalhe": str(resp_json)}
+                    elif zapi_resp.status_code == 200:
+                        zapi_resultado = {"status": "Sucesso", "detalhe": zapi_resp.text}
+                        print(f"✅ Arquivo enviado com sucesso via Z-API!")
+                        print(f"📱 MessageID: {resp_json.get('messageId', 'N/A')}")
+                    else:
+                        zapi_resultado = {"status": "Erro", "detalhe": f"Status {zapi_resp.status_code}: {zapi_resp.text}"}
+                        print(f"❌ Erro na Z-API: Status {zapi_resp.status_code}")
+                except:
+                    # Se não conseguir parsear JSON
+                    if zapi_resp.status_code == 200:
+                        zapi_resultado = {"status": "Sucesso", "detalhe": zapi_resp.text}
+                        print(f"✅ Arquivo enviado com sucesso via Z-API!")
+                    else:
+                        zapi_resultado = {"status": "Erro", "detalhe": f"Status {zapi_resp.status_code}: {zapi_resp.text}"}
+                        print(f"❌ Erro na Z-API: Status {zapi_resp.status_code}")
+                    
+            except Exception as _e:
+                zapi_resultado = {"status": "Erro", "detalhe": str(_e)}
+                print(f"❌ Exceção ao chamar Z-API: {_e}")
+    else:
+        print(f"⚠️ API Z-API não configurada para o usuário")
     
     # Salvar referência no banco
     msg = WhatsAppMensagem(
@@ -3702,10 +4067,11 @@ def upload_arquivo_canais():
         mensagem=f"[{file_type.upper()}] {file.filename}",
         recebido_em=datetime.utcnow(),
         usuario_crm_id=user_id,
-        status="enviado"
+        status="enviado" if zapi_resultado.get("status") == "Sucesso" else "erro"
     )
     db.session.add(msg)
     db.session.commit()
+    print(f"💾 Mensagem salva no banco (ID: {msg.id})")
     
     # Emitir via WebSocket
     cliente_found = find_cliente_by_phone(numero_norm)
@@ -3724,13 +4090,18 @@ def upload_arquivo_canais():
     
     socketio.emit("nova_mensagem", payload, room=numero_norm)
     
-    return jsonify({
+    response_data = {
         "status": "ok",
         "file_url": file_url,
         "file_type": file_type,
         "message_id": msg.id,
         "zapi": zapi_resultado.get("status")
-    })
+    }
+    
+    print(f"✅ Retornando resposta: {response_data}")
+    print("=" * 50)
+    
+    return jsonify(response_data)
 
 @app.route("/canais/conversas/nao_lidas", methods=["GET"])
 @login_required

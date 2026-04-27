@@ -1,0 +1,285 @@
+{% extends "base.html" %}
+{% block title %}{{ campanha.nome }} - Funil{% endblock %}
+
+{% block content %}
+
+<style>
+  .campanha-header {
+    background: #f8f9fa;
+    color: #4a235a;
+    padding: 2rem;
+    border-radius: 12px;
+    margin-bottom: 2rem;
+    border: 2px solid var(--primary-purple);
+  }
+
+  .campanha-header h2,
+  .campanha-header p,
+  .campanha-header strong,
+  .campanha-header small {
+    color: #4a235a;
+  }
+
+  .campanha-stats {
+    display: flex;
+    gap: 2rem;
+    margin-top: 1rem;
+  }
+
+  .stat-item {
+    text-align: center;
+  }
+
+  .stat-item small {
+    color: #4a235a;
+  }
+
+  .stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #4a235a;
+  }
+
+  .stat-label {
+    font-size: 0.9rem;
+    opacity: 0.9;
+    color: #4a235a;
+  }
+
+  .kanban-board {
+    display: flex;
+    gap: 1rem;
+    overflow-x: auto;
+    padding-bottom: 1rem;
+  }
+
+  .kanban-column {
+    flex: 0 0 280px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1rem;
+  }
+
+  .kanban-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #dee2e6;
+  }
+
+  .kanban-header h5 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #4a235a;
+  }
+
+  .kanban-header .badge {
+    background: #f8f9fa;
+    color: #4a235a;
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    border: 1px solid var(--primary-purple);
+  }
+
+  .kanban-cards {
+    min-height: 400px;
+  }
+
+  .kanban-card {
+    background: white;
+    border-radius: 6px;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    cursor: pointer;
+    transition: 0.2s;
+  }
+
+  .kanban-card:hover {
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    transform: translateY(-2px);
+  }
+
+  .kanban-card.dragging {
+    opacity: 0.5;
+  }
+
+  .card-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #4a235a;
+    margin-bottom: 0.25rem;
+  }
+
+  .card-subtitle {
+    font-size: 0.85rem;
+    color: #4a235a;
+    margin-bottom: 0.5rem;
+  }
+
+  .card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+
+  .tag {
+    font-size: 0.75rem;
+    padding: 0.15rem 0.4rem;
+    background: #e9ecef;
+    border-radius: 4px;
+    color: #4a235a;
+  }
+
+  .btn-add-lead {
+    width: 100%;
+    padding: 0.5rem;
+    background: white;
+    border: 2px dashed #dee2e6;
+    border-radius: 6px;
+    color: #6c757d;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+
+  .btn-add-lead:hover {
+    border-color: var(--primary-purple);
+    color: var(--primary-purple);
+  }
+
+  /* Estilos para diferentes estágios */
+  .kanban-column[data-estagio="Novo"] .kanban-header { border-color: #6c757d; }
+  .kanban-column[data-estagio="Contatado"] .kanban-header { border-color: #0dcaf0; }
+  .kanban-column[data-estagio="Qualificado"] .kanban-header { border-color: #ffc107; }
+  .kanban-column[data-estagio="Proposta"] .kanban-header { border-color: #fd7e14; }
+  .kanban-column[data-estagio="Negociação"] .kanban-header { border-color: #0d6efd; }
+  .kanban-column[data-estagio="Ganho"] .kanban-header { border-color: #198754; }
+  .kanban-column[data-estagio="Perdido"] .kanban-header { border-color: #dc3545; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="section-title" style="color: #4a235a;">
+    <a href="{{ url_for('mesas_negocio') }}#tab-campanhas" class="text-decoration-none" style="color: #4a235a;">
+      <i class="fas fa-arrow-left"></i>
+    </a>
+    {{ campanha.nome }}
+  </h1>
+  <div>
+    <a href="{{ url_for('importar_leads', campanha_id=campanha.id) }}" class="btn btn-success">
+      <i class="fas fa-file-import"></i> Importar Leads
+    </a>
+  </div>
+</div>
+
+<!-- Header da Campanha -->
+<div class="campanha-header">
+  <div class="d-flex justify-content-between align-items-start">
+    <div>
+      <h2>{{ campanha.nome }}</h2>
+      <p class="mb-0">{{ campanha.descricao }}</p>
+      <p class="mb-0 mt-2">
+        📅 {{ campanha.data_inicio.strftime('%d/%m/%Y') }}
+        {% if campanha.data_fim %} - {{ campanha.data_fim.strftime('%d/%m/%Y') }}{% endif %}
+        {% if campanha.dias_restantes is not none %}
+          <br>⏱️ <strong>{{ campanha.dias_restantes }} dias restantes</strong>
+        {% endif %}
+      </p>
+    </div>
+    <span class="badge bg-light text-dark fs-6">{{ campanha.status }}</span>
+  </div>
+
+  <div class="campanha-stats">
+    <div class="stat-item">
+      <div class="stat-value">{{ campanha.total_leads }}</div>
+      <div class="stat-label">Total de Leads</div>
+      {% if campanha.meta_leads %}
+        <small>Meta: {{ campanha.meta_leads }}</small>
+      {% endif %}
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">{{ campanha.leads_contatados }}</div>
+      <div class="stat-label">Contatados</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">{{ campanha.leads_convertidos }}</div>
+      <div class="stat-label">Convertidos</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">{{ campanha.taxa_conversao }}%</div>
+      <div class="stat-label">Taxa de Conversão</div>
+      {% if campanha.meta_conversao %}
+        <small>Meta: {{ campanha.meta_conversao }}%</small>
+      {% endif %}
+    </div>
+    <div class="stat-item">
+      <div class="stat-value">R$ {{ "%.2f"|format(campanha.receita_gerada)|replace(".", ",") }}</div>
+      <div class="stat-label">Receita Gerada</div>
+      {% if campanha.meta_receita %}
+        <small>Meta: R$ {{ "%.2f"|format(campanha.meta_receita)|replace(".", ",") }}</small>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Funil Kanban -->
+<div class="kanban-board">
+  {% for estagio, cor in [
+    ('Novo', '#6c757d'),
+    ('Contatado', '#0dcaf0'),
+    ('Qualificado', '#ffc107'),
+    ('Proposta', '#fd7e14'),
+    ('Negociação', '#0d6efd'),
+    ('Ganho', '#198754'),
+    ('Perdido', '#dc3545')
+  ] %}
+  <div class="kanban-column" data-estagio="{{ estagio }}">
+    <div class="kanban-header">
+      <h5>{{ estagio }}</h5>
+      <span class="badge">{{ leads_por_estagio[estagio]|length }}</span>
+    </div>
+    
+    <div class="kanban-cards" id="cards-{{ estagio|lower }}">
+      {% for lead in leads_por_estagio[estagio] %}
+      <div class="kanban-card" draggable="true" data-lead-id="{{ lead.id }}">
+        <div class="card-title">{{ lead.nome }}</div>
+        {% if lead.empresa %}
+          <div class="card-subtitle">{{ lead.empresa }}</div>
+        {% endif %}
+        <div class="card-tags">
+          {% if lead.telefone %}
+            <span class="tag">📞 {{ lead.telefone }}</span>
+          {% endif %}
+          {% if lead.valor_proposta %}
+            <span class="tag">💰 R$ {{ "%.2f"|format(lead.valor_proposta)|replace(".", ",") }}</span>
+          {% endif %}
+          {% if lead.tags %}
+            {% for tag in lead.tags %}
+              <span class="tag">🏷️ {{ tag }}</span>
+            {% endfor %}
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+      
+      <!-- Botão para adicionar lead manualmente -->
+      {% if estagio == 'Novo' %}
+      <button class="btn-add-lead" onclick="alert('Funcionalidade será implementada em breve!')">
+        <i class="fas fa-plus"></i> Adicionar Lead
+      </button>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<script>
+  // Funcionalidade de Drag & Drop (será implementada na Fase 3)
+  console.log('Funil carregado com sucesso!');
+  console.log('Drag & Drop será implementado na Fase 3');
+</script>
+
+{% endblock %}

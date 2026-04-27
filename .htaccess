@@ -1,0 +1,84 @@
+# Força HTTPS
+RewriteEngine On
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Configuração Python/Passenger
+PassengerEnabled On
+PassengerAppRoot /home/seu_usuario/public_html
+PassengerAppType wsgi
+PassengerStartupFile passenger_wsgi.py
+PassengerPython /home/seu_usuario/virtualenv/python3.10/bin/python
+
+# Headers de segurança
+<IfModule mod_headers.c>
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+    
+    # HSTS - Force HTTPS por 1 ano
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+</IfModule>
+
+# Proteção de arquivos sensíveis
+<FilesMatch "^\.env">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+<FilesMatch "^\.git">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+<FilesMatch "\.(pyc|pyo|log|sql)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Permitir arquivos Python necessários
+<FilesMatch "passenger_wsgi\.py$">
+    Order allow,deny
+    Allow from all
+</FilesMatch>
+
+# Cache para arquivos estáticos
+<FilesMatch "\.(jpg|jpeg|png|gif|ico|svg|webp)$">
+    Header set Cache-Control "max-age=2592000, public"
+</FilesMatch>
+
+<FilesMatch "\.(css|js)$">
+    Header set Cache-Control "max-age=604800, public"
+</FilesMatch>
+
+<FilesMatch "\.(woff|woff2|ttf|eot)$">
+    Header set Cache-Control "max-age=31536000, public"
+</FilesMatch>
+
+# Compressão Gzip
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css
+    AddOutputFilterByType DEFLATE application/javascript application/json
+    AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
+
+# Proteger diretório de logs
+<DirectoryMatch "^/.*/logs/">
+    Order deny,allow
+    Deny from all
+</DirectoryMatch>
+
+# Limites de upload (16MB)
+LimitRequestBody 16777216
+
+# Timeout
+Timeout 300
+
+# Evitar listagem de diretórios
+Options -Indexes
+
+# Custom error pages (opcional)
+# ErrorDocument 404 /404.html
+# ErrorDocument 500 /500.html

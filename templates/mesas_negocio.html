@@ -66,6 +66,42 @@
     background: var(--hover-yellow);
     box-shadow: 0 0 15px rgba(255, 193, 7, 0.3);
   }
+
+  /* Estilos para as abas */
+  .nav-tabs {
+    border-bottom: 2px solid #dee2e6;
+    margin-bottom: 1.5rem;
+  }
+
+  .nav-tabs .nav-link {
+    color: white;
+    border: none;
+    border-radius: 8px 8px 0 0;
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    transition: all 0.3s;
+    background: linear-gradient(135deg, rgba(74, 35, 90, 0.6) 0%, rgba(115, 3, 192, 0.6) 100%);
+    margin-right: 0.25rem;
+  }
+
+  .nav-tabs .nav-link:hover {
+    background: linear-gradient(135deg, rgba(74, 35, 90, 0.8) 0%, rgba(115, 3, 192, 0.8) 100%);
+    transform: translateY(-2px);
+  }
+
+  .nav-tabs .nav-link.active {
+    background: var(--gradient-primary);
+    box-shadow: 0 3px 10px rgba(74, 35, 90, 0.4);
+  }
+
+  .tab-content {
+    animation: fadeIn 0.3s;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
 </style>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -73,8 +109,26 @@
   <button class="btn-export" onclick="exportarCSV()">Exportar CSV</button>
 </div>
 
-<div class="table-scroll">
-    <table class="table table-crm" id="tabelaMesas">
+<!-- Abas de Navegação -->
+<ul class="nav nav-tabs" role="tablist">
+  <li class="nav-item">
+    <a class="nav-link active" data-bs-toggle="tab" href="#tab-mesas" role="tab">
+      <i class="fas fa-handshake"></i> Negociações
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" data-bs-toggle="tab" href="#tab-campanhas" role="tab">
+      <i class="fas fa-bullhorn"></i> Campanhas
+    </a>
+  </li>
+</ul>
+
+<!-- Conteúdo das Abas -->
+<div class="tab-content">
+  <!-- Aba Negociações (conteúdo atual) -->
+  <div class="tab-pane fade show active" id="tab-mesas" role="tabpanel">
+    <div class="table-scroll">
+        <table class="table table-crm" id="tabelaMesas">
         <thead>
             <tr>
                 <th>Cliente</th>
@@ -155,6 +209,227 @@
             {% endfor %}
         </tbody>
     </table>
+</div>
+  </div>
+  <!-- Fim Aba Negociações -->
+
+  <!-- Aba Campanhas (NOVA) -->
+  <div class="tab-pane fade" id="tab-campanhas" role="tabpanel">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h3><i class="fas fa-bullhorn"></i> Minhas Campanhas</h3>
+      <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovaCampanha">
+        <i class="fas fa-plus"></i> Nova Campanha
+      </button>
+    </div>
+
+    {% if campanhas %}
+      <div class="row">
+        {% for campanha in campanhas %}
+        <div class="col-md-6 mb-3">
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-start mb-2">
+                <h5 class="card-title mb-0">
+                  {% if campanha.tipo == 'vendas' %}
+                    💼
+                  {% elif campanha.tipo == 'marketing' %}
+                    📢
+                  {% elif campanha.tipo == 'relacionamento' %}
+                    🤝
+                  {% else %}
+                    📊
+                  {% endif %}
+                  {{ campanha.nome }}
+                </h5>
+                <span class="badge 
+                  {% if campanha.status == 'Ativa' %}
+                    bg-success
+                  {% elif campanha.status == 'Pausada' %}
+                    bg-warning
+                  {% elif campanha.status == 'Concluída' %}
+                    bg-info
+                  {% else %}
+                    bg-secondary
+                  {% endif %}
+                ">{{ campanha.status }}</span>
+              </div>
+              
+              <p class="text-muted small mb-2">{{ campanha.descricao[:100] }}{% if campanha.descricao and campanha.descricao|length > 100 %}...{% endif %}</p>
+              
+              <div class="row text-center mb-2">
+                <div class="col-4">
+                  <small class="text-muted">Leads</small>
+                  <div><strong>{{ campanha.total_leads }}</strong>{% if campanha.meta_leads %}/{{ campanha.meta_leads }}{% endif %}</div>
+                </div>
+                <div class="col-4">
+                  <small class="text-muted">Conversão</small>
+                  <div><strong>{{ campanha.taxa_conversao }}%</strong></div>
+                </div>
+                <div class="col-4">
+                  <small class="text-muted">Receita</small>
+                  <div><strong>R$ {{ "%.2f"|format(campanha.receita_gerada)|replace(".", ",") }}</strong></div>
+                </div>
+              </div>
+              
+              <div class="d-flex justify-content-between align-items-center">
+                <small class="text-muted">
+                  📅 {{ campanha.data_inicio.strftime('%d/%m/%Y') }}
+                  {% if campanha.data_fim %} - {{ campanha.data_fim.strftime('%d/%m/%Y') }}{% endif %}
+                  {% if campanha.dias_restantes is not none %}
+                    <br>⏱️ {{ campanha.dias_restantes }} dias restantes
+                  {% endif %}
+                </small>
+                <div>
+                  <a href="{{ url_for('ver_campanha', id=campanha.id) }}" class="btn btn-sm btn-primary">
+                    Ver Funil
+                  </a>
+                  <a href="{{ url_for('importar_leads', campanha_id=campanha.id) }}" class="btn btn-sm btn-success">
+                    <i class="fas fa-file-import"></i> Importar
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="alert alert-info">
+        <i class="fas fa-info-circle"></i> Nenhuma campanha criada ainda.
+        <a href="#" data-bs-toggle="modal" data-bs-target="#modalNovaCampanha">Clique aqui</a> para criar sua primeira campanha!
+      </div>
+    {% endif %}
+  </div>
+  <!-- Fim Aba Campanhas -->
+</div>
+<!-- Fim Tab Content -->
+
+<!-- Modal Nova Campanha -->
+<div class="modal fade" id="modalNovaCampanha" tabindex="-1" aria-labelledby="modalNovaCampanhaLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header" style="background: var(--gradient-primary); color: white;">
+        <h5 class="modal-title" id="modalNovaCampanhaLabel">
+          <i class="fas fa-bullhorn"></i> Nova Campanha
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" style="max-height: 70vh;">
+        <form id="formNovaCampanha" method="POST" action="{{ url_for('criar_campanha') }}">
+          <!-- Informações Básicas -->
+          <h6 class="text-primary fw-bold mb-2" style="font-size: 0.95rem;">Informações Básicas</h6>
+          
+          <div class="mb-2">
+            <label for="nome" class="form-label mb-1" style="font-size: 0.9rem;">Nome da Campanha *</label>
+            <input type="text" class="form-control form-control-sm" id="nome" name="nome" required placeholder="Ex: Black Friday 2026">
+          </div>
+
+          <div class="mb-2">
+            <label for="descricao" class="form-label mb-1" style="font-size: 0.9rem;">Descrição</label>
+            <textarea class="form-control form-control-sm" id="descricao" name="descricao" rows="2" placeholder="Descreva os objetivos e detalhes desta campanha..."></textarea>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-2">
+                <label for="tipo" class="form-label mb-1" style="font-size: 0.9rem;">Tipo de Campanha *</label>
+                <select class="form-select form-select-sm" id="tipo" name="tipo" required>
+                  <option value="vendas">Vendas</option>
+                  <option value="marketing">Marketing</option>
+                  <option value="relacionamento">Relacionamento</option>
+                  <option value="nps">NPS / Satisfação</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="mb-2">
+                <label for="produto_principal" class="form-label mb-1" style="font-size: 0.9rem;">Produto Principal</label>
+                <input type="text" class="form-control form-control-sm" id="produto_principal" name="produto_principal" placeholder="Ex: Pacote Premium">
+              </div>
+            </div>
+          </div>
+
+          <!-- Período -->
+          <h6 class="text-primary fw-bold mb-2 mt-3" style="font-size: 0.95rem;">Período</h6>
+          
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-2">
+                <label for="data_inicio" class="form-label mb-1" style="font-size: 0.9rem;">Data de Início *</label>
+                <input type="date" class="form-control form-control-sm" id="data_inicio" name="data_inicio" required>
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="mb-2">
+                <label for="data_fim" class="form-label mb-1" style="font-size: 0.9rem;">Data de Término</label>
+                <input type="date" class="form-control form-control-sm" id="data_fim" name="data_fim">
+              </div>
+            </div>
+          </div>
+
+          <!-- Metas -->
+          <h6 class="text-primary fw-bold mb-2 mt-3" style="font-size: 0.95rem;">Metas (Opcional)</h6>
+          
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-2">
+                <label for="meta_leads" class="form-label mb-1" style="font-size: 0.9rem;">Meta de Leads</label>
+                <input type="number" class="form-control form-control-sm" id="meta_leads" name="meta_leads" min="0" placeholder="Ex: 200">
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="mb-2">
+                <label for="meta_conversao" class="form-label mb-1" style="font-size: 0.9rem;">Meta de Conversão (%)</label>
+                <input type="number" class="form-control form-control-sm" id="meta_conversao" name="meta_conversao" min="0" max="100" step="0.1" placeholder="Ex: 15.5">
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-2">
+            <label for="meta_receita" class="form-label mb-1" style="font-size: 0.9rem;">Meta de Receita (R$)</label>
+            <input type="number" class="form-control form-control-sm" id="meta_receita" name="meta_receita" min="0" step="0.01" placeholder="Ex: 100000.00">
+          </div>
+
+          <!-- Oferta -->
+          <h6 class="text-primary fw-bold mb-2 mt-3" style="font-size: 0.95rem;">Oferta (Opcional)</h6>
+          
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-2">
+                <label for="valor_oferta" class="form-label mb-1" style="font-size: 0.9rem;">Valor da Oferta (R$)</label>
+                <input type="number" class="form-control form-control-sm" id="valor_oferta" name="valor_oferta" min="0" step="0.01" placeholder="Ex: 2500.00">
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="mb-2">
+                <label for="desconto_percentual" class="form-label mb-1" style="font-size: 0.9rem;">Desconto (%)</label>
+                <input type="number" class="form-control form-control-sm" id="desconto_percentual" name="desconto_percentual" min="0" max="100" step="0.1" placeholder="Ex: 30">
+              </div>
+            </div>
+          </div>
+
+          <!-- WhatsApp -->
+          <h6 class="text-primary fw-bold mb-2 mt-3" style="font-size: 0.95rem;">Template WhatsApp (Opcional)</h6>
+          
+          <div class="mb-2">
+            <label for="mensagem_template" class="form-label mb-1" style="font-size: 0.9rem;">Mensagem Padrão</label>
+            <textarea class="form-control form-control-sm" id="mensagem_template" name="mensagem_template" rows="3" placeholder="Olá {nome}!&#10;&#10;Vi que você tem interesse em {produto}.&#10;&#10;Temos uma oferta especial!&#10;&#10;Quer saber mais?"></textarea>
+            <small class="text-muted" style="font-size: 0.8rem;">Variáveis: {nome}, {empresa}, {produto}</small>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" form="formNovaCampanha" class="btn btn-primary btn-sm">
+          <i class="fas fa-check"></i> Criar Campanha
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -291,6 +566,21 @@
     link.download = `mesas_negocio_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
   }
+
+  // Inicializar data de início da campanha como hoje
+  document.getElementById('modalNovaCampanha').addEventListener('shown.bs.modal', function() {
+    const hoje = new Date().toISOString().split('T')[0];
+    document.getElementById('data_inicio').value = hoje;
+  });
+
+  // Ativar aba de campanhas se vier do anchor #tab-campanhas
+  document.addEventListener('DOMContentLoaded', function() {
+    if (window.location.hash === '#tab-campanhas') {
+      const campanhasTab = document.querySelector('a[href="#tab-campanhas"]');
+      const tab = new bootstrap.Tab(campanhasTab);
+      tab.show();
+    }
+  });
 </script>
 
 {% endblock %}
