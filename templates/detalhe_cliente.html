@@ -4,6 +4,19 @@
 {% block content %}
 
 <style>
+/* Reduzir espaçamento entre campos */
+.card-body p {
+    margin-bottom: 0.3rem;
+}
+
+.card {
+    margin-bottom: 0.8rem;
+}
+
+.row {
+    margin-top: 0.8rem !important;
+}
+
 .nps-badge {
     display: inline-flex;
     align-items: center;
@@ -79,7 +92,7 @@
     {% endif %}
 </h1>
 
-<div class="mb-4 d-flex gap-2">
+<div class="mb-2 d-flex gap-2">
   <a href="{{ url_for('planner') }}" class="btn btn-primary btn-rounded">Planner</a>
   <a href="{{ url_for('detalhe_cliente_novo', id=cliente.id) }}" class="btn btn-primary btn-rounded">Detalhes Completos</a>
   <a href="{{ url_for('add_mesa', id=cliente.id) }}" class="btn btn-primary btn-rounded">Nova Mesa</a>
@@ -108,7 +121,7 @@
   </div>
 </div>
 
-<div class="row mt-4">
+<div class="row mt-2">
   <div class="col-12 col-md-6">
     <div class="card card-accent">
       <div class="card-header">Negócio</div>

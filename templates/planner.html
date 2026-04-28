@@ -44,7 +44,18 @@
         background: #eef7ff;
     }
     html, body {
-        overflow-x: hidden;
+        overflow: hidden;
+        height: 100vh;
+    }
+    .container {
+        height: calc(100vh - 120px);
+        display: flex;
+        flex-direction: column;
+    }
+    .planner-scroll-container {
+        flex: 1;
+        overflow-y: auto;
+        overflow-x: auto;
     }
 </style>
 
@@ -65,13 +76,9 @@
         </a>
     </div>
 
-    <button class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#modalAgendamento">
-        Registrar agendamento
-    </button>
-
     {% set dias_pt = {'Monday': 'Segunda', 'Tuesday': 'Terça', 'Wednesday': 'Quarta', 'Thursday': 'Quinta', 'Friday': 'Sexta', 'Saturday': 'Sábado', 'Sunday': 'Domingo'} %}
     {% set tipos_pt = {'agendamento': 'Agendamento', 'contato': 'Contato', 'outros': 'Outros'} %}
-    <div class="table-responsive" style="max-height: 75vh; overflow-y: auto;">
+    <div class="planner-scroll-container">
         <table class="planner-table table-bordered">
             <thead>
                 <tr>
